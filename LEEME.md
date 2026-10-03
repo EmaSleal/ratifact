@@ -78,3 +78,8 @@ usuario (`cita_usuario`, guardada en el ADR) y debe requerir aprobación en cada
 - Claude Desktop: Configuración → conectores/MCP → memoria-proyectos → `confirmar_decision` → requiere aprobación.
 - Claude Code: `"mcp__memoria-proyectos__confirmar_decision"` en `permissions.ask` de `.claude/settings.json`.
 - Pi: sin permisos configurables; la evidencia queda en la sección "Confirmación" del ADR.
+
+## 9. Revisar propuestas
+Desde el chat: "revisa las propuestas pendientes" → `revisar_propuestas` muestra todas con su detalle. Por cada una:
+confirmar (`confirmar_decision`, con aprobación), ajustar (nueva decisión + `reemplazar_decision`) o descartar
+(`descartar_decision`, con motivo; queda en el historial como descartada).

@@ -260,7 +260,7 @@ def _regenerar_vistas(proyecto: str) -> list[Path]:
     dec.mkdir(parents=True, exist_ok=True)
     pen.mkdir(parents=True, exist_ok=True)
 
-    grupos = {"acordada": [], "propuesta": [], "reemplazada": []}
+    grupos = {"acordada": [], "propuesta": [], "reemplazada": [], "descartada": []}
     for p in sorted(dec.glob("ADR-*.md")):
         m, _ = _leer_registro(p)
         linea = f"- **{m.get('id')}** {m.get('titulo')} — {m.get('resumen', '')} ({m.get('fecha')}) → `decisiones/{p.name}`"
@@ -269,7 +269,7 @@ def _regenerar_vistas(proyecto: str) -> list[Path]:
         grupos.setdefault(m.get("estado", "propuesta"), []).append(linea)
     acuerdos = ["# Acuerdos", "", "_Vista generada por memoria-proyectos. No editar a mano._", ""]
     for titulo, clave in (("Acordadas (vigentes)", "acordada"), ("Propuestas (sin confirmar)", "propuesta"),
-                          ("Reemplazadas", "reemplazada")):
+                          ("Reemplazadas", "reemplazada"), ("Descartadas", "descartada")):
         acuerdos += [f"## {titulo}", *(grupos.get(clave) or ["- (ninguna)"]), ""]
 
     abiertas, cerradas = [], []
@@ -398,6 +398,46 @@ def confirmar_decision(proyecto: str, id: str, cita_usuario: str) -> str:
             _escribir_registro(ruta, meta, cuerpo)
             sha = _commit(proyecto, [ruta, *_regenerar_vistas(proyecto)], f"{meta['id']} acordada")
             return f"{meta['id']} acordada · commit {sha}"
+    return _ejecutar(f)
+
+
+@herramienta
+def revisar_propuestas(proyecto: str) -> str:
+    """Devuelve TODAS las decisiones en estado 'propuesta' con su detalle completo (decisión, justificación,
+    alternativas), para que el usuario las revise de una vez y decida confirmar, ajustar o descartar cada una."""
+    def f():
+        carpeta = _mem(proyecto) / "decisiones"
+        bloques = []
+        for p in sorted(carpeta.glob("ADR-*.md")) if carpeta.exists() else []:
+            m, cuerpo = _leer_registro(p)
+            if m.get("estado") == "propuesta":
+                bloques.append(f"{cuerpo.strip()}\n\n_(propuesta del {m.get('fecha')})_")
+        if not bloques:
+            return "(no hay propuestas pendientes)"
+        return (f"{len(bloques)} propuesta(s) por revisar. Para cada una: confirmar (confirmar_decision con la cita "
+                "literal), ajustar (registrar una nueva y reemplazar_decision) o descartar (descartar_decision).\n\n"
+                + "\n\n---\n\n".join(bloques))
+    return _ejecutar(f)
+
+
+@herramienta
+def descartar_decision(proyecto: str, id: str, motivo: str) -> str:
+    """Cierra una propuesta que el usuario NO aprueba. Queda como 'descartada' con su motivo (no se borra: el
+    historial conserva qué se consideró y por qué no se adoptó). Solo por indicación explícita del usuario."""
+    def f():
+        if len(motivo.strip()) < 3:
+            raise ErrorMemoria("Falta el motivo del descarte.")
+        with _bloqueo(proyecto):
+            ruta = _buscar_registro(_mem(proyecto) / "decisiones", id)
+            meta, cuerpo = _leer_registro(ruta)
+            if meta.get("estado") != "propuesta":
+                raise ErrorMemoria(f"{meta.get('id')} está '{meta.get('estado')}'; solo se descartan propuestas. "
+                                   "Para dejar sin efecto una acordada, usa reemplazar_decision.")
+            meta["estado"], meta["descartada"] = "descartada", _hoy()
+            cuerpo = cuerpo.rstrip() + f"\n\n## Descartada ({_hoy()})\n{motivo.strip()}\n"
+            _escribir_registro(ruta, meta, cuerpo)
+            sha = _commit(proyecto, [ruta, *_regenerar_vistas(proyecto)], f"{meta['id']} descartada")
+            return f"{meta['id']} descartada · commit {sha}"
     return _ejecutar(f)
 
 
