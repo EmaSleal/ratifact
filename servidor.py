@@ -647,7 +647,9 @@ def inicializar_memoria(proyecto: str) -> str:
             gi = mem / ".gitignore"
             _escribir_atomico(gi, ".lock\n*.tmp\n")
             tocados.append(gi)
-            if not (mem / ".git").exists() and _raiz(proyecto) not in mem.parents:   # memoria externa: repo propio
+            explicita = bool(_proyectos()[proyecto].get("memoria"))
+            if not (mem / ".git").exists() and (explicita or _raiz(proyecto) not in mem.parents):
+                # memoria configurada explícitamente o fuera del repo: repo propio, independiente de la rama
                 subprocess.run(["git", "init", "-q", "-b", "main", str(mem)], capture_output=True)
                 tocados = [p for p in mem.rglob("*") if p.is_file() and ".git" not in p.parts and p.name != ".lock"]
             return f"Memoria inicializada · commit {_commit(proyecto, tocados, 'inicializar memoria')}"
