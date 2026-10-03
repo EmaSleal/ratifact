@@ -1,0 +1,9 @@
+# Configuración personal (rutas absolutas de cada usuario): ver projects.example.json
+projects.json
+# Telemetría local y memoria de este mismo proyecto (repo propio)
+logs/
+.project/
+# Python
+__pycache__/
+*.pyc
+*.tmp

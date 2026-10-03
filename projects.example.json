@@ -1,0 +1,7 @@
+{
+  "mi-proyecto": {
+    "ruta": "/home/usuario/Projects/mi-proyecto/repo",
+    "memoria": "/home/usuario/Projects/mi-proyecto/.project",
+    "escritura": [".project", "docs"]
+  }
+}
