@@ -658,7 +658,16 @@ def inicializar_memoria(proyecto: str) -> str:
 
 # ───────────────────────── prompts (comandos reutilizables) ─────────────────────────
 
-TEXTO_CIERRE = """Haz el cierre de esta sesión del proyecto `{proyecto}` con las herramientas de memoria-proyectos:
+def _proyecto_objetivo(proyecto: str) -> str:
+    """Texto que fija el proyecto. Sin argumento, el modelo lo toma del contexto del chat: nunca se asume uno."""
+    if proyecto.strip():
+        return f"el proyecto `{proyecto.strip()}`"
+    return ("el proyecto de este chat: tómalo de la línea `proyecto:` de las instrucciones del proyecto de Claude "
+            "(o del CLAUDE.md / AGENTS.md del repositorio). Si no hay ninguna o hay duda, llama `listar_proyectos` "
+            "y pregúntame cuál antes de seguir. No asumas ningún proyecto por defecto")
+
+
+TEXTO_CIERRE = """Haz el cierre de esta sesión para {objetivo}, con las herramientas de memoria-proyectos:
 
 1. Repasa la conversación y lista lo que se resolvió y lo que quedó abierto.
 2. Decisiones nuevas: regístralas con `registrar_decision` (siempre quedan como propuesta). Para las que yo haya
@@ -668,21 +677,21 @@ TEXTO_CIERRE = """Haz el cierre de esta sesión del proyecto `{proyecto}` con la
 4. `registrar_sesion` con un resumen breve (5–10 líneas): qué se hizo, qué se decidió, qué sigue.
 5. Regenera `INDEX.md` con `actualizar_indice`: un RESUMEN del estado real del proyecto (qué es, estado por hito/fase,
    foco actual, próximos pasos, dónde está cada cosa). Reescríbelo completo; no agregues líneas al anterior. Antes,
-   contrasta con `obtener_contexto("{proyecto}")`, `listar_tareas` y los acuerdos vigentes.
+   contrasta con `obtener_contexto`, `listar_tareas` y los acuerdos vigentes.
 6. Termina con una lista de lo que registraste (ids) y las propuestas que esperan mi confirmación.
 No inventes decisiones: si algo es ambiguo, déjalo como pendiente o pregúntame."""
 
 
 @mcp.prompt(name="cierre", description="Cierra la sesión: registra decisiones, pendientes y bitácora, y regenera INDEX.md")
-def prompt_cierre(proyecto: str = "game") -> str:
-    return TEXTO_CIERRE.format(proyecto=proyecto)
+def prompt_cierre(proyecto: str = "") -> str:
+    return TEXTO_CIERRE.format(objetivo=_proyecto_objetivo(proyecto))
 
 
 @mcp.prompt(name="inicio", description="Carga el contexto del proyecto antes de empezar a trabajar")
-def prompt_inicio(proyecto: str = "game") -> str:
-    return (f"Llama `obtener_contexto(\"{proyecto}\")` y resúmeme en 5 líneas: estado actual, tareas activas, "
-            "pendientes que bloquean y propuestas esperando mi confirmación. Si avisa que INDEX.md está "
-            "desactualizado, dímelo primero.")
+def prompt_inicio(proyecto: str = "") -> str:
+    return (f"Trabaja con {_proyecto_objetivo(proyecto)}. Llama `obtener_contexto` para ese proyecto y resúmeme en "
+            "5 líneas: estado actual, tareas activas, pendientes que bloquean y propuestas esperando mi confirmación. "
+            "Empieza diciendo qué proyecto cargaste. Si avisa que INDEX.md está desactualizado, dímelo primero.")
 
 
 if __name__ == "__main__":
