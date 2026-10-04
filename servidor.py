@@ -426,8 +426,10 @@ def revisar_propuestas(proyecto: str) -> str:
                 bloques.append(f"{cuerpo.strip()}\n\n_(propuesta del {m.get('fecha')})_")
         if not bloques:
             return "(no hay propuestas pendientes)"
-        return (f"{len(bloques)} propuesta(s) por revisar. Para cada una: confirmar (confirmar_decision con la cita "
-                "literal), ajustar (registrar una nueva y reemplazar_decision) o descartar (descartar_decision).\n\n"
+        return (f"{len(bloques)} propuesta(s) por revisar. Si la aplicación lo permite, preséntaselas al usuario como "
+                "preguntas de opción múltiple (confirmar / ajustar / descartar / posponer). Luego: confirmar "
+                "(confirmar_decision con su frase literal), ajustar (registrar una nueva y reemplazar_decision) o "
+                "descartar (descartar_decision). Haz las escrituras de a una, no en paralelo.\n\n"
                 + "\n\n---\n\n".join(bloques))
     return _ejecutar(f)
 
@@ -447,11 +449,16 @@ def _texto_propuesta(cuerpo: str, limite: int = 1200) -> str:
 
 @herramienta_async
 async def decidir_propuestas(proyecto: str, ctx: Context) -> str:
-    """Abre un formulario en la aplicación del usuario por cada propuesta pendiente para que él elija directamente:
-    confirmar, descartar, ajustar o posponer. Las respuestas vienen del usuario, no del modelo, así que las
-    confirmaciones y descartes se aplican sin intermediación. Devuelve el resumen y las propuestas a ajustar (con
-    el comentario del usuario) para que redactes la versión nueva. Si el cliente no soporta formularios, usa
-    revisar_propuestas + confirmar_decision/descartar_decision."""
+    """SOLO para aplicaciones que soportan formularios MCP (elicitation), como Claude Code. En Claude Desktop o
+    claude.ai NO la uses: llama revisar_propuestas y presenta las opciones (confirmar / ajustar / descartar /
+    posponer) con tus propias tarjetas o preguntas de opción múltiple; luego aplica confirmar_decision o
+    descartar_decision según lo que el usuario elija.
+    Abre un formulario por cada propuesta pendiente; las respuestas vienen del usuario sin pasar por el modelo,
+    así que confirmaciones y descartes se aplican directamente. Devuelve el resumen y las propuestas a ajustar."""
+    params = getattr(ctx.session, "client_params", None)
+    if not (params and params.capabilities and params.capabilities.elicitation):
+        return ("Esta aplicación no soporta formularios MCP. Usa revisar_propuestas y presenta las opciones con tus "
+                "propias tarjetas o preguntas de opción múltiple; luego confirmar_decision / descartar_decision.")
     carpeta = _mem(proyecto) / "decisiones"
     pendientes = []
     for p in sorted(carpeta.glob("ADR-*.md")) if carpeta.exists() else []:
