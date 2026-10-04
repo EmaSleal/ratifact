@@ -67,6 +67,8 @@ def test_documentos_en_subrepo_se_commitean_en_ese_repo(srv, multi):
 
 def test_configurar_pruebas_por_repo(srv, multi):
     assert "indica `repositorio`" in srv.configurar_pruebas(proyecto="fractall", comando="make test")
-    assert "`app/`: `uv run pytest`" in srv.configurar_pruebas(proyecto="fractall", repositorio="app", comando="uv run pytest")
+    salida = srv.configurar_pruebas(proyecto="fractall", repositorio="app", comando="uv run pytest")
+    assert "`app/`: `uv run pytest`" in salida
+    assert "Bloque actualizado" in salida and "- `app/`: `uv run pytest`" in salida   # el bloque ya trae el cambio
     assert "no es un repositorio" in srv.configurar_pruebas(proyecto="fractall", repositorio="nada")
     assert "app/: uv run pytest" in srv._comando_pruebas("fractall")

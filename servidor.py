@@ -1006,7 +1006,9 @@ def configurar_pruebas(proyecto: str, comando: str = "", repositorio: str = "") 
                            else f"`{nuevo}`")
         proyectos[proyecto]["pruebas"] = nuevo
         _escribir_atomico(CONFIG, json.dumps(proyectos, indent=2, ensure_ascii=False) + "\n")
-        return f"Pruebas de `{proyecto}`: {descripcion}" + ("" if comando.strip() else " (detectado)")
+        return (f"Pruebas de `{proyecto}`: {descripcion}" + ("" if comando.strip() else " (detectado)")
+                + "\n\nBloque actualizado para CLAUDE.md/AGENTS.md (reemplaza el anterior):\n\n"
+                + f"```\n{PLANTILLA_AGENTES.format(proyecto=proyecto)}{_linea_pruebas(proyecto)}\n```")
     return _ejecutar(f)
 
 
