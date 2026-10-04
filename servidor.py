@@ -775,6 +775,10 @@ def registrar_tarea(proyecto: str, titulo: str, objetivo: str, criterios_aceptac
                                   ("Fuera de alcance", fuera_de_alcance), ("Notas", notas)):
                 if valor:
                     secciones += [f"## {nombre}", valor]
+            cmd = _comando_pruebas(proyecto)
+            secciones += ["## Cómo verificar",
+                          f"Desde la raíz del repositorio: `{cmd}`" if cmd else
+                          "(sin comando de pruebas configurado: pregúntale al usuario o usa configurar_pruebas)"]
             secciones += ["## Resultado", "(lo completa Claude Code al terminar)"]
             _escribir_registro(ruta, meta, "\n\n".join(secciones))
             sha = _commit(proyecto, [ruta], f"{id_} {titulo} (pendiente)")
@@ -863,12 +867,49 @@ Si usas otra memoria de agente (p. ej. engram de gentle-ai), úsala solo para ap
 pendientes y tareas viven en `memoria-proyectos`, y ante una contradicción gana la decisión acordada."""
 
 
+def _detectar_pruebas(ruta: Path) -> str:
+    """Propone el comando de pruebas según los archivos del proyecto. Vacío si no reconoce nada."""
+    def hay(*nombres):
+        return any((ruta / n).exists() for n in nombres)
+    if hay("pom.xml"):
+        return "./mvnw test" if hay("mvnw") else "mvn test"
+    if hay("build.gradle", "build.gradle.kts"):
+        return "./gradlew test" if hay("gradlew") else "gradle test"
+    if hay("package.json"):
+        try:
+            if "test" not in json.loads((ruta / "package.json").read_text(encoding="utf-8")).get("scripts", {}):
+                return ""
+        except (ValueError, OSError):
+            return ""
+        return "pnpm test" if hay("pnpm-lock.yaml") else "yarn test" if hay("yarn.lock") else "npm test"
+    if hay("project.godot"):
+        runners = sorted(p.name for p in (ruta / "tests").glob("run_tests*.gd")) if hay("tests") else []
+        return " && ".join(f"godot --headless --path . -s res://tests/{r}" for r in runners)
+    if hay("Cargo.toml"):
+        return "cargo test"
+    if hay("go.mod"):
+        return "go test ./..."
+    if hay("pyproject.toml", "pytest.ini", "setup.cfg", "tests/conftest.py"):
+        return "python -m pytest -q"
+    return ""
+
+
+def _comando_pruebas(proyecto: str) -> str:
+    return _proyectos().get(proyecto, {}).get("pruebas", "")
+
+
+def _linea_pruebas(proyecto: str) -> str:
+    cmd = _comando_pruebas(proyecto)
+    return (f"\nComando de pruebas (desde la raíz del repositorio): `{cmd}`" if cmd
+            else "\nComando de pruebas: sin configurar (usa configurar_pruebas).")
+
+
 def _instrucciones(proyecto: str) -> str:
     return (f"Instrucciones para el proyecto `{proyecto}`.\n\n"
             "1) Pega esto en las instrucciones del proyecto de Claude (Claude Desktop / claude.ai):\n\n"
             f"```\n{PLANTILLA_INSTRUCCIONES.format(proyecto=proyecto)}\n```\n\n"
             "2) Agrega esto al CLAUDE.md (Claude Code) o AGENTS.md (Pi, Codex) del repositorio:\n\n"
-            f"```\n{PLANTILLA_AGENTES.format(proyecto=proyecto)}\n```")
+            f"```\n{PLANTILLA_AGENTES.format(proyecto=proyecto)}{_linea_pruebas(proyecto)}\n```")
 
 
 @herramienta
@@ -882,11 +923,28 @@ def instrucciones_proyecto(proyecto: str) -> str:
 
 
 @herramienta
-def registrar_proyecto(nombre: str, ruta: str, memoria: str = "") -> str:
+def configurar_pruebas(proyecto: str, comando: str = "") -> str:
+    """Fija el comando con que el agente de código verifica las tareas (/tarea). Sin `comando`, lo detecta a partir
+    de los archivos del proyecto. Se guarda en projects.json y aparece en cada tarea nueva."""
+    def f():
+        raiz = _raiz(proyecto)
+        cmd = comando.strip() or _detectar_pruebas(raiz)
+        if not cmd:
+            raise ErrorMemoria("No se reconoce el tipo de proyecto; indica el comando explícitamente.")
+        proyectos = _proyectos()
+        proyectos[proyecto]["pruebas"] = cmd
+        _escribir_atomico(CONFIG, json.dumps(proyectos, indent=2, ensure_ascii=False) + "\n")
+        return f"Comando de pruebas de `{proyecto}`: `{cmd}`" + ("" if comando.strip() else " (detectado)")
+    return _ejecutar(f)
+
+
+@herramienta
+def registrar_proyecto(nombre: str, ruta: str, memoria: str = "", pruebas: str = "") -> str:
     """Da de alta un proyecto: lo agrega a projects.json, inicializa su memoria (repo git propio) y devuelve las
     instrucciones para pegar en Claude y en CLAUDE.md/AGENTS.md. `ruta`: carpeta del código (debe existir dentro de
     la carpeta de proyectos). `memoria`: opcional; por defecto <carpeta de proyectos>/.memorias/<nombre>,
-    fuera del repositorio del código. Solo con confirmación del usuario."""
+    fuera del repositorio del código. `pruebas`: comando para correr las pruebas; si se omite se detecta
+    (Maven, Gradle, npm/pnpm/yarn, Godot, pytest, cargo, go). Solo con confirmación del usuario."""
     def f():
         if not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,40}", nombre):
             raise ErrorMemoria("Nombre inválido: minúsculas, números y guiones (2–41 caracteres).")
@@ -901,7 +959,8 @@ def registrar_proyecto(nombre: str, ruta: str, memoria: str = "") -> str:
         if not r.is_dir():
             raise ErrorMemoria(f"No existe la carpeta {r}.")
         anterior = CONFIG.read_text(encoding="utf-8") if CONFIG.exists() else None
-        proyectos[nombre] = {"ruta": str(r), "memoria": str(m), "escritura": [MEM, "docs"]}
+        proyectos[nombre] = {"ruta": str(r), "memoria": str(m), "escritura": [MEM, "docs"],
+                             "pruebas": pruebas.strip() or _detectar_pruebas(r)}
         CONFIG.parent.mkdir(parents=True, exist_ok=True)
         _escribir_atomico(CONFIG, json.dumps(proyectos, indent=2, ensure_ascii=False) + "\n")
         resultado = inicializar_memoria(proyecto=nombre)
