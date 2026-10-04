@@ -42,7 +42,13 @@ CONFIG = Path(os.environ.get(
 MEM = ".project"
 LIMITE_INDICE = 6000          # caracteres (~1.5k tokens)
 LIMITE_LECTURA = 40_000       # caracteres por lectura de documento
-EXT_TEXTO = {".md", ".txt", ".json", ".gd", ".py", ".sh", ".cfg", ".tscn", ".csv", ".yaml", ".yml", ".toml"}
+EXT_TEXTO = {".md", ".txt", ".json", ".gd", ".py", ".sh", ".cfg", ".tscn", ".csv", ".yaml", ".yml", ".toml",
+             ".java", ".kt", ".gradle", ".properties", ".xml", ".sql", ".ts", ".tsx", ".js", ".jsx", ".vue",
+             ".html", ".css", ".scss", ".go", ".rs", ".env.example", ".ini"}
+# Fuera de git (o si git falla) no se recorren estas carpetas: dependencias y artefactos de compilación.
+CARPETAS_IGNORADAS = {".git", ".godot", "node_modules", "target", "build", "dist", "out", ".gradle", ".idea",
+                      ".venv", "venv", "__pycache__", ".next", ".nuxt", ".angular", "coverage", ".pytest_cache"}
+LIMITE_ARCHIVO_BUSQUEDA = 1_000_000   # bytes: archivos más grandes no se recorren en buscar
 
 mcp = FastMCP(
     "memoria-proyectos",
@@ -592,6 +598,26 @@ def cerrar_pendiente(proyecto: str, id: str, resolucion: str, id_decision: str =
     return _ejecutar(f)
 
 
+def _archivos_proyecto(base: Path, usar_git: bool = True) -> list[Path]:
+    """Archivos del proyecto respetando .gitignore: en un repo git usa `git ls-files` (versionados + nuevos no
+    ignorados); si no, recorre la carpeta. En ambos casos salta CARPETAS_IGNORADAS (aunque falten en el
+    .gitignore) y nunca incluye .git."""
+    if not base.is_dir():
+        return []
+    if usar_git and (base / ".git").exists():
+        r = subprocess.run(["git", "-C", str(base), "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+                           capture_output=True, text=True)
+        if r.returncode == 0:
+            rutas = {base / x for x in r.stdout.split("\0")
+                     if x and not CARPETAS_IGNORADAS.intersection(Path(x).parts[:-1])}
+            return sorted(p for p in rutas if p.is_file())
+    salida = []
+    for actual, dirs, archivos in os.walk(base):
+        dirs[:] = sorted(d for d in dirs if d not in CARPETAS_IGNORADAS)
+        salida += [Path(actual) / a for a in sorted(archivos) if a != ".lock"]
+    return salida
+
+
 @herramienta
 def buscar(proyecto: str, texto: str, max_resultados: int = 20) -> str:
     """Busca texto (sin distinguir mayúsculas) en archivos de texto del proyecto y devuelve
@@ -600,17 +626,17 @@ def buscar(proyecto: str, texto: str, max_resultados: int = 20) -> str:
         raiz, mem = _raiz(proyecto), _mem(proyecto)
         patron = re.compile(re.escape(texto), re.I)
         res = []
-        bases = [(raiz, "")] + ([(mem, MEM + "/")] if raiz not in mem.parents else [])
-        for base, prefijo in bases:
-            for p in sorted(base.rglob("*")):
-                rel = p.relative_to(base)
-                if rel.parts and rel.parts[0] in (".git", ".godot") or ".git" in rel.parts \
-                        or not p.is_file() or p.suffix not in EXT_TEXTO:
+        codigo = [p for p in _archivos_proyecto(raiz) if p != mem and mem not in p.parents]
+        for base, prefijo, archivos in ((raiz, "", codigo), (mem, MEM + "/", _archivos_proyecto(mem, usar_git=False))):
+            for p in archivos:
+                if p.suffix not in EXT_TEXTO:
                     continue
                 try:
+                    if p.stat().st_size > LIMITE_ARCHIVO_BUSQUEDA:
+                        continue
                     for n, linea in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
                         if patron.search(linea):
-                            res.append(f"{prefijo}{rel}:{n}: {linea.strip()[:200]}")
+                            res.append(f"{prefijo}{p.relative_to(base)}:{n}: {linea.strip()[:200]}")
                             if len(res) >= max_resultados:
                                 return "\n".join(res) + "\n(… más resultados; refina la búsqueda)"
                 except (UnicodeDecodeError, OSError):
@@ -624,8 +650,10 @@ def listar_documentos(proyecto: str, carpeta: str = "docs") -> str:
     """Lista archivos (con tamaño) bajo una carpeta del proyecto."""
     def f():
         base = _ruta_segura(proyecto, carpeta)
-        filas = [f"{carpeta.rstrip('/')}/{p.relative_to(base)}  ({p.stat().st_size} B)" for p in sorted(base.rglob("*"))
-                 if p.is_file() and ".git" not in p.parts and p.name != ".lock"]
+        en_memoria = carpeta.split("/")[0] == MEM
+        repo = _mem(proyecto) if en_memoria else _raiz(proyecto)
+        archivos = [p for p in _archivos_proyecto(repo, usar_git=not en_memoria) if p == base or base in p.parents]
+        filas = [f"{carpeta.rstrip('/')}/{p.relative_to(base)}  ({p.stat().st_size} B)" for p in archivos]
         return "\n".join(filas) or "(vacío)"
     return _ejecutar(f)
 

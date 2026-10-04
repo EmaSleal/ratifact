@@ -59,3 +59,36 @@ def test_buscar_en_codigo_y_memoria(srv, proyecto):
 def test_listar_documentos(srv, proyecto):
     assert "docs/vision.md" in srv.listar_documentos(proyecto="demo")
     assert ".project/acuerdos.md" in srv.listar_documentos(proyecto="demo", carpeta=".project")
+
+
+def test_buscar_respeta_gitignore_y_salta_dependencias(srv, proyecto):
+    """Backlog punto 3: en proyectos con dependencias (node_modules, target) buscar no debe recorrerlas."""
+    repo = proyecto["repo"]
+    (repo / ".gitignore").write_text("secreto.md\nbuild/\n")
+    (repo / "secreto.md").write_text("lobo alfa ignorado\n")
+    (repo / "build").mkdir()
+    (repo / "build" / "salida.md").write_text("lobo alfa compilado\n")
+    (repo / "node_modules" / "pkg").mkdir(parents=True)
+    (repo / "node_modules" / "pkg" / "index.js").write_text("// lobo alfa dependencia\n")
+    (repo / "nuevo.md").write_text("lobo alfa sin commitear\n")          # nuevo y no ignorado: sí se busca
+    (repo / "src").mkdir()
+    (repo / "src" / "Lobo.java").write_text("class LoboAlfa {}  // lobo alfa en Java\n")
+    salida = srv.buscar(proyecto="demo", texto="lobo alfa")
+    assert "nuevo.md" in salida and "docs/vision.md" in salida and "src/Lobo.java" in salida
+    for ignorado in ("secreto.md", "build/", "node_modules"):
+        assert ignorado not in salida
+
+
+def test_buscar_sin_git_salta_carpetas_conocidas(srv, entorno):
+    carpeta = entorno["base"] / "sin-git"
+    (carpeta / "target" / "classes").mkdir(parents=True)
+    (carpeta / "target" / "classes" / "a.properties").write_text("clave=lobo\n")
+    (carpeta / "app.properties").write_text("clave=lobo\n")
+    srv.registrar_proyecto(nombre="sin-git", ruta=str(carpeta))
+    salida = srv.buscar(proyecto="sin-git", texto="lobo")
+    assert "app.properties" in salida and "target" not in salida
+
+
+def test_buscar_omite_archivos_enormes(srv, proyecto):
+    (proyecto["repo"] / "docs" / "enorme.md").write_text("lobo alfa\n" * 200_000)
+    assert "enorme.md" not in srv.buscar(proyecto="demo", texto="lobo alfa", max_resultados=50)
