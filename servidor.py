@@ -81,7 +81,7 @@ def _registrar_uso(nombre: str, kwargs: dict, respuesta, ms: float) -> None:
         }
         if fila["error"]:
             fila["detalle"] = texto[:160]
-        if nombre in ("leer_documento", "guardar_documento") and "ruta" in kwargs:
+        if nombre in ("leer_documento", "guardar_documento", "crear_documento") and "ruta" in kwargs:
             fila["ruta"] = kwargs["ruta"]
         if nombre == "buscar":
             fila["resultados"] = 0 if texto == "(sin coincidencias)" else texto.count("\n") + 1
@@ -629,27 +629,38 @@ def leer_documento(proyecto: str, ruta: str, desde_linea: int = 1, hasta_linea: 
     return _ejecutar(f)
 
 
+def _escribir_documento(proyecto: str, ruta: str, contenido: str, nuevo: bool, anexar: bool, motivo: str) -> str:
+    p = _ruta_segura(proyecto, ruta, escribir=True)
+    if p.suffix not in EXT_TEXTO:
+        raise ErrorMemoria("Solo archivos de texto; los binarios se generan con el agente de código.")
+    with _bloqueo(proyecto):
+        if nuevo and p.exists():
+            raise ErrorMemoria(f"{ruta} ya existe; para modificarlo usa guardar_documento.")
+        if not nuevo and not p.exists():
+            raise ErrorMemoria(f"{ruta} no existe; para crearlo usa crear_documento.")
+        final = (p.read_text(encoding="utf-8").rstrip("\n") + "\n\n" + contenido) if anexar else contenido
+        _escribir_atomico(p, final if final.endswith("\n") else final + "\n")
+        accion = "crear" if nuevo else ("anexar" if anexar else "reemplazar")
+        sha = _commit(proyecto, [p], f"{accion} {ruta}" + (f" — {motivo}" if motivo else ""))
+        return f"{ruta} guardado ({accion}) · commit {sha}"
+
+
+@herramienta
+def crear_documento(proyecto: str, ruta: str, contenido: str, motivo: str = "") -> str:
+    """Crea un archivo de texto NUEVO en una zona autorizada (por defecto .project/ y docs/). Falla si ya existe.
+    Separada de guardar_documento para que el usuario pueda exigir aprobación al crear archivos."""
+    return _ejecutar(lambda: _escribir_documento(proyecto, ruta, contenido, True, False, motivo))
+
+
 @herramienta
 def guardar_documento(proyecto: str, ruta: str, contenido: str, modo: str = "reemplazar",
                       motivo: str = "") -> str:
-    """Escribe un archivo de texto en una zona autorizada (por defecto .project/ y docs/).
-    modo: 'reemplazar' | 'anexar' | 'crear' (falla si ya existe)."""
+    """Modifica un archivo de texto EXISTENTE en una zona autorizada. modo: 'reemplazar' | 'anexar'.
+    Para crear un archivo nuevo usa crear_documento."""
     def f():
-        p = _ruta_segura(proyecto, ruta, escribir=True)
-        if p.suffix not in EXT_TEXTO:
-            raise ErrorMemoria("Solo archivos de texto; los binarios se generan con Claude Code.")
-        with _bloqueo(proyecto):
-            if modo == "crear" and p.exists():
-                raise ErrorMemoria(f"{ruta} ya existe.")
-            if modo == "anexar" and p.exists():
-                contenido_final = p.read_text(encoding="utf-8").rstrip("\n") + "\n\n" + contenido
-            elif modo in ("reemplazar", "crear", "anexar"):
-                contenido_final = contenido
-            else:
-                raise ErrorMemoria("modo inválido.")
-            _escribir_atomico(p, contenido_final if contenido_final.endswith("\n") else contenido_final + "\n")
-            sha = _commit(proyecto, [p], f"{modo} {ruta}" + (f" — {motivo}" if motivo else ""))
-            return f"{ruta} guardado ({modo}) · commit {sha}"
+        if modo not in ("reemplazar", "anexar"):
+            raise ErrorMemoria("modo inválido: 'reemplazar' o 'anexar' (para crear, usa crear_documento).")
+        return _escribir_documento(proyecto, ruta, contenido, False, modo == "anexar", motivo)
     return _ejecutar(f)
 
 
@@ -792,7 +803,7 @@ Cuando lleguemos a una decisión, regístrala con `registrar_decision` (queda co
 explícitamente, llama `confirmar_decision` con mi frase literal en `cita_usuario`; la aplicación me pedirá aprobarla.
 Todo tema sin resolver va con `registrar_pendiente`; al resolverlo, `cerrar_pendiente`.
 Para consultar documentos usa primero `buscar` y lee rangos con `leer_documento`; no leas documentos completos si no hace falta.
-Los documentos de diseño se guardan con `guardar_documento` en `docs/`. No generes .zip.
+Los documentos de diseño se crean con `crear_documento` y se modifican con `guardar_documento`, en `docs/`. No generes .zip.
 Cuando acordemos un cambio de código, no lo describas como prompt: regístralo con `registrar_tarea` (objetivo, criterios
 de aceptación verificables, ADR aplicables, archivos involucrados y fuera de alcance) y dime el comando `/tarea T-NNN`.
 Marca una tarea `integrada` o `descartada` solo cuando yo lo confirme.

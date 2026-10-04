@@ -51,18 +51,5 @@
       "Bash(git reset --hard:*)",
       "Bash(git clean -fd:*)"
     ]
-  },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/preguntar_si_es_nuevo.sh"
-          }
-        ]
-      }
-    ]
   }
 }

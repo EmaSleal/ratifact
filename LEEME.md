@@ -86,3 +86,10 @@ confirmar (`confirmar_decision`, con aprobación), ajustar (nueva decisión + `r
 Con formularios: "decidamos las propuestas" → `decidir_propuestas` abre un formulario por propuesta en la aplicación
 (confirmar / descartar / ajustar / posponer + comentario). La respuesta viene directo del usuario, sin pasar por el
 modelo. Si la aplicación no soporta formularios (MCP elicitation), la herramienta lo indica y se usa el flujo por chat.
+
+## 10. Aprobaciones en Claude Desktop
+Crear registros en la memoria debe pasar por usted; modificar o leer, no. Marque como "requiere aprobación":
+`registrar_decision`, `registrar_pendiente`, `registrar_tarea`, `crear_documento`, `registrar_proyecto` y `confirmar_decision`.
+Deje en "permitir siempre" el resto (lecturas, `guardar_documento` sobre archivos existentes, `actualizar_tarea`,
+`actualizar_indice`, `registrar_sesion`, `descartar_decision`, `reemplazar_decision`). El servidor no tiene herramientas
+para borrar archivos: nada se elimina, solo cambia de estado. En Claude Code no se usan aprobaciones para el código.
