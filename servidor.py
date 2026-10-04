@@ -161,6 +161,25 @@ def _mem(proyecto: str) -> Path:
     return mem
 
 
+def _repos(proyecto: str) -> list[str]:
+    """Subcarpetas que son repositorios git, para proyectos de varios repos (p. ej. backend + frontend).
+    Vacío si la raíz misma es un repositorio."""
+    raiz = _raiz(proyecto)
+    if (raiz / ".git").exists():
+        return []
+    return sorted(d.name for d in raiz.iterdir() if d.is_dir() and (d / ".git").exists())
+
+
+def _repo_de(ruta: Path, tope: Path) -> Path | None:
+    """Repositorio git más cercano que contiene `ruta`, sin salir de `tope`."""
+    for d in [ruta, *ruta.parents]:
+        if (d / ".git").exists():
+            return d
+        if d == tope:
+            break
+    return None
+
+
 def _zonas_escritura(proyecto: str) -> list[str]:
     return _proyectos()[proyecto].get("escritura", [MEM, "docs"])
 
@@ -189,8 +208,11 @@ def _ruta_segura(proyecto: str, relativa: str, escribir: bool = False) -> Path:
         raise ErrorMemoria("No se permite acceder a .git.")
     if escribir:
         zonas = _zonas_escritura(proyecto)
-        if not partes or partes[0] not in zonas:
-            raise ErrorMemoria(f"Escritura solo permitida en: {', '.join(zonas)}")
+        en_subrepo = len(partes) > 1 and partes[0] in _repos(proyecto) and partes[1] in zonas
+        if not partes or not (partes[0] in zonas or en_subrepo):
+            raise ErrorMemoria(f"Escritura solo permitida en: {', '.join(zonas)}"
+                               + (f" (o <repo>/{zonas[-1]} con repo en {', '.join(_repos(proyecto))})"
+                                  if _repos(proyecto) else ""))
     return destino
 
 
@@ -221,7 +243,7 @@ def _commit(proyecto: str, rutas: list[Path], mensaje: str) -> str:
     grupos: dict[Path, list[str]] = {}
     for r in rutas:
         en_mem = r == mem or mem in r.parents
-        repo = mem if en_mem else raiz
+        repo = mem if en_mem else (_repo_de(r.parent, raiz) or raiz)
         grupos.setdefault(repo, []).append(str(r.relative_to(repo)))
     resultados = []
     for repo, rel in grupos.items():
@@ -349,7 +371,8 @@ def listar_proyectos() -> str:
                 estado = "[memoria lista]" if (_mem(nombre) / "INDEX.md").exists() else "[sin memoria]"
             except ErrorMemoria as e:
                 estado = f"[configuración inválida: {e}]"
-            filas.append(f"- {nombre}: {ruta} {estado}")
+            repos = _repos(nombre) if ruta.is_dir() else []
+            filas.append(f"- {nombre}: {ruta} {estado}" + (f" · repos: {', '.join(repos)}" if repos else ""))
         return "\n".join(filas) or "(sin proyectos)"
     return _ejecutar(f)
 
@@ -607,8 +630,8 @@ def cerrar_pendiente(proyecto: str, id: str, resolucion: str, id_decision: str =
 
 def _archivos_proyecto(base: Path, usar_git: bool = True) -> list[Path]:
     """Archivos del proyecto respetando .gitignore: en un repo git usa `git ls-files` (versionados + nuevos no
-    ignorados); si no, recorre la carpeta. En ambos casos salta CARPETAS_IGNORADAS (aunque falten en el
-    .gitignore) y nunca incluye .git."""
+    ignorados); si no, recorre la carpeta y, al encontrar un repo anidado (proyectos de varios repos), usa el
+    .gitignore de ese repo. Siempre salta CARPETAS_IGNORADAS y nunca incluye .git."""
     if not base.is_dir():
         return []
     if usar_git and (base / ".git").exists():
@@ -620,7 +643,10 @@ def _archivos_proyecto(base: Path, usar_git: bool = True) -> list[Path]:
             return sorted(p for p in rutas if p.is_file())
     salida = []
     for actual, dirs, archivos in os.walk(base):
-        dirs[:] = sorted(d for d in dirs if d not in CARPETAS_IGNORADAS)
+        anidados = [d for d in dirs if usar_git and (Path(actual) / d / ".git").exists()]
+        for d in anidados:
+            salida += _archivos_proyecto(Path(actual) / d)
+        dirs[:] = sorted(d for d in dirs if d not in CARPETAS_IGNORADAS and d not in anidados)
         salida += [Path(actual) / a for a in sorted(archivos) if a != ".lock"]
     return salida
 
@@ -755,7 +781,7 @@ def _resumen_tareas(proyecto: str, solo_activas: bool = True) -> list[str]:
         m, _ = _leer_registro(p)
         if solo_activas and m.get("estado") in ("integrada", "descartada"):
             continue
-        rama = f" · rama {m['rama']}" if m.get("rama") else ""
+        rama = (f" · rama {m['rama']}" if m.get("rama") else "") + (f" en {m['repositorio']}/" if m.get("repositorio") else "")
         filas.append(f"- **{m.get('id')}** [{m.get('estado')}] {m.get('titulo')}{rama}")
     return filas
 
@@ -763,12 +789,18 @@ def _resumen_tareas(proyecto: str, solo_activas: bool = True) -> list[str]:
 @herramienta
 def registrar_tarea(proyecto: str, titulo: str, objetivo: str, criterios_aceptacion: str,
                     decisiones: str = "", archivos: str = "", fuera_de_alcance: str = "",
-                    notas: str = "") -> str:
+                    notas: str = "", repositorio: str = "") -> str:
     """Crea una especificación de trabajo para Claude Code en .project/tareas/T-NNN.md (estado 'pendiente').
+    En proyectos de varios repos, `repositorio` (obligatorio) indica la carpeta donde se trabaja.
     Debe ser autosuficiente: Claude Code la ejecuta sin este chat. `criterios_aceptacion`: lista verificable
     (pruebas que deben pasar, comportamiento observable). `decisiones`: ids de ADR aplicables.
     `archivos`: rutas que probablemente se tocan. El usuario la ejecuta con /tarea T-NNN en Claude Code."""
     def f():
+        repos = _repos(proyecto)
+        if repos and repositorio not in repos:
+            raise ErrorMemoria(f"Proyecto de varios repositorios: indica `repositorio` ({', '.join(repos)}).")
+        if not repos and repositorio:
+            raise ErrorMemoria("Este proyecto tiene un solo repositorio; omite `repositorio`.")
         with _bloqueo(proyecto):
             carpeta = _mem(proyecto) / "tareas"
             carpeta.mkdir(parents=True, exist_ok=True)
@@ -776,15 +808,18 @@ def registrar_tarea(proyecto: str, titulo: str, objetivo: str, criterios_aceptac
             ruta = carpeta / f"{id_}-{_slug(titulo)}.md"
             meta = {"id": id_, "titulo": titulo, "estado": "pendiente", "fecha": _hoy(),
                     "rama": f"{id_.lower()}-{_slug(titulo)}"}
+            if repositorio:
+                meta["repositorio"] = repositorio
             secciones = [f"# {id_} — {titulo}", "## Objetivo", objetivo,
                          "## Criterios de aceptación", criterios_aceptacion]
             for nombre, valor in (("Decisiones aplicables", decisiones), ("Archivos involucrados", archivos),
                                   ("Fuera de alcance", fuera_de_alcance), ("Notas", notas)):
                 if valor:
                     secciones += [f"## {nombre}", valor]
-            cmd = _comando_pruebas(proyecto)
+            cmd = _comando_pruebas(proyecto, repositorio)
+            donde = f"Desde `{repositorio}/`" if repositorio else "Desde la raíz del repositorio"
             secciones += ["## Cómo verificar",
-                          f"Desde la raíz del repositorio: `{cmd}`" if cmd else
+                          f"{donde}: `{cmd}`" if cmd else
                           "(sin comando de pruebas configurado: pregúntale al usuario o usa configurar_pruebas)"]
             secciones += ["## Resultado", "(lo completa Claude Code al terminar)"]
             _escribir_registro(ruta, meta, "\n\n".join(secciones))
@@ -899,13 +934,29 @@ def _detectar_pruebas(ruta: Path) -> str:
     return ""
 
 
-def _comando_pruebas(proyecto: str) -> str:
-    return _proyectos().get(proyecto, {}).get("pruebas", "")
+def _detectar_pruebas_proyecto(raiz: Path) -> str | dict:
+    """Un comando para proyectos de un repo; un comando por repo en proyectos de varios repos."""
+    if (raiz / ".git").exists() or _detectar_pruebas(raiz):
+        return _detectar_pruebas(raiz)
+    subrepos = sorted(d for d in raiz.iterdir() if d.is_dir() and (d / ".git").exists()) if raiz.is_dir() else []
+    return {d.name: c for d in subrepos if (c := _detectar_pruebas(d))}
+
+
+def _comando_pruebas(proyecto: str, repositorio: str = "") -> str:
+    """Comando de pruebas de un repo; sin `repositorio` en proyectos multi-repo, la lista completa."""
+    cfg = _proyectos().get(proyecto, {}).get("pruebas", "")
+    if isinstance(cfg, dict):
+        if repositorio:
+            return cfg.get(repositorio, "")
+        return "; ".join(f"{repo}/: {cmd}" for repo, cmd in cfg.items())
+    return cfg
 
 
 def _linea_pruebas(proyecto: str) -> str:
-    cmd = _comando_pruebas(proyecto)
-    return (f"\nComando de pruebas (desde la raíz del repositorio): `{cmd}`" if cmd
+    cfg = _proyectos().get(proyecto, {}).get("pruebas", "")
+    if isinstance(cfg, dict) and cfg:
+        return "\nComandos de pruebas por repositorio:\n" + "\n".join(f"- `{r}/`: `{c}`" for r, c in cfg.items())
+    return (f"\nComando de pruebas (desde la raíz del repositorio): `{cfg}`" if cfg
             else "\nComando de pruebas: sin configurar (usa configurar_pruebas).")
 
 
@@ -928,18 +979,34 @@ def instrucciones_proyecto(proyecto: str) -> str:
 
 
 @herramienta
-def configurar_pruebas(proyecto: str, comando: str = "") -> str:
+def configurar_pruebas(proyecto: str, comando: str = "", repositorio: str = "") -> str:
     """Fija el comando con que el agente de código verifica las tareas (/tarea). Sin `comando`, lo detecta a partir
-    de los archivos del proyecto. Se guarda en projects.json y aparece en cada tarea nueva."""
+    de los archivos. En proyectos de varios repos, `repositorio` indica a cuál se aplica (sin él y sin comando,
+    redetecta todos). Se guarda en projects.json y aparece en cada tarea nueva."""
     def f():
-        raiz = _raiz(proyecto)
-        cmd = comando.strip() or _detectar_pruebas(raiz)
-        if not cmd:
-            raise ErrorMemoria("No se reconoce el tipo de proyecto; indica el comando explícitamente.")
+        raiz, repos = _raiz(proyecto), _repos(proyecto)
         proyectos = _proyectos()
-        proyectos[proyecto]["pruebas"] = cmd
+        actual = proyectos[proyecto].get("pruebas", "")
+        if repositorio:
+            if repositorio not in repos:
+                raise ErrorMemoria(f"'{repositorio}' no es un repositorio del proyecto. Disponibles: {', '.join(repos) or '(ninguno)'}")
+            cmd = comando.strip() or _detectar_pruebas(raiz / repositorio)
+            if not cmd:
+                raise ErrorMemoria("No se reconoce el tipo de repositorio; indica el comando explícitamente.")
+            nuevo = dict(actual) if isinstance(actual, dict) else {}
+            nuevo[repositorio] = cmd
+            descripcion = f"`{repositorio}/`: `{cmd}`"
+        else:
+            if repos and comando.strip():
+                raise ErrorMemoria(f"Proyecto de varios repositorios: indica `repositorio` ({', '.join(repos)}).")
+            nuevo = comando.strip() or _detectar_pruebas_proyecto(raiz)
+            if not nuevo:
+                raise ErrorMemoria("No se reconoce el tipo de proyecto; indica el comando explícitamente.")
+            descripcion = (", ".join(f"`{r}/`: `{c}`" for r, c in nuevo.items()) if isinstance(nuevo, dict)
+                           else f"`{nuevo}`")
+        proyectos[proyecto]["pruebas"] = nuevo
         _escribir_atomico(CONFIG, json.dumps(proyectos, indent=2, ensure_ascii=False) + "\n")
-        return f"Comando de pruebas de `{proyecto}`: `{cmd}`" + ("" if comando.strip() else " (detectado)")
+        return f"Pruebas de `{proyecto}`: {descripcion}" + ("" if comando.strip() else " (detectado)")
     return _ejecutar(f)
 
 
@@ -968,7 +1035,7 @@ def registrar_proyecto(nombre: str, ruta: str, memoria: str = "", pruebas: str =
                                "omite `memoria` para usar .memorias/<nombre>.")
         anterior = CONFIG.read_text(encoding="utf-8") if CONFIG.exists() else None
         proyectos[nombre] = {"ruta": str(r), "memoria": str(m), "escritura": [MEM, "docs"],
-                             "pruebas": pruebas.strip() or _detectar_pruebas(r)}
+                             "pruebas": pruebas.strip() or _detectar_pruebas_proyecto(r)}
         CONFIG.parent.mkdir(parents=True, exist_ok=True)
         _escribir_atomico(CONFIG, json.dumps(proyectos, indent=2, ensure_ascii=False) + "\n")
         resultado = inicializar_memoria(proyecto=nombre)
@@ -980,6 +1047,12 @@ def registrar_proyecto(nombre: str, ruta: str, memoria: str = "", pruebas: str =
             raise ErrorMemoria(f"No se pudo inicializar la memoria; alta revertida. {resultado}")
         aviso = "" if (r / ".git").exists() else ("\n⚠ La carpeta del código no es un repositorio git: los documentos "
                                                   "en docs/ no quedarán versionados hasta que ejecutes `git init`.")
+        repos = _repos(nombre)
+        if repos:
+            aviso = (f"\nProyecto de varios repositorios: {', '.join(repos)}. Cada tarea indica en cuál se trabaja; "
+                     "agrega el bloque de abajo al CLAUDE.md/AGENTS.md de cada uno."
+                     + ("" if (r / ".git").exists() else " La carpeta raíz no es un repo: lo que se guarde en "
+                        "su docs/ no queda versionado (usa <repo>/docs/ o la memoria)."))
         return f"{resultado}{aviso}\n\n{_instrucciones(nombre)}"
     return _ejecutar(f)
 

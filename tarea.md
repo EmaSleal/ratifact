@@ -6,11 +6,11 @@ argument-hint: T-NNN
 Ejecuta la tarea **$ARGUMENTS** del proyecto de este repositorio.
 
 ## 0. Identificar el proyecto
-El nombre del proyecto en `memoria-proyectos` está en el `CLAUDE.md` / `AGENTS.md` de este repositorio ("con el proyecto `<nombre>`"). Si no lo encuentras, llama `listar_proyectos` y elige el que tenga la ruta del directorio actual; si sigue sin estar claro, pregúntame. En adelante, `<proyecto>` es ese nombre.
+El nombre del proyecto en `memoria-proyectos` está en el `CLAUDE.md` / `AGENTS.md` de este repositorio ("con el proyecto `<nombre>`"). Si no lo encuentras, llama `listar_proyectos` y elige el proyecto cuya ruta contiene el directorio actual (en proyectos de varios repos, la ruta es la carpeta que los agrupa); si sigue sin estar claro, pregúntame. En adelante, `<proyecto>` es ese nombre.
 
 ## 1. Preparar
 1. Lee la especificación con la herramienta MCP `memoria-proyectos` → `leer_documento("<proyecto>", ".project/tareas/<archivo de $ARGUMENTS>")` (usa `listar_tareas("<proyecto>")` si no conoces el nombre exacto).
-2. Si su estado no es `pendiente` ni `fallida`, detente y avísame.
+2. Si su estado no es `pendiente` ni `fallida`, detente y avísame. Si la spec trae el campo `repositorio` (proyectos de varios repos), **todo lo que sigue —git, ramas, comandos y pruebas— se hace dentro de esa carpeta**, no en la raíz del proyecto.
 3. Lee las decisiones listadas en "Decisiones aplicables" (`.project/decisiones/`). Solo las **acordadas** son reglas.
 4. Verifica con `git status` que el árbol de trabajo esté limpio. Si hay cambios sin commitear, **detente** y pregúntame; no los muevas ni los descartes.
 5. Crea la rama indicada en el campo `rama` de la spec **desde `main`**: `git switch main && git switch -c <rama>`. Excepción: si la spec indica trabajar sobre una rama existente, cámbiate a esa rama (`git switch <rama existente>`) y no crees otra.
