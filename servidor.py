@@ -31,7 +31,8 @@ import subprocess
 from contextlib import contextmanager
 from pathlib import Path
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
+from pydantic import BaseModel, Field
 
 CONFIG = Path(os.environ.get(
     "MEMORIA_PROYECTOS_CONFIG",
@@ -72,7 +73,7 @@ def _registrar_uso(nombre: str, kwargs: dict, respuesta, ms: float) -> None:
             "herramienta": nombre,
             "proyecto": kwargs.get("proyecto"),
             "args_chars": {k: len(str(v)) for k, v in kwargs.items()
-                           if k != "proyecto" and not isinstance(v, (bool, int))},
+                           if k not in ("proyecto", "ctx") and not isinstance(v, (bool, int))},
             "params": {k: v for k, v in kwargs.items() if isinstance(v, (bool, int))},
             "resp_chars": len(texto),
             "ms": round(ms, 1),
@@ -97,6 +98,17 @@ def herramienta(fn):
     def envoltura(*args, **kwargs):
         inicio = time.perf_counter()
         respuesta = fn(*args, **kwargs)
+        _registrar_uso(fn.__name__, kwargs, respuesta, (time.perf_counter() - inicio) * 1000)
+        return respuesta
+    return mcp.tool()(envoltura)
+
+
+def herramienta_async(fn):
+    """Igual que `herramienta`, para herramientas asíncronas (las que interactúan con el usuario)."""
+    @functools.wraps(fn)
+    async def envoltura(*args, **kwargs):
+        inicio = time.perf_counter()
+        respuesta = await fn(*args, **kwargs)
         _registrar_uso(fn.__name__, kwargs, respuesta, (time.perf_counter() - inicio) * 1000)
         return respuesta
     return mcp.tool()(envoltura)
@@ -418,6 +430,72 @@ def revisar_propuestas(proyecto: str) -> str:
                 "literal), ajustar (registrar una nueva y reemplazar_decision) o descartar (descartar_decision).\n\n"
                 + "\n\n---\n\n".join(bloques))
     return _ejecutar(f)
+
+
+class DecisionUsuario(BaseModel):
+    accion: str = Field(
+        json_schema_extra={"enum": ["confirmar", "descartar", "ajustar", "posponer"]},
+        description="confirmar = pasa a acordada · descartar = se cierra · ajustar = pedir una nueva versión · "
+                    "posponer = sigue como propuesta")
+    comentario: str = Field(default="", description="Opcional. Motivo del descarte o qué cambiar al ajustar.")
+
+
+def _texto_propuesta(cuerpo: str, limite: int = 1200) -> str:
+    texto = re.sub(r"\n{3,}", "\n\n", cuerpo.strip())
+    return texto if len(texto) <= limite else texto[:limite] + "…"
+
+
+@herramienta_async
+async def decidir_propuestas(proyecto: str, ctx: Context) -> str:
+    """Abre un formulario en la aplicación del usuario por cada propuesta pendiente para que él elija directamente:
+    confirmar, descartar, ajustar o posponer. Las respuestas vienen del usuario, no del modelo, así que las
+    confirmaciones y descartes se aplican sin intermediación. Devuelve el resumen y las propuestas a ajustar (con
+    el comentario del usuario) para que redactes la versión nueva. Si el cliente no soporta formularios, usa
+    revisar_propuestas + confirmar_decision/descartar_decision."""
+    carpeta = _mem(proyecto) / "decisiones"
+    pendientes = []
+    for p in sorted(carpeta.glob("ADR-*.md")) if carpeta.exists() else []:
+        m, cuerpo = _leer_registro(p)
+        if m.get("estado") == "propuesta":
+            pendientes.append((m.get("id"), cuerpo))
+    if not pendientes:
+        return "(no hay propuestas pendientes)"
+
+    hechos, ajustes, pospuestas = [], [], []
+    for i, (id_, cuerpo) in enumerate(pendientes, 1):
+        try:
+            r = await ctx.elicit(f"Propuesta {i} de {len(pendientes)}\n\n{_texto_propuesta(cuerpo)}", DecisionUsuario)
+        except Exception as e:   # el cliente no implementa formularios (elicitation)
+            return ("ERROR: este cliente no soporta formularios interactivos "
+                    f"({type(e).__name__}). Usa revisar_propuestas y luego confirmar_decision / descartar_decision.")
+        if r.action != "accept" or r.data is None:
+            pospuestas += [x[0] for x in pendientes[i - 1:]]
+            hechos.append(f"Revisión interrumpida por el usuario en {id_} ({r.action}).")
+            break
+        d = r.data
+        nota = d.comentario.strip()
+        if d.accion not in ("confirmar", "descartar", "ajustar", "posponer"):
+            pospuestas.append(id_)
+            continue
+        if d.accion == "confirmar":
+            cita = "[formulario] confirmar" + (f" — {nota}" if nota else "")
+            hechos.append(f"{id_}: {confirmar_decision(proyecto=proyecto, id=id_, cita_usuario=cita)}")
+        elif d.accion == "descartar":
+            motivo = nota or "Descartada por el usuario desde el formulario."
+            hechos.append(f"{id_}: {descartar_decision(proyecto=proyecto, id=id_, motivo=motivo)}")
+        elif d.accion == "ajustar":
+            ajustes.append(f"- {id_}: {nota or '(sin indicaciones: pregúntale qué cambiar)'}")
+        else:
+            pospuestas.append(id_)
+
+    salida = ["Resultado de la revisión:", *(f"- {h}" for h in hechos)]
+    if pospuestas:
+        salida.append(f"- Siguen como propuesta: {', '.join(pospuestas)}")
+    if ajustes:
+        salida += ["", "El usuario pidió AJUSTAR estas propuestas. Redacta la versión nueva de cada una con "
+                   "registrar_decision, luego reemplazar_decision(anterior, nueva), y vuelve a ofrecerle "
+                   "decidir_propuestas para que confirme las nuevas:", *ajustes]
+    return "\n".join(salida)
 
 
 @herramienta

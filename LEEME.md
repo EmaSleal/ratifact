@@ -83,3 +83,6 @@ usuario (`cita_usuario`, guardada en el ADR) y debe requerir aprobación en cada
 Desde el chat: "revisa las propuestas pendientes" → `revisar_propuestas` muestra todas con su detalle. Por cada una:
 confirmar (`confirmar_decision`, con aprobación), ajustar (nueva decisión + `reemplazar_decision`) o descartar
 (`descartar_decision`, con motivo; queda en el historial como descartada).
+Con formularios: "decidamos las propuestas" → `decidir_propuestas` abre un formulario por propuesta en la aplicación
+(confirmar / descartar / ajustar / posponer + comentario). La respuesta viene directo del usuario, sin pasar por el
+modelo. Si la aplicación no soporta formularios (MCP elicitation), la herramienta lo indica y se usa el flujo por chat.
