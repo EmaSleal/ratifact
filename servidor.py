@@ -150,12 +150,15 @@ def _raiz(proyecto: str) -> Path:
 
 
 def _mem(proyecto: str) -> Path:
-    """Carpeta de memoria. Por defecto <ruta>/.project; con "memoria" en projects.json vive fuera del
-    repositorio del código, así ninguna rama ni checkout la afecta."""
-    p = _proyectos()[proyecto] if proyecto in _proyectos() else None
-    if p and p.get("memoria"):
-        return Path(p["memoria"]).expanduser().resolve()
-    return _raiz(proyecto) / MEM
+    """Carpeta de memoria (ADR-010): repo git propio, SIEMPRE fuera del repositorio del código, para que ninguna
+    rama ni checkout la afecte. Clave "memoria" de projects.json; por defecto <carpeta de proyectos>/.memorias/<nombre>."""
+    p = _proyectos().get(proyecto) or {}
+    mem = Path(p["memoria"]).expanduser().resolve() if p.get("memoria") else BASE_PROYECTOS / ".memorias" / proyecto
+    raiz = _raiz(proyecto)
+    if mem == raiz or raiz in mem.parents:
+        raise ErrorMemoria(f"La memoria de '{proyecto}' está dentro del repositorio del código ({mem}); ADR-010 lo "
+                           f"impide. Muévela a {BASE_PROYECTOS / '.memorias' / proyecto} y actualiza projects.json.")
+    return mem
 
 
 def _zonas_escritura(proyecto: str) -> list[str]:
@@ -218,7 +221,7 @@ def _commit(proyecto: str, rutas: list[Path], mensaje: str) -> str:
     grupos: dict[Path, list[str]] = {}
     for r in rutas:
         en_mem = r == mem or mem in r.parents
-        repo = mem if en_mem and ((mem / ".git").exists() or raiz not in mem.parents) else raiz
+        repo = mem if en_mem else raiz
         grupos.setdefault(repo, []).append(str(r.relative_to(repo)))
     resultados = []
     for repo, rel in grupos.items():
@@ -337,12 +340,16 @@ def _ejecutar(fn):
 
 @herramienta
 def listar_proyectos() -> str:
-    """Lista los proyectos registrados y si ya tienen memoria (.project/)."""
+    """Lista los proyectos registrados, su carpeta de código y si ya tienen memoria."""
     def f():
         filas = []
         for nombre, p in _proyectos().items():
             ruta = Path(p["ruta"]).expanduser()
-            filas.append(f"- {nombre}: {ruta} {'[memoria lista]' if (_mem(nombre) / 'INDEX.md').exists() else '[sin memoria]'}")
+            try:
+                estado = "[memoria lista]" if (_mem(nombre) / "INDEX.md").exists() else "[sin memoria]"
+            except ErrorMemoria as e:
+                estado = f"[configuración inválida: {e}]"
+            filas.append(f"- {nombre}: {ruta} {estado}")
         return "\n".join(filas) or "(sin proyectos)"
     return _ejecutar(f)
 
@@ -832,9 +839,7 @@ def inicializar_memoria(proyecto: str) -> str:
             gi = mem / ".gitignore"
             _escribir_atomico(gi, ".lock\n*.tmp\n")
             tocados.append(gi)
-            explicita = bool(_proyectos()[proyecto].get("memoria"))
-            if not (mem / ".git").exists() and (explicita or _raiz(proyecto) not in mem.parents):
-                # memoria configurada explícitamente o fuera del repo: repo propio, independiente de la rama
+            if not (mem / ".git").exists():   # repo propio, independiente de la rama del código (ADR-010)
                 subprocess.run(["git", "init", "-q", "-b", "main", str(mem)], capture_output=True)
                 tocados = [p for p in mem.rglob("*") if p.is_file() and ".git" not in p.parts and p.name != ".lock"]
             return f"Memoria inicializada · commit {_commit(proyecto, tocados, 'inicializar memoria')}"
@@ -958,6 +963,9 @@ def registrar_proyecto(nombre: str, ruta: str, memoria: str = "", pruebas: str =
                 raise ErrorMemoria(f"La {etiqueta} debe estar dentro de {BASE_PROYECTOS}.")
         if not r.is_dir():
             raise ErrorMemoria(f"No existe la carpeta {r}.")
+        if m == r or r in m.parents:
+            raise ErrorMemoria("La memoria no puede ir dentro del repositorio del código (ADR-010); "
+                               "omite `memoria` para usar .memorias/<nombre>.")
         anterior = CONFIG.read_text(encoding="utf-8") if CONFIG.exists() else None
         proyectos[nombre] = {"ruta": str(r), "memoria": str(m), "escritura": [MEM, "docs"],
                              "pruebas": pruebas.strip() or _detectar_pruebas(r)}

@@ -29,13 +29,27 @@ def test_alta_sin_git_avisa(srv, entorno):
     assert "no es un repositorio git" in srv.registrar_proyecto(nombre="suelto", ruta=str(entorno["base"] / "suelto"))
 
 
-def test_memoria_explicita_dentro_del_repo_usa_repo_propio(srv, entorno):
-    """Regresión: con la memoria dentro del repo (ignorada), los commits iban al repo del código y fallaban."""
+def test_memoria_dentro_del_repo_del_codigo_se_rechaza(srv, entorno):
+    """ADR-010: un solo modo; la memoria nunca vive dentro del repositorio del código."""
     repo = crear_repo(entorno["base"] / "interno")
-    (repo / ".gitignore").write_text(".project/\n")
-    srv.registrar_proyecto(nombre="interno", ruta=str(repo), memoria=str(repo / ".project"))
-    assert "registrado" in srv.registrar_pendiente(proyecto="interno", tema="t", contexto="c")
-    assert log_git(repo / ".project")[0].startswith("memoria: P-001")
+    salida = srv.registrar_proyecto(nombre="interno", ruta=str(repo), memoria=str(repo / ".project"))
+    assert "ADR-010" in salida and "interno" not in srv.listar_proyectos()
+
+
+def test_config_heredada_con_memoria_interna_avisa_como_migrar(srv, entorno):
+    repo = crear_repo(entorno["base"] / "viejo")
+    Path(entorno["env"]["MEMORIA_PROYECTOS_CONFIG"]).write_text(json.dumps(
+        {"viejo": {"ruta": str(repo), "memoria": str(repo / ".project")}}))
+    salida = srv.registrar_pendiente(proyecto="viejo", tema="t", contexto="c")
+    assert salida.startswith("ERROR:") and ".memorias/viejo" in salida
+    assert "configuración inválida" in srv.listar_proyectos()
+
+
+def test_sin_clave_memoria_usa_memorias_por_defecto(srv, entorno):
+    repo = crear_repo(entorno["base"] / "legado")
+    Path(entorno["env"]["MEMORIA_PROYECTOS_CONFIG"]).write_text(json.dumps({"legado": {"ruta": str(repo)}}))
+    srv.inicializar_memoria(proyecto="legado")
+    assert (entorno["base"] / ".memorias" / "legado" / ".git").exists() and not (repo / ".project").exists()
 
 
 def test_inicializar_es_idempotente(srv, proyecto):
