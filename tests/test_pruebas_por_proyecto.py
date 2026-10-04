@@ -16,6 +16,7 @@ from conftest import crear_repo
     ({"project.godot": "", "tests/run_tests.gd": "", "tests/run_tests_hito1.gd": "", "tests/otro.gd": ""},
      "godot --headless --path . -s res://tests/run_tests.gd && godot --headless --path . -s res://tests/run_tests_hito1.gd"),
     ({"pyproject.toml": ""}, "python -m pytest -q"),
+    ({"pyproject.toml": "", "uv.lock": ""}, "uv run pytest -q"),
     ({"go.mod": ""}, "go test ./..."),
     ({"README.md": ""}, ""),
 ])

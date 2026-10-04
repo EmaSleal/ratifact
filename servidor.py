@@ -930,7 +930,7 @@ def _detectar_pruebas(ruta: Path) -> str:
     if hay("go.mod"):
         return "go test ./..."
     if hay("pyproject.toml", "pytest.ini", "setup.cfg", "tests/conftest.py"):
-        return "python -m pytest -q"
+        return "uv run pytest -q" if hay("uv.lock") else "python -m pytest -q"
     return ""
 
 
