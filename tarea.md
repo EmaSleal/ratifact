@@ -14,6 +14,7 @@ Ejecuta la tarea **$ARGUMENTS** del proyecto `game`.
 6. Marca la tarea: `actualizar_tarea("game", "$ARGUMENTS", "en_curso")`.
 
 ## 2. Ejecutar
+- Puedes apoyarte en el orquestador, los sub-agentes y las skills de gentle-ai para implementar; la spec define el contrato y los criterios de aceptación, no el método. Aprendizajes técnicos van a engram; decisiones nuevas NO: proponlas al usuario para registrarlas en memoria-proyectos.
 - Implementa **solo** lo que pide la spec. Lo que esté en "Fuera de alcance" no se toca.
 - Si la spec es ambigua o contradice un ADR acordado, **detente y pregúntame** antes de decidir por tu cuenta.
 - Respeta `CLAUDE.md`: la simulación (`src/sim`) sin nodos; los valores numéricos en `data/*.json`.
