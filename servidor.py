@@ -77,9 +77,10 @@ def _registrar_uso(nombre: str, kwargs: dict, respuesta, ms: float) -> None:
             "params": {k: v for k, v in kwargs.items() if isinstance(v, (bool, int))},
             "resp_chars": len(texto),
             "ms": round(ms, 1),
-            "error": texto.startswith("ERROR:"),
+            "error": texto.startswith("ERROR"),
         }
         if fila["error"]:
+            fila["tipo_error"] = "interno" if texto.startswith("ERROR INTERNO") else "validacion"
             fila["detalle"] = texto[:160]
         if nombre in ("leer_documento", "guardar_documento", "crear_documento") and "ruta" in kwargs:
             fila["ruta"] = kwargs["ruta"]
@@ -97,7 +98,12 @@ def herramienta(fn):
     @functools.wraps(fn)
     def envoltura(*args, **kwargs):
         inicio = time.perf_counter()
-        respuesta = fn(*args, **kwargs)
+        try:
+            respuesta = fn(*args, **kwargs)
+        except Exception as e:   # algo escapó de _ejecutar: se registra como falla interna y se propaga
+            _registrar_uso(fn.__name__, kwargs, f"ERROR INTERNO: {type(e).__name__}: {e}",
+                           (time.perf_counter() - inicio) * 1000)
+            raise
         _registrar_uso(fn.__name__, kwargs, respuesta, (time.perf_counter() - inicio) * 1000)
         return respuesta
     return mcp.tool()(envoltura)
@@ -108,7 +114,12 @@ def herramienta_async(fn):
     @functools.wraps(fn)
     async def envoltura(*args, **kwargs):
         inicio = time.perf_counter()
-        respuesta = await fn(*args, **kwargs)
+        try:
+            respuesta = await fn(*args, **kwargs)
+        except Exception as e:
+            _registrar_uso(fn.__name__, kwargs, f"ERROR INTERNO: {type(e).__name__}: {e}",
+                           (time.perf_counter() - inicio) * 1000)
+            raise
         _registrar_uso(fn.__name__, kwargs, respuesta, (time.perf_counter() - inicio) * 1000)
         return respuesta
     return mcp.tool()(envoltura)
@@ -303,11 +314,17 @@ def _regenerar_vistas(proyecto: str) -> list[Path]:
 
 
 def _ejecutar(fn):
-    """Convierte errores de dominio en mensajes legibles para el modelo."""
+    """Convierte errores en mensajes legibles para el modelo. 'ERROR:' = rechazo de validación (uso esperado);
+    'ERROR INTERNO:' = falla del servidor (la que mide ADR-009). El detalle técnico va a stderr (log del cliente)."""
     try:
         return fn()
     except ErrorMemoria as e:
         return f"ERROR: {e}"
+    except Exception as e:
+        import sys
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        return f"ERROR INTERNO: {type(e).__name__}: {e}"
 
 
 # ───────────────────────── herramientas ─────────────────────────

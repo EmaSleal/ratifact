@@ -1,0 +1,61 @@
+"""Documentos: crear vs. modificar, zonas de escritura, rutas protegidas, búsqueda y lectura."""
+import pytest
+
+from conftest import log_git
+
+
+def test_crear_y_modificar_son_herramientas_distintas(srv, proyecto):
+    assert "crear_documento" in srv.guardar_documento(proyecto="demo", ruta="docs/nuevo.md", contenido="x")
+    assert "(crear)" in srv.crear_documento(proyecto="demo", ruta="docs/nuevo.md", contenido="hola")
+    assert "ya existe" in srv.crear_documento(proyecto="demo", ruta="docs/nuevo.md", contenido="otra vez")
+    assert "(anexar)" in srv.guardar_documento(proyecto="demo", ruta="docs/nuevo.md", contenido="mundo", modo="anexar")
+    assert srv.guardar_documento(proyecto="demo", ruta="docs/nuevo.md", contenido="z", modo="crear").startswith("ERROR:")
+    assert (proyecto["repo"] / "docs" / "nuevo.md").read_text() == "hola\n\nmundo\n"
+    assert log_git(proyecto["repo"])[0].startswith("memoria: anexar docs/nuevo.md")
+
+
+def test_documentos_de_memoria_van_al_repo_de_memoria(srv, proyecto):
+    srv.crear_documento(proyecto="demo", ruta=".project/notas.md", contenido="nota")
+    assert (proyecto["mem"] / "notas.md").exists()
+    assert not (proyecto["repo"] / ".project").exists()
+    assert log_git(proyecto["mem"])[0] == "memoria: crear .project/notas.md"
+
+
+@pytest.mark.parametrize("ruta, mensaje", [
+    ("../fuera.md", "fuera del proyecto"),
+    ("/etc/passwd", "relativa"),
+    (".git/config", ".git"),
+    ("src/codigo.py", "Escritura solo permitida"),
+    (".project/../../escape.md", "fuera de la memoria"),
+    (".project/.git/config", "fuera de la memoria"),
+])
+def test_escrituras_bloqueadas(srv, proyecto, ruta, mensaje):
+    salida = srv.crear_documento(proyecto="demo", ruta=ruta, contenido="x")
+    assert salida.startswith("ERROR:") and mensaje.lower() in salida.lower()
+
+
+def test_lecturas_bloqueadas(srv, proyecto):
+    for ruta in ("/etc/passwd", "../../x", ".git/HEAD", ".project/.git/HEAD"):
+        assert srv.leer_documento(proyecto="demo", ruta=ruta).startswith("ERROR:")
+
+
+def test_solo_archivos_de_texto(srv, proyecto):
+    assert "Solo archivos de texto" in srv.crear_documento(proyecto="demo", ruta="docs/a.zip", contenido="x")
+
+
+def test_leer_con_rango(srv, proyecto):
+    srv.crear_documento(proyecto="demo", ruta="docs/l.md", contenido="\n".join(f"línea {i}" for i in range(1, 11)))
+    assert srv.leer_documento(proyecto="demo", ruta="docs/l.md", desde_linea=3, hasta_linea=4) == "línea 3\nlínea 4"
+    assert srv.leer_documento(proyecto="demo", ruta="docs/no.md").startswith("ERROR:")
+
+
+def test_buscar_en_codigo_y_memoria(srv, proyecto):
+    srv.registrar_pendiente(proyecto="demo", tema="Lobo alfa", contexto="Revisar")
+    salida = srv.buscar(proyecto="demo", texto="LOBO ALFA")
+    assert "docs/vision.md:2:" in salida and ".project/pendientes/" in salida
+    assert srv.buscar(proyecto="demo", texto="inexistente-zzz") == "(sin coincidencias)"
+
+
+def test_listar_documentos(srv, proyecto):
+    assert "docs/vision.md" in srv.listar_documentos(proyecto="demo")
+    assert ".project/acuerdos.md" in srv.listar_documentos(proyecto="demo", carpeta=".project")

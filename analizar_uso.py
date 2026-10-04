@@ -66,11 +66,20 @@ def main():
         print(f"- Decisiones propuestas: {len(dec)} · confirmadas por el usuario: "
               f"{sum(1 for f in conf if not f['error'])} · confirmaciones con error: "
               f"{sum(1 for f in conf if f['error'])}")
-    errores = [f for f in filas if f["error"]]
+    internos = [f for f in filas if f["error"] and f.get("tipo_error") == "interno"]
+    rechazos = [f for f in filas if f["error"] and f.get("tipo_error") != "interno"]
+    tasa = len(internos) / len(filas) * 100
+    print(f"- Fallas internas del servidor: {len(internos)} ({tasa:.2f} %) · rechazos de validación: {len(rechazos)} "
+          "(uso esperado: p. ej. confirmar sin cita o un nombre inválido)")
+    dias = {f["ts"][:10] for f in filas}
+    cumple = len(filas) >= 300 and tasa < 1 and len(dias) >= min(a.dias, 14)
+    print(f"- ADR-009 criterio 2 (≥300 llamadas, <1 % de fallas internas, 14 días): "
+          f"{len(filas)} llamadas en {len(dias)} días con uso → {'CUMPLE' if cumple else 'aún no'}")
+    errores = internos + rechazos
     if errores:
         print("\nÚltimos errores")
-        for f in errores[-5:]:
-            print(f"  {f['ts']} {f['herramienta']}: {f.get('detalle', '')}")
+        for f in sorted(errores, key=lambda f: f["ts"])[-5:]:
+            print(f"  {f['ts']} [{f.get('tipo_error', 'validacion')}] {f['herramienta']}: {f.get('detalle', '')}")
 
 
 if __name__ == "__main__":

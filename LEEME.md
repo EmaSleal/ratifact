@@ -93,3 +93,8 @@ Crear registros en la memoria debe pasar por usted; modificar o leer, no. Marque
 Deje en "permitir siempre" el resto (lecturas, `guardar_documento` sobre archivos existentes, `actualizar_tarea`,
 `actualizar_indice`, `registrar_sesion`, `descartar_decision`, `reemplazar_decision`). El servidor no tiene herramientas
 para borrar archivos: nada se elimina, solo cambia de estado. En Claude Code no se usan aprobaciones para el código.
+
+## 11. Pruebas
+Desde esta carpeta: `uv run --with pytest --with "mcp>=1.2,<2" pytest -q` (o `python3 -m pytest -q` con pytest y mcp instalados).
+Corren contra una carpeta temporal: no tocan `projects.json`, la telemetría ni los proyectos reales.
+`test_cobertura.py` falla si se agrega una herramienta sin pruebas (ADR-009, criterio 1).
