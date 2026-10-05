@@ -467,23 +467,64 @@ def confirmar_decision(proyecto: str, id: str, cita_usuario: str) -> str:
 
 
 @herramienta
-def revisar_propuestas(proyecto: str) -> str:
-    """Devuelve TODAS las decisiones en estado 'propuesta' con su detalle completo (decisión, justificación,
-    alternativas), para que el usuario las revise de una vez y decida confirmar, ajustar o descartar cada una."""
+def confirmar_decisiones_lote(proyecto: str, ids: list[str], cita_usuario: str) -> str:
+    """Confirma VARIAS propuestas con una sola aprobación del usuario, que ve la lista completa al aprobar. Úsala
+    solo cuando el usuario confirmó explícitamente esas decisiones en un mismo mensaje; `cita_usuario` es ese
+    mensaje literal. Todo o nada: si alguna no es propuesta o no existe, no se confirma ninguna."""
+    def f():
+        if len(cita_usuario.strip()) < 2:
+            raise ErrorMemoria("Falta cita_usuario: el texto literal con que el usuario confirmó.")
+        unicos = list(dict.fromkeys(i.strip().upper() for i in ids if i.strip()))
+        if not unicos:
+            raise ErrorMemoria("La lista de ids está vacía.")
+        if len(unicos) > 30:
+            raise ErrorMemoria("Máximo 30 decisiones por lote.")
+        with _bloqueo(proyecto):
+            carpeta = _mem(proyecto) / "decisiones"
+            registros = []
+            for id_ in unicos:
+                ruta = _buscar_registro(carpeta, id_)
+                meta, cuerpo = _leer_registro(ruta)
+                if meta.get("estado") != "propuesta":
+                    raise ErrorMemoria(f"{meta.get('id')} está '{meta.get('estado')}'; no se confirmó ninguna.")
+                registros.append((ruta, meta, cuerpo))
+            for ruta, meta, cuerpo in registros:
+                meta["estado"], meta["confirmada"] = "acordada", _hoy()
+                cuerpo = cuerpo.rstrip() + f"\n\n## Confirmación ({_hoy()}, en lote)\n> {cita_usuario.strip()}\n"
+                _escribir_registro(ruta, meta, cuerpo)
+            sha = _commit(proyecto, [r for r, _, _ in registros] + _regenerar_vistas(proyecto),
+                          f"{len(registros)} decisiones acordadas en lote: {', '.join(unicos)}")
+            return f"{len(registros)} acordadas ({', '.join(unicos)}) · commit {sha}"
+    return _ejecutar(f)
+
+
+@herramienta
+def revisar_propuestas(proyecto: str, desde_id: str = "", cantidad: int = 10, resumen: bool = False) -> str:
+    """Devuelve las decisiones en estado 'propuesta' para que el usuario decida confirmar, ajustar o descartar.
+    Paginado: `cantidad` por página (máx. 25) a partir de `desde_id` (p. ej. "ADR-020"). Con `resumen=True`
+    devuelve una línea por propuesta (útil para ver el panorama antes de entrar al detalle)."""
     def f():
         carpeta = _mem(proyecto) / "decisiones"
-        bloques = []
+        propuestas = []
         for p in sorted(carpeta.glob("ADR-*.md")) if carpeta.exists() else []:
             m, cuerpo = _leer_registro(p)
-            if m.get("estado") == "propuesta":
-                bloques.append(f"{cuerpo.strip()}\n\n_(propuesta del {m.get('fecha')})_")
-        if not bloques:
+            if m.get("estado") == "propuesta" and (not desde_id or m.get("id", "") >= desde_id.upper()):
+                propuestas.append((m, cuerpo))
+        if not propuestas:
             return "(no hay propuestas pendientes)"
-        return (f"{len(bloques)} propuesta(s) por revisar. Si la aplicación lo permite, preséntaselas al usuario como "
-                "preguntas de opción múltiple (confirmar / ajustar / descartar / posponer). Luego: confirmar "
-                "(confirmar_decision con su frase literal), ajustar (registrar una nueva y reemplazar_decision) o "
-                "descartar (descartar_decision). Haz las escrituras de a una, no en paralelo.\n\n"
-                + "\n\n---\n\n".join(bloques))
+        n = max(1, min(cantidad, 25))
+        pagina, resto = propuestas[:n], propuestas[n:]
+        if resumen:
+            cuerpo_txt = "\n".join(f"- **{m.get('id')}** {m.get('titulo')} — {m.get('resumen', '')}" for m, _ in pagina)
+        else:
+            cuerpo_txt = "\n\n---\n\n".join(f"{c.strip()}\n\n_(propuesta del {m.get('fecha')})_" for m, c in pagina)
+        pie = (f"\n\n(Quedan {len(resto)} propuesta(s): continúa con desde_id=\"{resto[0][0].get('id')}\".)"
+               if resto else "")
+        return (f"{len(propuestas)} propuesta(s) por revisar; se muestran {len(pagina)}. Preséntaselas al usuario como "
+                "preguntas de opción múltiple si la aplicación lo permite (confirmar / ajustar / descartar / posponer). "
+                "Luego: confirmar (confirmar_decision, o confirmar_decisiones_lote si el usuario aprueba varias en "
+                "un mismo mensaje), ajustar (registrar una nueva y reemplazar_decision) o descartar (descartar_decision). "
+                "Escrituras de a una, no en paralelo.\n\n" + cuerpo_txt + pie)
     return _ejecutar(f)
 
 
@@ -698,7 +739,11 @@ def leer_documento(proyecto: str, ruta: str, desde_linea: int = 1, hasta_linea: 
         p = _ruta_segura(proyecto, ruta)
         if not p.is_file():
             raise ErrorMemoria(f"No existe {ruta}.")
-        lineas = p.read_text(encoding="utf-8").splitlines()
+        try:
+            lineas = p.read_text(encoding="utf-8").splitlines()
+        except UnicodeDecodeError:
+            raise ErrorMemoria(f"{ruta} no es un archivo de texto (p. ej. .docx, .pdf o una imagen); "
+                               "pídele al usuario que lo abra o lo convierta.")
         fin = hasta_linea if hasta_linea > 0 else len(lineas)
         texto = "\n".join(lineas[max(desde_linea, 1) - 1:fin])
         if len(texto) > LIMITE_LECTURA:

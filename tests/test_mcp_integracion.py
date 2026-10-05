@@ -82,3 +82,17 @@ def test_formulario_aplica_lo_que_elige_el_usuario(srv, proyecto, entorno):
     assert "ADR-001 acordada" in salida and "ADR-002 descartada" in salida
     assert "ADR-003: bajar a 2 semanas" in salida and "Siguen como propuesta: ADR-004" in salida
     assert "[formulario] confirmar — me gusta" in next((proyecto["mem"] / "decisiones").glob("ADR-001*.md")).read_text()
+
+
+def test_confirmar_lote_acepta_lista_por_mcp(srv, proyecto, entorno):
+    for t in "AB":
+        srv.registrar_decision(proyecto="demo", titulo=t, decision="d", justificacion="j")
+
+    async def cuerpo(s):
+        esquema = next(t for t in (await s.list_tools()).tools if t.name == "confirmar_decisiones_lote").inputSchema
+        res = await s.call_tool("confirmar_decisiones_lote",
+                                {"proyecto": "demo", "ids": ["ADR-001", "ADR-002"], "cita_usuario": "confirmo ambas"})
+        return esquema, _texto(res)
+    esquema, salida = _correr(entorno, cuerpo)
+    assert esquema["properties"]["ids"]["type"] == "array"
+    assert "2 acordadas" in salida

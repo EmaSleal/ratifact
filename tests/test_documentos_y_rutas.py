@@ -92,3 +92,10 @@ def test_buscar_sin_git_salta_carpetas_conocidas(srv, entorno):
 def test_buscar_omite_archivos_enormes(srv, proyecto):
     (proyecto["repo"] / "docs" / "enorme.md").write_text("lobo alfa\n" * 200_000)
     assert "enorme.md" not in srv.buscar(proyecto="demo", texto="lobo alfa", max_resultados=50)
+
+
+def test_leer_binario_es_rechazo_no_falla_interna(srv, proyecto):
+    """Regresión (Fractall): leer un .docx daba ERROR INTERNO UnicodeDecodeError."""
+    (proyecto["repo"] / "docs" / "correo.docx").write_bytes(b"PK\x03\x04\xf9\xff binario")
+    salida = srv.leer_documento(proyecto="demo", ruta="docs/correo.docx")
+    assert salida.startswith("ERROR:") and "no es un archivo de texto" in salida
