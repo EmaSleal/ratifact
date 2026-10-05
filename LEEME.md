@@ -98,3 +98,13 @@ para borrar archivos: nada se elimina, solo cambia de estado. En Claude Code no 
 Desde esta carpeta: `uv run --with pytest --with "mcp>=1.2,<2" pytest -q` (o `python3 -m pytest -q` con pytest y mcp instalados).
 Corren contra una carpeta temporal: no tocan `projects.json`, la telemetría ni los proyectos reales.
 `test_cobertura.py` falla si se agrega una herramienta sin pruebas (ADR-009, criterio 1).
+
+## 12. /tarea global (una vez por equipo)
+`/tarea` es genérico: se instala a nivel de usuario con un enlace a `tarea.md`, así existe en todos los proyectos y se
+actualiza solo con el repositorio:
+```
+mkdir -p ~/.claude/commands ~/.pi/agent/prompts
+ln -sf ~/Projects/.memoria-proyectos/tarea.md ~/.claude/commands/tarea.md
+ln -sf ~/Projects/.memoria-proyectos/tarea.md ~/.pi/agent/prompts/tarea.md
+```
+Si usa gentle-shell independiente, repita el segundo enlace en `~/.gentle-shell/agent/prompts/`.

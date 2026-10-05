@@ -1010,7 +1010,11 @@ def _instrucciones(proyecto: str) -> str:
             "1) Pega esto en las instrucciones del proyecto de Claude (Claude Desktop / claude.ai):\n\n"
             f"```\n{PLANTILLA_INSTRUCCIONES.format(proyecto=proyecto)}\n```\n\n"
             "2) Agrega esto al CLAUDE.md (Claude Code) o AGENTS.md (Pi, Codex) del repositorio:\n\n"
-            f"```\n{PLANTILLA_AGENTES.format(proyecto=proyecto)}{_linea_pruebas(proyecto)}\n```")
+            f"```\n{PLANTILLA_AGENTES.format(proyecto=proyecto)}{_linea_pruebas(proyecto)}\n```\n\n"
+            "3) Una sola vez por equipo, para que `/tarea` exista en todos los proyectos (Claude Code y Pi):\n\n"
+            f"```\nmkdir -p ~/.claude/commands ~/.pi/agent/prompts\n"
+            f"ln -sf {Path(__file__).resolve().parent / 'tarea.md'} ~/.claude/commands/tarea.md\n"
+            f"ln -sf {Path(__file__).resolve().parent / 'tarea.md'} ~/.pi/agent/prompts/tarea.md\n```")
 
 
 @herramienta
