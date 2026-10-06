@@ -277,7 +277,15 @@ def _esquema_al_dia(proyecto: str, mem: Path) -> None:
     for v in range(actual + 1, VERSION_ESQUEMA + 1):
         tocados += MIGRACIONES[v](mem)
     tocados.append(_escribir_esquema(mem))
-    _commit(proyecto, tocados, f"migrar esquema v{actual} → v{VERSION_ESQUEMA}")
+    resultado = _commit(proyecto, tocados, f"migrar esquema v{actual} → v{VERSION_ESQUEMA}")
+    if "git falló" in resultado:     # sin commit no hay vuelta atrás: se deshace y se reintenta en la próxima llamada
+        subprocess.run(["git", "-C", str(mem), "reset", "-q", "--", ARCHIVO_ESQUEMA], capture_output=True)
+        if actual == 0:
+            (mem / ARCHIVO_ESQUEMA).unlink(missing_ok=True)
+        else:
+            subprocess.run(["git", "-C", str(mem), "checkout", "-q", "--", ARCHIVO_ESQUEMA], capture_output=True)
+        raise ErrorMemoria(f"No se pudo versionar la migración del esquema de '{proyecto}' {resultado}; "
+                           "no se escribió nada. Revisa la configuración de git de la memoria.")
 
 
 def _escribir_atomico(ruta: Path, texto: str) -> None:

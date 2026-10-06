@@ -75,3 +75,13 @@ def test_esquema_danado_es_rechazo_legible(srv, proyecto):
     (proyecto["mem"] / "esquema.json").write_text("{no es json")
     salida = srv.registrar_pendiente(proyecto="demo", tema="T", contexto="c")
     assert salida.startswith("ERROR:") and "dañado" in salida
+
+
+def test_migracion_sin_commit_se_deshace(srv, proyecto, monkeypatch):
+    """Hallazgo al migrar Fractall: si git no puede commitear, la migración no debe quedar a medias."""
+    _quitar_esquema(proyecto["mem"])
+    monkeypatch.setattr(srv, "_commit", lambda *a, **k: "(git falló: Author identity unknown)")
+    salida = srv.registrar_pendiente(proyecto="demo", tema="T", contexto="c")
+    assert salida.startswith("ERROR:") and "Author identity unknown" in salida
+    assert not (proyecto["mem"] / "esquema.json").exists()
+    assert not list((proyecto["mem"] / "pendientes").glob("P-*.md"))
