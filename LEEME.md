@@ -108,7 +108,9 @@ actualiza solo con el repositorio:
 mkdir -p ~/.claude/commands ~/.pi/agent/prompts
 ln -sf ~/Projects/.memoria-proyectos/tarea.md ~/.claude/commands/tarea.md
 ln -sf ~/Projects/.memoria-proyectos/tarea.md ~/.pi/agent/prompts/tarea.md
-mkdir -p ~/.agents/skills/tarea && ln -sf ~/Projects/.memoria-proyectos/tarea.md ~/.agents/skills/tarea/SKILL.md   # Codex
+mkdir -p ~/.codex/skills/tarea ~/.agents/skills/tarea   # Codex: según la versión lee una u otra carpeta
+ln -sf ~/Projects/.memoria-proyectos/tarea.md ~/.codex/skills/tarea/SKILL.md
+ln -sf ~/Projects/.memoria-proyectos/tarea.md ~/.agents/skills/tarea/SKILL.md
 ```
 Si usa gentle-shell independiente, repita el segundo enlace en `~/.gentle-shell/agent/prompts/`.
 
@@ -140,6 +142,8 @@ MEMORIA_PROYECTOS_CONFIG = "/home/mano-pc/Projects/.memoria-proyectos/projects.j
 ```
 
 Codex eliminó los comandos personalizados (`~/.codex/prompts`) en marzo de 2026; `/tarea` se instala como skill
-(enlace de la sección 12 en `~/.agents/skills/tarea/SKILL.md`) y se invoca con `$tarea T-NNN`. Codex lee `AGENTS.md`
-de forma nativa: el bloque de `instrucciones_proyecto` sirve sin cambios.
+(enlaces de la sección 12 en `~/.codex/skills` y `~/.agents/skills`) y se invoca con `$tarea T-NNN`. Codex lee `AGENTS.md`
+de forma nativa, pero solo desde la raíz del repo git hacia abajo: en proyectos de varios repos ponga el bloque en la
+carpeta raíz (si abre Codex ahí) y en el `AGENTS.md` de cada repo. Si hay otra memoria de agente instalada (engram),
+el servidor declara en sus instrucciones MCP que memoria-proyectos es la fuente de verdad del proyecto.
 

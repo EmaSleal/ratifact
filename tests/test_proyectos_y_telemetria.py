@@ -90,6 +90,13 @@ def test_sin_nombres_de_proyecto_fijos_en_el_codigo():
 def test_instrucciones_cubren_codex(srv, proyecto):
     """ADR-008: Codex no tiene comandos propios (custom prompts eliminados); /tarea se instala como skill."""
     salida = srv.instrucciones_proyecto(proyecto="demo")
-    assert "~/.agents/skills/tarea/SKILL.md" in salida and "$tarea T-NNN" in salida
+    assert "~/.agents/skills/tarea/SKILL.md" in salida and "~/.codex/skills/tarea/SKILL.md" in salida
+    assert "$tarea T-NNN" in salida
     cabecera = (srv.Path(srv.__file__).parent / "tarea.md").read_text().split("---")[1]
     assert "name: tarea" in cabecera and "description:" in cabecera      # requisitos de una skill de Codex
+
+
+def test_servidor_se_declara_fuente_de_verdad(srv):
+    """Hallazgo Codex/Fractall: con engram presente, "carga el contexto" consultó solo engram."""
+    texto = srv.mcp.instructions
+    assert "obtener_contexto" in texto and "engram" in texto and "gana memoria-proyectos" in texto

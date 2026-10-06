@@ -30,6 +30,7 @@ def multi(srv, entorno):
 
 def test_alta_detecta_repos_y_pruebas_por_repo(srv, multi, entorno):
     assert "varios repositorios: app, backend, frontend" in multi["salida"]
+    assert "en la carpeta raíz Y en cada repo" in multi["salida"]      # Codex no sube más allá del repo git
     assert "- `backend/`: `./mvnw test`" in multi["salida"] and "- `frontend/`: `npm test`" in multi["salida"]
     config = json.loads(Path(entorno["env"]["MEMORIA_PROYECTOS_CONFIG"]).read_text())
     assert config["fractall"]["pruebas"] == {"backend": "./mvnw test", "frontend": "npm test"}
@@ -72,3 +73,13 @@ def test_configurar_pruebas_por_repo(srv, multi):
     assert "Bloque actualizado" in salida and "- `app/`: `uv run pytest`" in salida   # el bloque ya trae el cambio
     assert "no es un repositorio" in srv.configurar_pruebas(proyecto="fractall", repositorio="nada")
     assert "app/: uv run pytest" in srv._comando_pruebas("fractall")
+
+
+def test_git_vacio_del_sandbox_de_codex_no_rompe_la_deteccion(srv, multi):
+    """Hallazgo Codex/Fractall: al abrir Codex en la raíz, su sandbox crea .git/.agents/.codex vacíos ahí.
+    Con eso la raíz parecía un repo y el proyecto dejaba de verse como multi-repo."""
+    for d in (".git", ".agents", ".codex"):
+        (multi["raiz"] / d).mkdir()
+    assert srv._repos("fractall") == ["app", "backend", "frontend"]
+    assert "rama sugerida" in srv.registrar_tarea(proyecto="fractall", titulo="Y", objetivo="o",
+                                                  criterios_aceptacion="c", repositorio="backend")
