@@ -90,9 +90,12 @@ def test_sin_nombres_de_proyecto_fijos_en_el_codigo():
 def test_instrucciones_cubren_codex(srv, proyecto):
     """ADR-008: Codex no tiene comandos propios (custom prompts eliminados); /tarea se instala como skill."""
     salida = srv.instrucciones_proyecto(proyecto="demo")
-    assert "~/.agents/skills/tarea/SKILL.md" in salida and "~/.codex/skills/tarea/SKILL.md" in salida
+    assert "skills/tarea ~/.codex/skills/tarea" in salida and "skills/tarea ~/.agents/skills/tarea" in salida
     assert "$tarea T-NNN" in salida
-    cabecera = (srv.Path(srv.__file__).parent / "tarea.md").read_text().split("---")[1]
+    skill = srv.Path(srv.__file__).parent / "skills" / "tarea" / "SKILL.md"
+    assert skill.is_file() and not skill.is_symlink()                   # Codex no sigue SKILL.md enlazados
+    assert (skill.parent.parent.parent / "tarea.md").resolve() == skill.resolve()   # una sola fuente
+    cabecera = skill.read_text().split("---")[1]
     assert "name: tarea" in cabecera and "description:" in cabecera      # requisitos de una skill de Codex
 
 

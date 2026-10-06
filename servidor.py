@@ -1127,6 +1127,9 @@ def _linea_pruebas(proyecto: str) -> str:
             else "\nComando de pruebas: sin configurar (usa configurar_pruebas).")
 
 
+_DIR = Path(__file__).resolve().parent
+
+
 def _instrucciones(proyecto: str) -> str:
     return (f"Instrucciones para el proyecto `{proyecto}`.\n\n"
             "1) Pega esto en las instrucciones del proyecto de Claude (Claude Desktop / claude.ai):\n\n"
@@ -1136,12 +1139,13 @@ def _instrucciones(proyecto: str) -> str:
                "desde la raíz del repo git hacia abajo)" if _repos(proyecto) else "") + ":\n\n"
             f"```\n{PLANTILLA_AGENTES.format(proyecto=proyecto)}{_linea_pruebas(proyecto)}\n```\n\n"
             "3) Una sola vez por equipo, para que `/tarea` exista en todos los proyectos (Claude Code, Pi y Codex):\n\n"
-            f"```\nmkdir -p ~/.claude/commands ~/.pi/agent/prompts ~/.codex/skills/tarea ~/.agents/skills/tarea\n"
-            f"ln -sf {Path(__file__).resolve().parent / 'tarea.md'} ~/.claude/commands/tarea.md\n"
-            f"ln -sf {Path(__file__).resolve().parent / 'tarea.md'} ~/.pi/agent/prompts/tarea.md\n"
-            f"ln -sf {Path(__file__).resolve().parent / 'tarea.md'} ~/.codex/skills/tarea/SKILL.md\n"
-            f"ln -sf {Path(__file__).resolve().parent / 'tarea.md'} ~/.agents/skills/tarea/SKILL.md\n```\n"
-            "(Codex: según la versión, las skills se leen de ~/.codex/skills o de ~/.agents/skills; se instala en ambas.)")
+            f"```\nmkdir -p ~/.claude/commands ~/.pi/agent/prompts ~/.codex/skills ~/.agents/skills\n"
+            f"ln -sf {_DIR / 'tarea.md'} ~/.claude/commands/tarea.md\n"
+            f"ln -sf {_DIR / 'tarea.md'} ~/.pi/agent/prompts/tarea.md\n"
+            f"ln -sfn {_DIR / 'skills' / 'tarea'} ~/.codex/skills/tarea\n"
+            f"ln -sfn {_DIR / 'skills' / 'tarea'} ~/.agents/skills/tarea\n```\n"
+            "(Codex no sigue un SKILL.md enlazado como archivo: se enlaza la carpeta completa. Según la versión, "
+            "lee ~/.codex/skills o ~/.agents/skills; se instala en ambas. Si ya existía una carpeta tarea/ ahí, bórrela antes.)")
 
 
 @herramienta

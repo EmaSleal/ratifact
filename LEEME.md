@@ -102,15 +102,15 @@ Corren contra una carpeta temporal: no tocan `projects.json`, la telemetría ni 
 `test_cobertura.py` falla si se agrega una herramienta sin pruebas (ADR-009, criterio 1).
 
 ## 12. /tarea global (una vez por equipo)
-`/tarea` es genérico: se instala a nivel de usuario con un enlace a `tarea.md`, así existe en todos los proyectos y se
+`/tarea` es genérico: la fuente es `skills/tarea/SKILL.md` (`tarea.md` es un enlace a ella) y se instala a nivel de usuario con enlaces, así existe en todos los proyectos y se
 actualiza solo con el repositorio:
 ```
 mkdir -p ~/.claude/commands ~/.pi/agent/prompts
 ln -sf ~/Projects/.memoria-proyectos/tarea.md ~/.claude/commands/tarea.md
 ln -sf ~/Projects/.memoria-proyectos/tarea.md ~/.pi/agent/prompts/tarea.md
-mkdir -p ~/.codex/skills/tarea ~/.agents/skills/tarea   # Codex: según la versión lee una u otra carpeta
-ln -sf ~/Projects/.memoria-proyectos/tarea.md ~/.codex/skills/tarea/SKILL.md
-ln -sf ~/Projects/.memoria-proyectos/tarea.md ~/.agents/skills/tarea/SKILL.md
+mkdir -p ~/.codex/skills ~/.agents/skills   # Codex: según la versión lee una u otra carpeta
+ln -sfn ~/Projects/.memoria-proyectos/skills/tarea ~/.codex/skills/tarea
+ln -sfn ~/Projects/.memoria-proyectos/skills/tarea ~/.agents/skills/tarea
 ```
 Si usa gentle-shell independiente, repita el segundo enlace en `~/.gentle-shell/agent/prompts/`.
 
@@ -142,7 +142,7 @@ MEMORIA_PROYECTOS_CONFIG = "/home/mano-pc/Projects/.memoria-proyectos/projects.j
 ```
 
 Codex eliminó los comandos personalizados (`~/.codex/prompts`) en marzo de 2026; `/tarea` se instala como skill
-(enlaces de la sección 12 en `~/.codex/skills` y `~/.agents/skills`) y se invoca con `$tarea T-NNN`. Codex lee `AGENTS.md`
+(enlaces de carpeta de la sección 12; Codex no sigue un `SKILL.md` enlazado como archivo) y se invoca con `$tarea T-NNN`. Codex lee `AGENTS.md`
 de forma nativa, pero solo desde la raíz del repo git hacia abajo: en proyectos de varios repos ponga el bloque en la
 carpeta raíz (si abre Codex ahí) y en el `AGENTS.md` de cada repo. Si hay otra memoria de agente instalada (engram),
 el servidor declara en sus instrucciones MCP que memoria-proyectos es la fuente de verdad del proyecto.
