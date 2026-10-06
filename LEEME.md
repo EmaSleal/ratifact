@@ -49,19 +49,21 @@ Recomendado: marcar `registrar_proyecto` como "requiere aprobación" igual que `
 ## 5. Tareas de código (Claude Desktop → Claude Code)
 Flujo: en Claude Desktop se acuerda un cambio y se registra con `registrar_tarea` → queda `.project/tareas/T-NNN.md` →
 en Claude Code, dentro del repositorio, se ejecuta `/tarea T-NNN` → Claude Code crea la rama, implementa, corre las pruebas
-de Godot y deja la tarea `en_revision` (o `fallida`) con el resultado → usted revisa la rama e integra.
+del proyecto ("Cómo verificar") y deja la tarea `en_revision` (o `fallida`) con el resultado → usted revisa la rama e integra.
 
-Instalación del comando (una sola vez, desde la raíz del repositorio):
-```bash
-mkdir -p .claude/commands && cp ~/Projects/.memoria-proyectos/tarea.md .claude/commands/tarea.md
-```
+Instalación del comando: una sola vez por equipo, con los enlaces globales de la sección 12 (no se copia por repositorio).
 Claude Code debe tener el MCP registrado (sección 2) para leer y actualizar la tarea.
 
 Agregue a las instrucciones del proyecto en claude.ai:
 > Cuando acordemos un cambio de código, no lo describas como prompt: regístralo con `registrar_tarea` con objetivo,
 > criterios de aceptación verificables, ADR aplicables, archivos involucrados y fuera de alcance. Debe poder ejecutarse sin
 > este chat. Luego dime el comando `/tarea T-NNN`. Para revisar el resultado, usa `listar_tareas` y lee la tarea.
-> Marca `integrada` o `descartada` solo cuando yo lo confirme.
+> Si pido correcciones, usa `devolver_tarea` con mis observaciones y criterios adicionales verificables, y dime de
+> nuevo `/tarea T-NNN`. Marca `integrada` o `descartada` solo cuando yo lo confirme.
+
+Ciclo de revisión: `pendiente` → `en_curso` → `en_revision` → (`devuelta` → `en_curso` → `en_revision`)* → `integrada`.
+Una tarea devuelta se corrige en la misma rama con commits nuevos; cada devolución queda como "Revisión N" en la tarea.
+`actualizar_tarea` rechaza pasar de `en_revision` a `pendiente`: devolver es siempre `devolver_tarea`.
 
 ## 6. Ubicación de la memoria
 Con la clave `"memoria"` en `projects.json`, la memoria vive fuera del repositorio del código (repo git propio) y no depende

@@ -1,4 +1,5 @@
 """Pendientes, tareas para el agente de código, sesiones, índice y contexto inicial."""
+from conftest import log_git
 
 
 def test_pendiente_abrir_y_cerrar(srv, proyecto):
@@ -57,3 +58,39 @@ def test_aviso_de_indice_desactualizado(srv, proyecto):
     assert "INDEX.md está desactualizado" in srv.obtener_contexto(proyecto="demo")
     srv.actualizar_indice(proyecto="demo", contenido="# Demo al día")
     assert "desactualizado" not in srv.obtener_contexto(proyecto="demo")
+
+
+def _tarea_en_revision(srv):
+    srv.registrar_tarea(proyecto="demo", titulo="Tope NC", objetivo="o", criterios_aceptacion="1. c")
+    srv.actualizar_tarea(proyecto="demo", id="T-001", estado="en_curso")
+    srv.actualizar_tarea(proyecto="demo", id="T-001", estado="en_revision", resultado="652 verdes", commit="c4eae6a")
+
+
+def test_devolver_tarea_deja_revision_estructurada(srv, proyecto):
+    """Hallazgo Fractall T-001: devolver con 'pendiente' confundía al agente (rama con commit + tarea 'pendiente')."""
+    _tarea_en_revision(srv)
+    assert srv.devolver_tarea(proyecto="demo", id="T-001", observaciones=" ").startswith("ERROR:")
+    salida = srv.devolver_tarea(proyecto="demo", id="T-001", observaciones="Criterio 3 falla: fuga de tenant",
+                                criterios_adicionales="6. 409 con mensaje fijo")
+    assert "T-001 devuelta (revisión 1)" in salida and "/tarea T-001" in salida
+    ruta = next((proyecto["mem"] / "tareas").glob("T-001*.md"))
+    meta, cuerpo = srv._leer_registro(ruta)
+    assert meta["estado"] == "devuelta" and meta["revisiones"] == "1"
+    assert "### Revisión 1" in cuerpo and "MISMA rama `t-001-tope-nc`" in cuerpo and "commit c4eae6a" in cuerpo
+    assert "**Criterios adicionales**\n6. 409 con mensaje fijo" in cuerpo
+    assert cuerpo.index("652 verdes") < cuerpo.index("### Revisión 1")      # historial en orden
+    assert "[devuelta] Tope NC" in srv.listar_tareas(proyecto="demo")
+    assert log_git(proyecto["mem"])[0] == "memoria: T-001 devuelta (revisión 1)"
+    # segunda vuelta: el agente corrige y vuelve a revisión; una nueva devolución numera la revisión 2
+    srv.actualizar_tarea(proyecto="demo", id="T-001", estado="en_curso")
+    assert srv.devolver_tarea(proyecto="demo", id="T-001", observaciones="x").startswith("ERROR:")   # aún en curso
+    srv.actualizar_tarea(proyecto="demo", id="T-001", estado="en_revision", resultado="corregido")
+    assert "revisión 2" in srv.devolver_tarea(proyecto="demo", id="T-001", observaciones="falta javadoc")
+
+
+def test_no_se_devuelve_por_atajos(srv, proyecto):
+    _tarea_en_revision(srv)
+    assert "devolver_tarea" in srv.actualizar_tarea(proyecto="demo", id="T-001", estado="pendiente")
+    assert "devolver_tarea" in srv.actualizar_tarea(proyecto="demo", id="T-001", estado="devuelta")
+    meta, _ = srv._leer_registro(next((proyecto["mem"] / "tareas").glob("T-001*.md")))
+    assert meta["estado"] == "en_revision"

@@ -10,10 +10,19 @@ El nombre del proyecto en `memoria-proyectos` está en el `CLAUDE.md` / `AGENTS.
 
 ## 1. Preparar
 1. Lee la especificación con la herramienta MCP `memoria-proyectos` → `leer_documento("<proyecto>", ".project/tareas/<archivo de $ARGUMENTS>")` (usa `listar_tareas("<proyecto>")` si no conoces el nombre exacto).
-2. Si su estado no es `pendiente` ni `fallida`, detente y avísame. Si la spec trae el campo `repositorio` (proyectos de varios repos), **todo lo que sigue —git, ramas, comandos y pruebas— se hace dentro de esa carpeta**, no en la raíz del proyecto.
+2. Según su estado:
+   - `pendiente`: primera ejecución.
+   - `devuelta`: el usuario revisó una ejecución anterior y pide correcciones. Lee la **última** sección "Revisión N" del Resultado: sus observaciones y criterios adicionales se suman a los criterios originales, que siguen vigentes. Lo que la revisión aprueba no se rehace.
+   - `fallida`: reintento; lee el último resultado para saber qué falló.
+   - Cualquier otro estado: detente y avísame.
+
+   Si la spec trae el campo `repositorio` (proyectos de varios repos), **todo lo que sigue —git, ramas, comandos y pruebas— se hace dentro de esa carpeta**, no en la raíz del proyecto.
 3. Lee las decisiones listadas en "Decisiones aplicables" (`.project/decisiones/`). Solo las **acordadas** son reglas.
 4. Verifica con `git status` que el árbol de trabajo esté limpio. Si hay cambios sin commitear, **detente** y pregúntame; no los muevas ni los descartes.
-5. Crea la rama indicada en el campo `rama` de la spec **desde la rama principal** del repositorio (`main`, o `master` si no existe `main`): `git switch <principal> && git switch -c <rama>`. Excepción: si la spec indica trabajar sobre una rama existente, cámbiate a esa rama (`git switch <rama existente>`) y no crees otra.
+5. Rama (campo `rama` de la spec). Comprueba si ya existe con `git branch --list <rama>`:
+   - **Ya existe** (siempre en `devuelta`, y a menudo en `fallida`): `git switch <rama>` y continúa sobre ella. No la recrees, no la rebases ni hagas `--amend` sobre commits anteriores: las correcciones van en commits nuevos.
+   - **No existe:** créala **desde la rama principal** del repositorio (`main`, o `master` si no existe `main`): `git switch <principal> && git switch -c <rama>`.
+   - Si la spec indica trabajar sobre otra rama existente, cámbiate a esa y no crees otra.
 6. Marca la tarea: `actualizar_tarea("<proyecto>", "$ARGUMENTS", "en_curso")`.
 
 ## 2. Ejecutar
@@ -27,9 +36,9 @@ El nombre del proyecto en `memoria-proyectos` está en el `CLAUDE.md` / `AGENTS.
 Ejecuta el comando de la sección **"Cómo verificar"** de la spec, desde la raíz del repositorio, y guarda el resumen (pasan/fallan por suite). Si la spec no trae comando, usa el del `CLAUDE.md` / `AGENTS.md`; si tampoco hay, pregúntame antes de dar la tarea por verificada. Repasa cada criterio de aceptación y marca cuál se cumple y cómo se verificó.
 
 ## 4. Cerrar
-- **Pruebas en verde y criterios cumplidos:** haz commit en la rama (`T-NNN: <título>`) y llama
+- **Pruebas en verde y criterios cumplidos:** haz commit en la rama (`T-NNN: <título>`; en una tarea devuelta, `T-NNN: correcciones de la revisión N`) y llama
   `actualizar_tarea("<proyecto>", "$ARGUMENTS", "en_revision", resultado=..., commit=<sha corto>)`.
 - **Algo falla y no se resuelve dentro del alcance:** haz commit del avance igualmente y llama `actualizar_tarea(..., "fallida", resultado=...)` explicando qué falla y por qué.
-- El `resultado` incluye: archivos tocados, pruebas ejecutadas con su conteo (pasan/fallan), criterio por criterio, y cualquier desvío respecto de la spec.
+- El `resultado` incluye: archivos tocados, pruebas ejecutadas con su conteo (pasan/fallan), criterio por criterio, y cualquier desvío respecto de la spec. En una tarea devuelta, recorre también cada criterio adicional de la revisión.
 - **No hagas merge a otra rama** ni marques la tarea como `integrada`: eso lo decido yo después de revisar.
 - **Nunca muevas, restaures, reescribas ni borres la rama principal ni ninguna rama que no sea la de la tarea** (nada de `git branch -f`, `git reset` sobre otras ramas, `git push --force` ni `git branch -D`), aunque veas que cambiaron mientras trabajabas: pudo haberlas integrado yo. Si notas un cambio inesperado, solo repórtalo en el `resultado`.
