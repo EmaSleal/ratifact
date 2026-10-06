@@ -223,9 +223,61 @@ def _bloqueo(proyecto: str):
     with open(mem / ".lock", "w") as f:
         fcntl.flock(f, fcntl.LOCK_EX)
         try:
+            _esquema_al_dia(proyecto, mem)    # toda escritura pasa por aquí: nunca se escribe en un formato ajeno
             yield
         finally:
             fcntl.flock(f, fcntl.LOCK_UN)
+
+
+# ───────────────────────── versión de esquema de la memoria ─────────────────────────
+# Cada memoria declara en esquema.json el formato con que fue escrita. Al cambiar el formato: subir VERSION_ESQUEMA
+# y agregar en MIGRACIONES la función que lleva una memoria de la versión anterior a la nueva (devuelve los archivos
+# que tocó). La migración corre sola, bajo el bloqueo, en la primera escritura o al cargar contexto, y queda en un
+# commit propio (reversible con git). Una memoria con versión mayor que la del servidor no se toca.
+
+VERSION_ESQUEMA = 1
+ARCHIVO_ESQUEMA = "esquema.json"
+
+
+def _migrar_0_a_1(mem: Path) -> list[Path]:
+    """v0 = memorias anteriores al versionado. Su formato ya es el de v1: solo falta declararlo."""
+    return []
+
+
+MIGRACIONES = {1: _migrar_0_a_1}
+
+
+def _version_esquema(mem: Path) -> int:
+    archivo = mem / ARCHIVO_ESQUEMA
+    if not archivo.exists():
+        return 0
+    try:
+        return int(json.loads(archivo.read_text(encoding="utf-8"))["version"])
+    except (ValueError, KeyError, TypeError) as e:
+        raise ErrorMemoria(f"{archivo} está dañado ({e}); revísalo con git log en la memoria.") from e
+
+
+def _escribir_esquema(mem: Path) -> Path:
+    archivo = mem / ARCHIVO_ESQUEMA
+    _escribir_atomico(archivo, json.dumps({"version": VERSION_ESQUEMA}) + "\n")
+    return archivo
+
+
+def _esquema_al_dia(proyecto: str, mem: Path) -> None:
+    """Llamar con el bloqueo tomado. Migra si la memoria es más antigua; rechaza si es más nueva."""
+    if not (mem / ".git").exists():        # memoria aún no inicializada: inicializar_memoria declara la versión
+        return
+    actual = _version_esquema(mem)
+    if actual > VERSION_ESQUEMA:
+        raise ErrorMemoria(f"La memoria de '{proyecto}' usa el esquema v{actual} y este servidor solo conoce hasta "
+                           f"v{VERSION_ESQUEMA}. Actualiza memoria-proyectos (git pull) antes de usarla; no se modificó nada.")
+    if actual == VERSION_ESQUEMA:
+        return
+    tocados: list[Path] = []
+    for v in range(actual + 1, VERSION_ESQUEMA + 1):
+        tocados += MIGRACIONES[v](mem)
+    tocados.append(_escribir_esquema(mem))
+    _commit(proyecto, tocados, f"migrar esquema v{actual} → v{VERSION_ESQUEMA}")
 
 
 def _escribir_atomico(ruta: Path, texto: str) -> None:
@@ -368,7 +420,9 @@ def listar_proyectos() -> str:
         for nombre, p in _proyectos().items():
             ruta = Path(p["ruta"]).expanduser()
             try:
-                estado = "[memoria lista]" if (_mem(nombre) / "INDEX.md").exists() else "[sin memoria]"
+                mem = _mem(nombre)
+                estado = (f"[memoria lista · esquema v{_version_esquema(mem)}]" if (mem / "INDEX.md").exists()
+                          else "[sin memoria]")
             except ErrorMemoria as e:
                 estado = f"[configuración inválida: {e}]"
             repos = _repos(nombre) if ruta.is_dir() else []
@@ -404,6 +458,9 @@ def obtener_contexto(proyecto: str) -> str:
     """Carga inicial de un chat: devuelve INDEX.md y las decisiones abiertas. Llamar antes de responder."""
     def f():
         mem = _mem(proyecto)
+        if (mem / ".git").exists():
+            with _bloqueo(proyecto):        # verifica y, si hace falta, migra el esquema antes de leer
+                pass
         partes = []
         for nombre in ("INDEX.md", "abiertas.md"):
             r = mem / nombre
@@ -961,6 +1018,8 @@ def inicializar_memoria(proyecto: str) -> str:
             gi = mem / ".gitignore"
             _escribir_atomico(gi, ".lock\n*.tmp\n")
             tocados.append(gi)
+            if not (mem / ARCHIVO_ESQUEMA).exists():
+                tocados.append(_escribir_esquema(mem))
             if not (mem / ".git").exists():   # repo propio, independiente de la rama del código (ADR-010)
                 subprocess.run(["git", "init", "-q", "-b", "main", str(mem)], capture_output=True)
                 tocados = [p for p in mem.rglob("*") if p.is_file() and ".git" not in p.parts and p.name != ".lock"]

@@ -110,3 +110,17 @@ ln -sf ~/Projects/.memoria-proyectos/tarea.md ~/.claude/commands/tarea.md
 ln -sf ~/Projects/.memoria-proyectos/tarea.md ~/.pi/agent/prompts/tarea.md
 ```
 Si usa gentle-shell independiente, repita el segundo enlace en `~/.gentle-shell/agent/prompts/`.
+
+## 13. Versión de esquema de la memoria
+
+Cada memoria declara en `esquema.json` el formato con que fue escrita (hoy v1). Al actualizar el servidor:
+
+- Memoria más antigua: se migra sola en la primera escritura o al llamar `obtener_contexto`, en un commit propio
+  (`memoria: migrar esquema vN → vM`), reversible con git.
+- Memoria más nueva que el servidor (p. ej. otro equipo con una versión posterior): el servidor no la modifica y pide
+  actualizar memoria-proyectos.
+- `listar_proyectos` muestra la versión de cada memoria.
+
+Para desarrolladores: un cambio de formato sube `VERSION_ESQUEMA` y agrega la función de migración en `MIGRACIONES`,
+con su prueba en `tests/test_esquema.py`.
+
