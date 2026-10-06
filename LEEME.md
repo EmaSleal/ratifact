@@ -108,6 +108,7 @@ actualiza solo con el repositorio:
 mkdir -p ~/.claude/commands ~/.pi/agent/prompts
 ln -sf ~/Projects/.memoria-proyectos/tarea.md ~/.claude/commands/tarea.md
 ln -sf ~/Projects/.memoria-proyectos/tarea.md ~/.pi/agent/prompts/tarea.md
+mkdir -p ~/.agents/skills/tarea && ln -sf ~/Projects/.memoria-proyectos/tarea.md ~/.agents/skills/tarea/SKILL.md   # Codex
 ```
 Si usa gentle-shell independiente, repita el segundo enlace en `~/.gentle-shell/agent/prompts/`.
 
@@ -123,4 +124,22 @@ Cada memoria declara en `esquema.json` el formato con que fue escrita (hoy v1). 
 
 Para desarrolladores: un cambio de formato sube `VERSION_ESQUEMA` y agrega la función de migración en `MIGRACIONES`,
 con su prueba en `tests/test_esquema.py`.
+
+## 14. Codex (CLI, extensión de IDE y app de escritorio)
+
+Las tres comparten `~/.codex/config.toml`. Agregue:
+
+```toml
+[mcp_servers.memoria-proyectos]
+command = "uv"
+args = ["run", "--script", "/home/mano-pc/Projects/.memoria-proyectos/servidor.py"]
+startup_timeout_sec = 30   # el primer arranque de uv resuelve dependencias
+
+[mcp_servers.memoria-proyectos.env]
+MEMORIA_PROYECTOS_CONFIG = "/home/mano-pc/Projects/.memoria-proyectos/projects.json"
+```
+
+Codex eliminó los comandos personalizados (`~/.codex/prompts`) en marzo de 2026; `/tarea` se instala como skill
+(enlace de la sección 12 en `~/.agents/skills/tarea/SKILL.md`) y se invoca con `$tarea T-NNN`. Codex lee `AGENTS.md`
+de forma nativa: el bloque de `instrucciones_proyecto` sirve sin cambios.
 

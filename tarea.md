@@ -1,9 +1,11 @@
 ---
-description: Ejecuta una tarea registrada en la memoria del proyecto (ej. /tarea T-001)
+name: tarea
+description: Ejecuta una tarea de código registrada en memoria-proyectos (ej. /tarea T-001, o $tarea T-001 en Codex). Úsala solo cuando el usuario pide ejecutar una tarea T-NNN; no la uses para tareas sin id.
 argument-hint: T-NNN
 ---
 
 Ejecuta la tarea **$ARGUMENTS** del proyecto de este repositorio.
+(Si arriba ves el texto literal `$ARGUMENTS` —p. ej. en Codex, donde esto es una skill—, la tarea es el `T-NNN` que escribió el usuario en su mensaje; úsalo en cada lugar donde aparezca `$ARGUMENTS`. Si no indicó ninguno, pregúntale cuál.)
 
 ## 0. Identificar el proyecto
 El nombre del proyecto en `memoria-proyectos` está en el `CLAUDE.md` / `AGENTS.md` de este repositorio ("con el proyecto `<nombre>`"). Si no lo encuentras, llama `listar_proyectos` y elige el proyecto cuya ruta contiene el directorio actual (en proyectos de varios repos, la ruta es la carpeta que los agrupa); si sigue sin estar claro, pregúntame. En adelante, `<proyecto>` es ese nombre.

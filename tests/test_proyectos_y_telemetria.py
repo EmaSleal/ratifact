@@ -85,3 +85,11 @@ def test_sin_nombres_de_proyecto_fijos_en_el_codigo():
     sin_docstring = codigo.split('"""', 2)[2]
     assert "game" not in sin_docstring
     assert not re.search(r'proyecto: str = "[^"]+"', sin_docstring)
+
+
+def test_instrucciones_cubren_codex(srv, proyecto):
+    """ADR-008: Codex no tiene comandos propios (custom prompts eliminados); /tarea se instala como skill."""
+    salida = srv.instrucciones_proyecto(proyecto="demo")
+    assert "~/.agents/skills/tarea/SKILL.md" in salida and "$tarea T-NNN" in salida
+    cabecera = (srv.Path(srv.__file__).parent / "tarea.md").read_text().split("---")[1]
+    assert "name: tarea" in cabecera and "description:" in cabecera      # requisitos de una skill de Codex
