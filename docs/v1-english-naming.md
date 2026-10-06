@@ -103,3 +103,9 @@ Implement after ADR-009 criterion 2 closes (~2026-10-17) so the stability window
 - Product name (section 1).
 - `/run-task` vs another command name.
 - Default memory root `.<name>/` vs keeping `.memorias/` for existing users.
+
+## Resolved (2026-10-06, ADR-017)
+- Product name: **ratifact** → package/CLI `ratifact`, env vars `RATIFACT_CONFIG` / `RATIFACT_LOG` / `RATIFACT_BASE`, config dir `~/.config/ratifact/`.
+- Command: **`/run-task`** (`$run-task` in Codex).
+- Default memory root: **`<base>/.ratifact/<project>`**; the v1 → v2 migration moves existing memories from `.memorias/` and updates projects.json.
+Status of this document: approved spec; implementation after ADR-009 criterion 2 (~2026-10-17).
