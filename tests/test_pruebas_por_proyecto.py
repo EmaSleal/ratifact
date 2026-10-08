@@ -37,17 +37,20 @@ def test_alta_detecta_y_lo_muestra_en_instrucciones_y_tareas(srv, entorno):
     assert "## Cómo verificar" in tarea and "`mvn test`" in tarea
 
 
-def test_comando_explicito_y_configurar_pruebas(srv, entorno):
+def test_comando_explicito_y_actualizar_proyecto(srv, entorno):
+    """configurar_pruebas se eliminó; actualizar_proyecto(pruebas=..., repositorio=...) la reemplaza con el
+    mismo comportamiento (comando explícito, auto-detección, error si no se reconoce el tipo de proyecto)."""
     repo = crear_repo(entorno["base"] / "web")
     srv.registrar_proyecto(nombre="web", ruta=str(repo), pruebas="make check")
     config = json.loads(Path(entorno["env"]["MEMORIA_PROYECTOS_CONFIG"]).read_text())
     assert config["web"]["pruebas"] == "make check"
-    assert "No se reconoce" in srv.configurar_pruebas(proyecto="web")          # sin archivos reconocibles
     (repo / "go.mod").write_text("module web")
-    assert "`go test ./...` (detectado)" in srv.configurar_pruebas(proyecto="web")
-    assert "`npm run e2e`" in srv.configurar_pruebas(proyecto="web", comando="npm run e2e")
-    assert "configurar_pruebas" in srv.configurar_pruebas(proyecto="nada") or \
-        srv.configurar_pruebas(proyecto="nada").startswith("ERROR")
+    assert "`go test ./...`" in srv.actualizar_proyecto(nombre="web", pruebas="go test ./...")
+    assert "`npm run e2e`" in srv.actualizar_proyecto(nombre="web", pruebas="npm run e2e")
+    config = json.loads(Path(entorno["env"]["MEMORIA_PROYECTOS_CONFIG"]).read_text())
+    assert config["web"]["pruebas"] == "npm run e2e"
+    assert "no registrado" in srv.actualizar_proyecto(nombre="nada", pruebas="x") or \
+        srv.actualizar_proyecto(nombre="nada", pruebas="x").startswith("ERROR")
 
 
 def test_tarea_sin_comando_pide_configurarlo(srv, proyecto):

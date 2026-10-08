@@ -66,13 +66,16 @@ def test_documentos_en_subrepo_se_commitean_en_ese_repo(srv, multi):
     assert "(sin git)" in srv.crear_documento(proyecto="fractall", ruta="docs/notas.md", contenido="raíz sin repo")
 
 
-def test_configurar_pruebas_por_repo(srv, multi):
-    assert "indica `repositorio`" in srv.configurar_pruebas(proyecto="fractall", comando="make test")
-    salida = srv.configurar_pruebas(proyecto="fractall", repositorio="app", comando="uv run pytest")
+def test_actualizar_proyecto_pruebas_por_repo(srv, multi):
+    assert "indica `repositorio`" in srv.actualizar_proyecto(nombre="fractall", pruebas="make test")
+    assert "No se reconoce" in srv.actualizar_proyecto(nombre="fractall", repositorio="app")  # sin comando ni archivos reconocibles
+    salida = srv.actualizar_proyecto(nombre="fractall", repositorio="app", pruebas="uv run pytest")
     assert "`app/`: `uv run pytest`" in salida
     assert "Bloque actualizado" in salida and "- `app/`: `uv run pytest`" in salida   # el bloque ya trae el cambio
-    assert "no es un repositorio" in srv.configurar_pruebas(proyecto="fractall", repositorio="nada")
+    assert "no es un repositorio" in srv.actualizar_proyecto(nombre="fractall", repositorio="nada")
     assert "app/: uv run pytest" in srv._comando_pruebas("fractall")
+    # auto-detección si se omite `pruebas` (criterio 4): mismo comportamiento que configurar_pruebas
+    assert "`backend/`: `./mvnw test` (detectado)" in srv.actualizar_proyecto(nombre="fractall", repositorio="backend")
 
 
 def test_git_vacio_del_sandbox_de_codex_no_rompe_la_deteccion(srv, multi):

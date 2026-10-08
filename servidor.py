@@ -143,22 +143,37 @@ def _proyectos() -> dict:
     return json.loads(CONFIG.read_text(encoding="utf-8"))
 
 
-def _raiz(proyecto: str) -> Path:
-    p = _proyectos().get(proyecto)
+def _sugerencia_nombre(nombre: str, proyectos: dict) -> str | None:
+    """Si `nombre` no está registrado pero existe un proyecto equivalente salvo '_'/'-' (p. ej. 'erp-spring-manager'
+    vs 'erp_spring_manager'), lo sugiere."""
+    def normal(n: str) -> str:
+        return n.replace("_", "-")
+    for existente in proyectos:
+        if existente != nombre and normal(existente) == normal(nombre):
+            return existente
+    return None
+
+
+def _raiz(proyecto: str, verificar_existe: bool = True) -> Path:
+    proyectos = _proyectos()
+    p = proyectos.get(proyecto)
     if not p:
-        raise ErrorMemoria(f"Proyecto '{proyecto}' no registrado. Disponibles: {', '.join(_proyectos())}")
+        sugerido = _sugerencia_nombre(proyecto, proyectos)
+        pista = f" ¿Quisiste decir '{sugerido}'?" if sugerido else f" Disponibles: {', '.join(proyectos)}"
+        raise ErrorMemoria(f"Proyecto '{proyecto}' no registrado.{pista}")
     raiz = Path(p["ruta"]).expanduser().resolve()
-    if not raiz.is_dir():
+    if verificar_existe and not raiz.is_dir():
         raise ErrorMemoria(f"La ruta del proyecto no existe: {raiz}")
     return raiz
 
 
 def _mem(proyecto: str) -> Path:
     """Carpeta de memoria (ADR-010): repo git propio, SIEMPRE fuera del repositorio del código, para que ninguna
-    rama ni checkout la afecte. Clave "memoria" de projects.json; por defecto <carpeta de proyectos>/.memorias/<nombre>."""
+    rama ni checkout la afecte. Clave "memoria" de projects.json; por defecto <carpeta de proyectos>/.memorias/<nombre>.
+    No exige que la ruta del código exista: solo se usa aquí para la comparación ADR-010, nunca para leerla."""
     p = _proyectos().get(proyecto) or {}
     mem = Path(p["memoria"]).expanduser().resolve() if p.get("memoria") else BASE_PROYECTOS / ".memorias" / proyecto
-    raiz = _raiz(proyecto)
+    raiz = _raiz(proyecto, verificar_existe=False)
     if mem == raiz or raiz in mem.parents:
         raise ErrorMemoria(f"La memoria de '{proyecto}' está dentro del repositorio del código ({mem}); ADR-010 lo "
                            f"impide. Muévela a {BASE_PROYECTOS / '.memorias' / proyecto} y actualiza projects.json.")
@@ -172,13 +187,18 @@ def _es_repo(d: Path) -> bool:
     return g.is_file() or (g / "HEAD").exists()
 
 
-def _repos(proyecto: str) -> list[str]:
-    """Subcarpetas que son repositorios git, para proyectos de varios repos (p. ej. backend + frontend).
-    Vacío si la raíz misma es un repositorio."""
-    raiz = _raiz(proyecto)
+def _repos_de(raiz: Path) -> list[str]:
+    """Igual que `_repos`, a partir de una ruta ya resuelta (para no releer projects.json en medio de una
+    actualización, p. ej. en actualizar_proyecto cuando `ruta` cambia en la misma llamada)."""
     if _es_repo(raiz):
         return []
     return sorted(d.name for d in raiz.iterdir() if d.is_dir() and _es_repo(d))
+
+
+def _repos(proyecto: str) -> list[str]:
+    """Subcarpetas que son repositorios git, para proyectos de varios repos (p. ej. backend + frontend).
+    Vacío si la raíz misma es un repositorio."""
+    return _repos_de(_raiz(proyecto))
 
 
 def _repo_de(ruta: Path, tope: Path) -> Path | None:
@@ -481,6 +501,11 @@ def obtener_contexto(proyecto: str) -> str:
             with _bloqueo(proyecto):        # verifica y, si hace falta, migra el esquema antes de leer
                 pass
         partes = []
+        raiz = _raiz(proyecto, verificar_existe=False)
+        if not raiz.is_dir():
+            partes.append(f"⚠ La ruta registrada de '{proyecto}' ya no existe en disco ({raiz}); el contexto de "
+                          f"memoria de abajo sigue siendo válido. Corrígela con actualizar_proyecto(\"{proyecto}\", "
+                          "ruta=\"<ruta nueva>\").")
         for nombre in ("INDEX.md", "abiertas.md"):
             r = mem / nombre
             partes.append(r.read_text(encoding="utf-8") if r.exists() else f"({nombre} no existe)")
@@ -949,7 +974,7 @@ def registrar_tarea(proyecto: str, titulo: str, objetivo: str, criterios_aceptac
             donde = f"Desde `{repositorio}/`" if repositorio else "Desde la raíz del repositorio"
             secciones += ["## Cómo verificar",
                           f"{donde}: `{cmd}`" if cmd else
-                          "(sin comando de pruebas configurado: pregúntale al usuario o usa configurar_pruebas)"]
+                          "(sin comando de pruebas configurado: pregúntale al usuario o usa actualizar_proyecto)"]
             secciones += ["## Resultado", MARCA_RESULTADO]
             _escribir_registro(ruta, meta, "\n\n".join(secciones))
             sha = _commit(proyecto, [ruta], f"{id_} {titulo} (pendiente)")
@@ -1124,7 +1149,7 @@ def _linea_pruebas(proyecto: str) -> str:
     if isinstance(cfg, dict) and cfg:
         return "\nComandos de pruebas por repositorio:\n" + "\n".join(f"- `{r}/`: `{c}`" for r, c in cfg.items())
     return (f"\nComando de pruebas (desde la raíz del repositorio): `{cfg}`" if cfg
-            else "\nComando de pruebas: sin configurar (usa configurar_pruebas).")
+            else "\nComando de pruebas: sin configurar (usa actualizar_proyecto).")
 
 
 _DIR = Path(__file__).resolve().parent
@@ -1158,38 +1183,18 @@ def instrucciones_proyecto(proyecto: str) -> str:
     return _ejecutar(f)
 
 
-@herramienta
-def configurar_pruebas(proyecto: str, comando: str = "", repositorio: str = "") -> str:
-    """Fija el comando con que el agente de código verifica las tareas (/tarea). Sin `comando`, lo detecta a partir
-    de los archivos. En proyectos de varios repos, `repositorio` indica a cuál se aplica (sin él y sin comando,
-    redetecta todos). Se guarda en projects.json y aparece en cada tarea nueva."""
-    def f():
-        raiz, repos = _raiz(proyecto), _repos(proyecto)
-        proyectos = _proyectos()
-        actual = proyectos[proyecto].get("pruebas", "")
-        if repositorio:
-            if repositorio not in repos:
-                raise ErrorMemoria(f"'{repositorio}' no es un repositorio del proyecto. Disponibles: {', '.join(repos) or '(ninguno)'}")
-            cmd = comando.strip() or _detectar_pruebas(raiz / repositorio)
-            if not cmd:
-                raise ErrorMemoria("No se reconoce el tipo de repositorio; indica el comando explícitamente.")
-            nuevo = dict(actual) if isinstance(actual, dict) else {}
-            nuevo[repositorio] = cmd
-            descripcion = f"`{repositorio}/`: `{cmd}`"
-        else:
-            if repos and comando.strip():
-                raise ErrorMemoria(f"Proyecto de varios repositorios: indica `repositorio` ({', '.join(repos)}).")
-            nuevo = comando.strip() or _detectar_pruebas_proyecto(raiz)
-            if not nuevo:
-                raise ErrorMemoria("No se reconoce el tipo de proyecto; indica el comando explícitamente.")
-            descripcion = (", ".join(f"`{r}/`: `{c}`" for r, c in nuevo.items()) if isinstance(nuevo, dict)
-                           else f"`{nuevo}`")
-        proyectos[proyecto]["pruebas"] = nuevo
-        _escribir_atomico(CONFIG, json.dumps(proyectos, indent=2, ensure_ascii=False) + "\n")
-        return (f"Pruebas de `{proyecto}`: {descripcion}" + ("" if comando.strip() else " (detectado)")
-                + "\n\nBloque actualizado para CLAUDE.md/AGENTS.md (reemplaza el anterior):\n\n"
-                + f"```\n{PLANTILLA_AGENTES.format(proyecto=proyecto)}{_linea_pruebas(proyecto)}\n```")
-    return _ejecutar(f)
+def _validar_ruta_proyecto(ruta: str, mem: Path) -> Path:
+    """Valida una ruta de código candidata, para alta (registrar_proyecto) o corrección (actualizar_proyecto):
+    debe quedar dentro de la carpeta de proyectos, ser una carpeta existente, y no contener la memoria (ADR-010)."""
+    r = Path(ruta).expanduser().resolve()
+    if r != BASE_PROYECTOS and BASE_PROYECTOS not in r.parents:
+        raise ErrorMemoria(f"La ruta debe estar dentro de {BASE_PROYECTOS}.")
+    if not r.is_dir():
+        raise ErrorMemoria(f"No existe la carpeta {r}.")
+    if mem == r or r in mem.parents:
+        raise ErrorMemoria("La memoria no puede ir dentro del repositorio del código (ADR-010); "
+                           "elige otra ruta (mover la memoria de un proyecto existente no está soportado aquí).")
+    return r
 
 
 @herramienta
@@ -1200,21 +1205,15 @@ def registrar_proyecto(nombre: str, ruta: str, memoria: str = "", pruebas: str =
     fuera del repositorio del código. `pruebas`: comando para correr las pruebas; si se omite se detecta
     (Maven, Gradle, npm/pnpm/yarn, Godot, pytest, cargo, go). Solo con confirmación del usuario."""
     def f():
-        if not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,40}", nombre):
-            raise ErrorMemoria("Nombre inválido: minúsculas, números y guiones (2–41 caracteres).")
+        if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{1,40}", nombre):
+            raise ErrorMemoria("Nombre inválido: minúsculas, números, '-' y '_' (2–41 caracteres).")
         proyectos = _proyectos() if CONFIG.exists() else {}
         if nombre in proyectos:
             raise ErrorMemoria(f"'{nombre}' ya está registrado. Usa instrucciones_proyecto('{nombre}').")
-        r = Path(ruta).expanduser().resolve()
         m = Path(memoria).expanduser().resolve() if memoria else BASE_PROYECTOS / ".memorias" / nombre
-        for etiqueta, p in (("ruta", r), ("memoria", m)):
-            if p != BASE_PROYECTOS and BASE_PROYECTOS not in p.parents:
-                raise ErrorMemoria(f"La {etiqueta} debe estar dentro de {BASE_PROYECTOS}.")
-        if not r.is_dir():
-            raise ErrorMemoria(f"No existe la carpeta {r}.")
-        if m == r or r in m.parents:
-            raise ErrorMemoria("La memoria no puede ir dentro del repositorio del código (ADR-010); "
-                               "omite `memoria` para usar .memorias/<nombre>.")
+        if m != BASE_PROYECTOS and BASE_PROYECTOS not in m.parents:
+            raise ErrorMemoria(f"La memoria debe estar dentro de {BASE_PROYECTOS}.")
+        r = _validar_ruta_proyecto(ruta, m)
         anterior = CONFIG.read_text(encoding="utf-8") if CONFIG.exists() else None
         proyectos[nombre] = {"ruta": str(r), "memoria": str(m), "escritura": [MEM, "docs"],
                              "pruebas": pruebas.strip() or _detectar_pruebas_proyecto(r)}
@@ -1236,6 +1235,69 @@ def registrar_proyecto(nombre: str, ruta: str, memoria: str = "", pruebas: str =
                      + ("" if _es_repo(r) else " La carpeta raíz no es un repo: lo que se guarde en "
                         "su docs/ no queda versionado (usa <repo>/docs/ o la memoria)."))
         return f"{resultado}{aviso}\n\n{_instrucciones(nombre)}"
+    return _ejecutar(f)
+
+
+@herramienta
+def actualizar_proyecto(nombre: str, ruta: str = "", pruebas: str = "", repositorio: str = "") -> str:
+    """Actualiza un proyecto ya registrado en projects.json sin editarlo a mano. Reemplaza a configurar_pruebas
+    (eliminada): además de fijar el comando de pruebas, permite corregir `ruta` cuando el código se movió.
+    `ruta`: nueva carpeta del código, con las MISMAS validaciones que registrar_proyecto (debe quedar dentro de la
+    carpeta de proyectos, ser una carpeta existente, y no contener la memoria del proyecto — ADR-010).
+    `pruebas`: comando con que el agente de código verifica las tareas (/tarea); sin él, se detecta a partir de
+    los archivos. En proyectos de varios repos, `repositorio` indica a cuál se aplica `pruebas` (sin él y sin
+    `pruebas`, redetecta todos los repos). Sin ningún campo para cambiar, devuelve error y no toca el archivo."""
+    def f():
+        proyectos = _proyectos()
+        if nombre not in proyectos:
+            sugerido = _sugerencia_nombre(nombre, proyectos)
+            pista = f" ¿Quisiste decir '{sugerido}'?" if sugerido else f" Disponibles: {', '.join(proyectos)}"
+            raise ErrorMemoria(f"Proyecto '{nombre}' no registrado.{pista}")
+        if not (ruta.strip() or pruebas.strip() or repositorio.strip()):
+            raise ErrorMemoria("Nada para actualizar: indica `ruta`, `pruebas` o `repositorio`.")
+
+        cambios = []
+        raiz = None
+        if ruta.strip():
+            mem = _mem(nombre)
+            anterior = proyectos[nombre]["ruta"]
+            raiz = _validar_ruta_proyecto(ruta.strip(), mem)
+            proyectos[nombre]["ruta"] = str(raiz)
+            cambios.append(f"ruta: {anterior} → {raiz}")
+
+        if pruebas.strip() or repositorio.strip():
+            if raiz is None:
+                raiz = _raiz(nombre)
+            repos = _repos_de(raiz)
+            actual = proyectos[nombre].get("pruebas", "")
+            repo = repositorio.strip()
+            if repo:
+                if repo not in repos:
+                    raise ErrorMemoria(f"'{repo}' no es un repositorio del proyecto. "
+                                       f"Disponibles: {', '.join(repos) or '(ninguno)'}")
+                cmd = pruebas.strip() or _detectar_pruebas(raiz / repo)
+                if not cmd:
+                    raise ErrorMemoria("No se reconoce el tipo de repositorio; indica el comando explícitamente.")
+                nuevo = dict(actual) if isinstance(actual, dict) else {}
+                nuevo[repo] = cmd
+                descripcion = f"`{repo}/`: `{cmd}`"
+            else:
+                if repos and pruebas.strip():
+                    raise ErrorMemoria(f"Proyecto de varios repositorios: indica `repositorio` ({', '.join(repos)}).")
+                nuevo = pruebas.strip() or _detectar_pruebas_proyecto(raiz)
+                if not nuevo:
+                    raise ErrorMemoria("No se reconoce el tipo de proyecto; indica el comando explícitamente.")
+                descripcion = (", ".join(f"`{r}/`: `{c}`" for r, c in nuevo.items()) if isinstance(nuevo, dict)
+                               else f"`{nuevo}`")
+            proyectos[nombre]["pruebas"] = nuevo
+            cambios.append(f"pruebas {descripcion}" + ("" if pruebas.strip() else " (detectado)"))
+
+        _escribir_atomico(CONFIG, json.dumps(proyectos, indent=2, ensure_ascii=False) + "\n")
+        mensaje = f"'{nombre}' actualizado:\n" + "\n".join(f"- {c}" for c in cambios)
+        if pruebas.strip() or repositorio.strip():
+            mensaje += ("\n\nBloque actualizado para CLAUDE.md/AGENTS.md (reemplaza el anterior):\n\n"
+                       f"```\n{PLANTILLA_AGENTES.format(proyecto=nombre)}{_linea_pruebas(nombre)}\n```")
+        return mensaje
     return _ejecutar(f)
 
 

@@ -46,6 +46,19 @@ con repo git propio) y devuelve las instrucciones exactas para pegar en el proye
 Para recuperar esas instrucciones de un proyecto existente: `instrucciones_proyecto("<nombre>")`.
 Recomendado: marcar `registrar_proyecto` como "requiere aprobación" igual que `confirmar_decision`.
 
+### Actualizar un proyecto ya registrado
+
+`actualizar_proyecto(nombre, ruta="", pruebas="", repositorio="")` corrige projects.json sin editarlo a mano;
+reemplaza a la antigua `configurar_pruebas` (eliminada). Indique al menos uno de estos campos (sin ninguno, la
+herramienta falla y no toca el archivo):
+- `ruta`: nueva carpeta del código, cuando el proyecto se movió. Mismas validaciones que `registrar_proyecto`
+  (debe quedar dentro de la carpeta de proyectos, ser una carpeta existente, y no contener la memoria del
+  proyecto — ADR-010). La respuesta indica la ruta vieja y la nueva.
+- `pruebas`: comando con que `/tarea` verifica el trabajo; sin él, se detecta a partir de los archivos (igual que
+  en el alta). En proyectos de varios repositorios, `repositorio` indica a cuál se aplica.
+No cubre renombrar un proyecto ni mover la ubicación de su memoria (`.memorias/<nombre>` o la clave `"memoria"`):
+para eso edite `projects.json` a mano y mueva la carpeta con `git mv`/`mv` según corresponda.
+
 ## 5. Tareas de código (Claude Desktop → Claude Code)
 Flujo: en Claude Desktop se acuerda un cambio y se registra con `registrar_tarea` → queda `.project/tareas/T-NNN.md` →
 en Claude Code, dentro del repositorio, se ejecuta `/tarea T-NNN` → Claude Code crea la rama, implementa, corre las pruebas
