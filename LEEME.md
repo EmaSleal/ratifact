@@ -48,14 +48,22 @@ Recomendado: marcar `registrar_proyecto` como "requiere aprobación" igual que `
 
 ### Actualizar un proyecto ya registrado
 
-`actualizar_proyecto(nombre, ruta="", pruebas="", repositorio="")` corrige projects.json sin editarlo a mano;
-reemplaza a la antigua `configurar_pruebas` (eliminada). Indique al menos uno de estos campos (sin ninguno, la
-herramienta falla y no toca el archivo):
+`actualizar_proyecto(nombre, ruta="", pruebas="", repositorio="", redetectar=False)` corrige projects.json sin
+editarlo a mano; reemplaza a la antigua `configurar_pruebas` (eliminada). Indique al menos uno de estos campos
+(sin ninguno, la herramienta falla y no toca el archivo):
 - `ruta`: nueva carpeta del código, cuando el proyecto se movió. Mismas validaciones que `registrar_proyecto`
   (debe quedar dentro de la carpeta de proyectos, ser una carpeta existente, y no contener la memoria del
-  proyecto — ADR-010). La respuesta indica la ruta vieja y la nueva.
-- `pruebas`: comando con que `/tarea` verifica el trabajo; sin él, se detecta a partir de los archivos (igual que
-  en el alta). En proyectos de varios repositorios, `repositorio` indica a cuál se aplica.
+  proyecto — ADR-010; el mensaje de rechazo es distinto al del alta, porque aquí mover la memoria de un
+  proyecto existente no está soportado). La respuesta indica la ruta vieja y la nueva. Si el proyecto es de
+  varios repositorios y el `pruebas` guardado queda con claves que ya no son repos bajo la ruta nueva, el
+  cambio se aplica igual (no bloquea) pero la respuesta avisa cuáles quedaron "huérfanas" y sugiere
+  `redetectar=True`.
+- `pruebas`: comando con que `/tarea` verifica el trabajo. En proyectos de varios repositorios, `repositorio`
+  indica a cuál se aplica.
+- `redetectar=True`: vuelve a detectar el comando a partir de los archivos del proyecto, en vez de darlo con
+  `pruebas` (ambos a la vez son incompatibles). En un proyecto de un solo repositorio redetecta el comando
+  completo; en uno de varios repositorios redetecta todos, o solo `repositorio` si se indica. Es la forma de
+  recuperar el comportamiento que antes tenía `configurar_pruebas()` llamada sin argumentos.
 No cubre renombrar un proyecto ni mover la ubicación de su memoria (`.memorias/<nombre>` o la clave `"memoria"`):
 para eso edite `projects.json` a mano y mueva la carpeta con `git mv`/`mv` según corresponda.
 

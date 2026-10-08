@@ -1253,22 +1253,32 @@ def registrar_proyecto(nombre: str, ruta: str, memoria: str = "", pruebas: str =
 
 
 @herramienta
-def actualizar_proyecto(nombre: str, ruta: str = "", pruebas: str = "", repositorio: str = "") -> str:
+def actualizar_proyecto(nombre: str, ruta: str = "", pruebas: str = "", repositorio: str = "",
+                        redetectar: bool = False) -> str:
     """Actualiza un proyecto ya registrado en projects.json sin editarlo a mano. Reemplaza a configurar_pruebas
-    (eliminada): además de fijar el comando de pruebas, permite corregir `ruta` cuando el código se movió.
-    `ruta`: nueva carpeta del código, con las MISMAS validaciones que registrar_proyecto (debe quedar dentro de la
-    carpeta de proyectos, ser una carpeta existente, y no contener la memoria del proyecto — ADR-010).
-    `pruebas`: comando con que el agente de código verifica las tareas (/tarea); sin él, se detecta a partir de
-    los archivos. En proyectos de varios repos, `repositorio` indica a cuál se aplica `pruebas` (sin él y sin
-    `pruebas`, redetecta todos los repos). Sin ningún campo para cambiar, devuelve error y no toca el archivo."""
+    (eliminada). Indica al menos uno de `ruta`, `pruebas`, `repositorio` o `redetectar=True`; sin ninguno,
+    devuelve error y no toca el archivo.
+    `ruta`: nueva carpeta del código, cuando se movió. Mismas validaciones que registrar_proyecto (debe quedar
+    dentro de la carpeta de proyectos, ser una carpeta existente, y no contener la memoria del proyecto —
+    ADR-010). Si el proyecto es de varios repos y el `pruebas` guardado queda con claves que ya no son repos
+    bajo la ruta nueva, el cambio se aplica igual pero la respuesta avisa cuáles y sugiere `redetectar=True`.
+    `pruebas`: comando con que el agente de código verifica las tareas (/tarea). En proyectos de varios repos,
+    `repositorio` indica a cuál se aplica.
+    `redetectar`: True para volver a detectar el comando a partir de los archivos del proyecto en vez de darlo
+    con `pruebas` (ambos a la vez son incompatibles: no tiene sentido pedir redetección y dar el comando).
+    En un proyecto de un solo repo redetecta el comando completo; en uno de varios repos redetecta todos, o
+    solo `repositorio` si se indica."""
     def f():
         proyectos = _proyectos()
         if nombre not in proyectos:
             sugerido = _sugerencia_nombre(nombre, proyectos)
             pista = f" ¿Quisiste decir '{sugerido}'?" if sugerido else f" Disponibles: {', '.join(proyectos)}"
             raise ErrorMemoria(f"Proyecto '{nombre}' no registrado.{pista}")
-        if not (ruta.strip() or pruebas.strip() or repositorio.strip()):
-            raise ErrorMemoria("Nada para actualizar: indica `ruta`, `pruebas` o `repositorio`.")
+        if not (ruta.strip() or pruebas.strip() or repositorio.strip() or redetectar):
+            raise ErrorMemoria("Nada para actualizar: indica `ruta`, `pruebas`, `repositorio` o `redetectar=True`.")
+        if redetectar and pruebas.strip():
+            raise ErrorMemoria("`redetectar` y `pruebas` son incompatibles: pedir que se redetecte el comando "
+                               "y darlo a la vez no tiene sentido; usa uno de los dos.")
 
         cambios = []
         raiz = None
@@ -1279,7 +1289,7 @@ def actualizar_proyecto(nombre: str, ruta: str = "", pruebas: str = "", reposito
             proyectos[nombre]["ruta"] = str(raiz)
             cambios.append(f"ruta: {anterior} → {raiz}")
 
-        if pruebas.strip() or repositorio.strip():
+        if pruebas.strip() or repositorio.strip() or redetectar:
             if raiz is None:
                 raiz = _raiz(nombre)
             repos = _repos_de(raiz)
@@ -1306,9 +1316,18 @@ def actualizar_proyecto(nombre: str, ruta: str = "", pruebas: str = "", reposito
             proyectos[nombre]["pruebas"] = nuevo
             cambios.append(f"pruebas {descripcion}" + ("" if pruebas.strip() else " (detectado)"))
 
+        if ruta.strip():
+            pruebas_final = proyectos[nombre].get("pruebas", "")
+            if isinstance(pruebas_final, dict):
+                vigentes = _repos_de(raiz)
+                huerfanas = sorted(k for k in pruebas_final if k not in vigentes)
+                if huerfanas:
+                    cambios.append(f"⚠ pruebas huérfanas (sin repo bajo la ruta nueva): {', '.join(huerfanas)}; "
+                                   f"usa actualizar_proyecto('{nombre}', redetectar=True) para regenerarlas.")
+
         _escribir_atomico(CONFIG, json.dumps(proyectos, indent=2, ensure_ascii=False) + "\n")
         mensaje = f"'{nombre}' actualizado:\n" + "\n".join(f"- {c}" for c in cambios)
-        if pruebas.strip() or repositorio.strip():
+        if pruebas.strip() or repositorio.strip() or redetectar:
             mensaje += ("\n\nBloque actualizado para CLAUDE.md/AGENTS.md (reemplaza el anterior):\n\n"
                        f"```\n{PLANTILLA_AGENTES.format(proyecto=nombre)}{_linea_pruebas(nombre)}\n```")
         return mensaje
