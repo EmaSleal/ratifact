@@ -1191,15 +1191,21 @@ def instrucciones_proyecto(proyecto: str) -> str:
     return _ejecutar(f)
 
 
-def _validar_ruta_proyecto(ruta: str, mem: Path) -> Path:
+def _validar_ruta_proyecto(ruta: str, mem: Path, alta: bool = False) -> Path:
     """Valida una ruta de código candidata, para alta (registrar_proyecto) o corrección (actualizar_proyecto):
-    debe quedar dentro de la carpeta de proyectos, ser una carpeta existente, y no contener la memoria (ADR-010)."""
+    debe quedar dentro de la carpeta de proyectos, ser una carpeta existente, y no contener la memoria (ADR-010).
+    `alta=True` usa la redacción de registrar_proyecto para el choque con la memoria (todavía no hay memoria
+    elegida, se puede omitir `memoria`); `alta=False` (actualizar_proyecto) usa la redacción de corrección
+    (la memoria ya existe en otro lado y moverla no está soportado aquí)."""
     r = Path(ruta).expanduser().resolve()
     if r != BASE_PROYECTOS and BASE_PROYECTOS not in r.parents:
         raise ErrorMemoria(f"La ruta debe estar dentro de {BASE_PROYECTOS}.")
     if not r.is_dir():
         raise ErrorMemoria(f"No existe la carpeta {r}.")
     if mem == r or r in mem.parents:
+        if alta:
+            raise ErrorMemoria("La memoria no puede ir dentro del repositorio del código (ADR-010); "
+                               "omite `memoria` para usar .memorias/<nombre>.")
         raise ErrorMemoria("La memoria no puede ir dentro del repositorio del código (ADR-010); "
                            "elige otra ruta (mover la memoria de un proyecto existente no está soportado aquí).")
     return r
@@ -1221,7 +1227,7 @@ def registrar_proyecto(nombre: str, ruta: str, memoria: str = "", pruebas: str =
         m = Path(memoria).expanduser().resolve() if memoria else BASE_PROYECTOS / ".memorias" / nombre
         if m != BASE_PROYECTOS and BASE_PROYECTOS not in m.parents:
             raise ErrorMemoria(f"La memoria debe estar dentro de {BASE_PROYECTOS}.")
-        r = _validar_ruta_proyecto(ruta, m)
+        r = _validar_ruta_proyecto(ruta, m, alta=True)
         anterior = CONFIG.read_text(encoding="utf-8") if CONFIG.exists() else None
         proyectos[nombre] = {"ruta": str(r), "memoria": str(m), "escritura": [MEM, "docs"],
                              "pruebas": pruebas.strip() or _detectar_pruebas_proyecto(r)}

@@ -27,7 +27,9 @@ def test_actualizar_ruta_valida_igual_que_registrar_proyecto(srv, proyecto, ento
 
 
 def test_actualizar_ruta_rechaza_memoria_adentro_adr010(srv, entorno):
-    """Criterio 2: ADR-010 también se aplica al actualizar (no solo al dar de alta)."""
+    """Criterio 2: ADR-010 también se aplica al actualizar (no solo al dar de alta). Obs. 4 / Criterio E:
+    actualizar_proyecto usa la redacción de corrección, distinta de la de registrar_proyecto (ver
+    tests/test_proyectos_y_telemetria.py::test_memoria_dentro_del_repo_mensaje_de_alta_distinto_de_actualizar)."""
     repo = crear_repo(entorno["base"] / "interno2")
     srv.registrar_proyecto(nombre="interno2", ruta=str(repo))   # memoria en <base>/.memorias/interno2
     ruta_config = Path(entorno["env"]["MEMORIA_PROYECTOS_CONFIG"])
@@ -35,6 +37,8 @@ def test_actualizar_ruta_rechaza_memoria_adentro_adr010(srv, entorno):
 
     salida = srv.actualizar_proyecto(nombre="interno2", ruta=str(entorno["base"]))   # contendría la memoria
     assert salida.startswith("ERROR:") and "ADR-010" in salida
+    assert "elige otra ruta" in salida and "no está soportado aquí" in salida
+    assert "omite `memoria`" not in salida
     assert ruta_config.read_text() == antes
 
 

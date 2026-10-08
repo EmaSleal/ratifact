@@ -36,6 +36,17 @@ def test_memoria_dentro_del_repo_del_codigo_se_rechaza(srv, entorno):
     assert "ADR-010" in salida and "interno" not in srv.listar_proyectos()
 
 
+def test_memoria_dentro_del_repo_mensaje_de_alta_distinto_de_actualizar(srv, entorno):
+    """Obs. 4 / Criterio E: registrar_proyecto sugiere omitir `memoria` (no existe aún una memoria elegida
+    para "corregir"); actualizar_proyecto, en cambio, usa la redacción de corrección (ver
+    tests/test_actualizar_proyecto.py::test_actualizar_ruta_rechaza_memoria_adentro_adr010 para su mensaje)."""
+    repo = crear_repo(entorno["base"] / "interno3")
+    salida = srv.registrar_proyecto(nombre="interno3", ruta=str(repo), memoria=str(repo / ".project"))
+    assert "ADR-010" in salida
+    assert "omite `memoria`" in salida
+    assert "no está soportado aquí" not in salida
+
+
 def test_config_heredada_con_memoria_interna_avisa_como_migrar(srv, entorno):
     repo = crear_repo(entorno["base"] / "viejo")
     Path(entorno["env"]["MEMORIA_PROYECTOS_CONFIG"]).write_text(json.dumps(
