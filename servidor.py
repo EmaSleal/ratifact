@@ -328,13 +328,21 @@ def _escribir_atomico(ruta: Path, texto: str) -> None:
 
 def _commit(proyecto: str, rutas: list[Path], mensaje: str) -> str:
     """Versiona cada ruta en su repositorio: .project/ tiene repo propio (independiente de la rama
-    del código); el resto (p. ej. docs/) va al repositorio del proyecto."""
-    raiz = _raiz(proyecto)
+    del código); el resto (p. ej. docs/) va al repositorio del proyecto. `raiz` se resuelve recién si hace
+    falta (alguna ruta queda fuera de la memoria): así registrar_pendiente/registrar_decision, que solo
+    escriben en la memoria, funcionan aunque la carpeta de código ya no exista (ADR-010: la memoria es
+    independiente de la ruta del código)."""
     mem = _mem(proyecto)
+    raiz = None
     grupos: dict[Path, list[str]] = {}
     for r in rutas:
         en_mem = r == mem or mem in r.parents
-        repo = mem if en_mem else (_repo_de(r.parent, raiz) or raiz)
+        if en_mem:
+            repo = mem
+        else:
+            if raiz is None:
+                raiz = _raiz(proyecto)
+            repo = _repo_de(r.parent, raiz) or raiz
         grupos.setdefault(repo, []).append(str(r.relative_to(repo)))
     resultados = []
     for repo, rel in grupos.items():
