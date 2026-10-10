@@ -1,0 +1,765 @@
+{
+  "herramientas": [
+    {
+      "descripcion": "Reescribe INDEX.md (resumen ejecutivo del proyecto). Debe ser un RESUMEN regenerado, no un\n    acumulado; límite ~6000 caracteres.",
+      "esquema_entrada": {
+        "properties": {
+          "contenido": {
+            "title": "Contenido",
+            "type": "string"
+          },
+          "proyecto": {
+            "title": "Proyecto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proyecto",
+          "contenido"
+        ],
+        "title": "actualizar_indiceArguments",
+        "type": "object"
+      },
+      "nombre": "actualizar_indice"
+    },
+    {
+      "descripcion": "Actualiza un proyecto ya registrado en projects.json sin editarlo a mano. Reemplaza a configurar_pruebas\n    (eliminada). Indica al menos uno de `ruta`, `pruebas`, `repositorio` o `redetectar=True`; sin ninguno,\n    devuelve error y no toca el archivo.\n    `ruta`: nueva carpeta del código, cuando se movió. Mismas validaciones que registrar_proyecto (debe quedar\n    dentro de la carpeta de proyectos, ser una carpeta existente, y no contener la memoria del proyecto —\n    ADR-010). Si el proyecto es de varios repos y el `pruebas` guardado queda con claves que ya no son repos\n    bajo la ruta nueva, el cambio se aplica igual pero la respuesta avisa cuáles y sugiere `redetectar=True`.\n    `pruebas`: comando con que el agente de código verifica las tareas (/tarea). En proyectos de varios repos,\n    `repositorio` indica a cuál se aplica.\n    `redetectar`: True para volver a detectar el comando a partir de los archivos del proyecto en vez de darlo\n    con `pruebas` (ambos a la vez son incompatibles: no tiene sentido pedir redetección y dar el comando).\n    En un proyecto de un solo repo redetecta el comando completo; en uno de varios repos redetecta todos, o\n    solo `repositorio` si se indica.",
+      "esquema_entrada": {
+        "properties": {
+          "nombre": {
+            "title": "Nombre",
+            "type": "string"
+          },
+          "pruebas": {
+            "default": "",
+            "title": "Pruebas",
+            "type": "string"
+          },
+          "redetectar": {
+            "default": false,
+            "title": "Redetectar",
+            "type": "boolean"
+          },
+          "repositorio": {
+            "default": "",
+            "title": "Repositorio",
+            "type": "string"
+          },
+          "ruta": {
+            "default": "",
+            "title": "Ruta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "nombre"
+        ],
+        "title": "actualizar_proyectoArguments",
+        "type": "object"
+      },
+      "nombre": "actualizar_proyecto"
+    },
+    {
+      "descripcion": "Cambia el estado de una tarea (pendiente, en_curso, en_revision, fallida, integrada, descartada).\n    `resultado`: qué se hizo, pruebas ejecutadas y su salida resumida, desvíos respecto de la spec.\n    'integrada' y 'descartada' solo con confirmación explícita del usuario.\n    Para pedir correcciones tras revisar una tarea usa `devolver_tarea`, no este cambio de estado.",
+      "esquema_entrada": {
+        "properties": {
+          "commit": {
+            "default": "",
+            "title": "Commit",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "proyecto": {
+            "title": "Proyecto",
+            "type": "string"
+          },
+          "resultado": {
+            "default": "",
+            "title": "Resultado",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proyecto",
+          "id",
+          "estado"
+        ],
+        "title": "actualizar_tareaArguments",
+        "type": "object"
+      },
+      "nombre": "actualizar_tarea"
+    },
+    {
+      "descripcion": "Busca texto (sin distinguir mayúsculas) en archivos de texto del proyecto y devuelve\n    fragmentos con ruta y línea. Úsala antes de leer documentos completos.",
+      "esquema_entrada": {
+        "properties": {
+          "max_resultados": {
+            "default": 20,
+            "title": "Max Resultados",
+            "type": "integer"
+          },
+          "proyecto": {
+            "title": "Proyecto",
+            "type": "string"
+          },
+          "texto": {
+            "title": "Texto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proyecto",
+          "texto"
+        ],
+        "title": "buscarArguments",
+        "type": "object"
+      },
+      "nombre": "buscar"
+    },
+    {
+      "descripcion": "Cierra un pendiente. Si la resolución generó una decisión, indica su id_decision.",
+      "esquema_entrada": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "id_decision": {
+            "default": "",
+            "title": "Id Decision",
+            "type": "string"
+          },
+          "proyecto": {
+            "title": "Proyecto",
+            "type": "string"
+          },
+          "resolucion": {
+            "title": "Resolucion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proyecto",
+          "id",
+          "resolucion"
+        ],
+        "title": "cerrar_pendienteArguments",
+        "type": "object"
+      },
+      "nombre": "cerrar_pendiente"
+    },
+    {
+      "descripcion": "Pasa una decisión de 'propuesta' a 'acordada'. Es la ÚNICA vía para acordar una decisión y el cliente\n    pide la aprobación del usuario en cada llamada. `cita_usuario`: el texto literal con que el usuario\n    confirmó en el chat (queda guardado en el ADR como evidencia). Nunca la llames sin esa confirmación.",
+      "esquema_entrada": {
+        "properties": {
+          "cita_usuario": {
+            "title": "Cita Usuario",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "proyecto": {
+            "title": "Proyecto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proyecto",
+          "id",
+          "cita_usuario"
+        ],
+        "title": "confirmar_decisionArguments",
+        "type": "object"
+      },
+      "nombre": "confirmar_decision"
+    },
+    {
+      "descripcion": "Confirma VARIAS propuestas con una sola aprobación del usuario, que ve la lista completa al aprobar. Úsala\n    solo cuando el usuario confirmó explícitamente esas decisiones en un mismo mensaje; `cita_usuario` es ese\n    mensaje literal. Todo o nada: si alguna no es propuesta o no existe, no se confirma ninguna.",
+      "esquema_entrada": {
+        "properties": {
+          "cita_usuario": {
+            "title": "Cita Usuario",
+            "type": "string"
+          },
+          "ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Ids",
+            "type": "array"
+          },
+          "proyecto": {
+            "title": "Proyecto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proyecto",
+          "ids",
+          "cita_usuario"
+        ],
+        "title": "confirmar_decisiones_loteArguments",
+        "type": "object"
+      },
+      "nombre": "confirmar_decisiones_lote"
+    },
+    {
+      "descripcion": "Crea un archivo de texto NUEVO en una zona autorizada (por defecto .project/ y docs/). Falla si ya existe.\n    Separada de guardar_documento para que el usuario pueda exigir aprobación al crear archivos.",
+      "esquema_entrada": {
+        "properties": {
+          "contenido": {
+            "title": "Contenido",
+            "type": "string"
+          },
+          "motivo": {
+            "default": "",
+            "title": "Motivo",
+            "type": "string"
+          },
+          "proyecto": {
+            "title": "Proyecto",
+            "type": "string"
+          },
+          "ruta": {
+            "title": "Ruta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proyecto",
+          "ruta",
+          "contenido"
+        ],
+        "title": "crear_documentoArguments",
+        "type": "object"
+      },
+      "nombre": "crear_documento"
+    },
+    {
+      "descripcion": "SOLO para aplicaciones que soportan formularios MCP (elicitation), como Claude Code. En Claude Desktop o\n    claude.ai NO la uses: llama revisar_propuestas y presenta las opciones (confirmar / ajustar / descartar /\n    posponer) con tus propias tarjetas o preguntas de opción múltiple; luego aplica confirmar_decision o\n    descartar_decision según lo que el usuario elija.\n    Abre un formulario por cada propuesta pendiente; las respuestas vienen del usuario sin pasar por el modelo,\n    así que confirmaciones y descartes se aplican directamente. Devuelve el resumen y las propuestas a ajustar.",
+      "esquema_entrada": {
+        "properties": {
+          "proyecto": {
+            "title": "Proyecto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proyecto"
+        ],
+        "title": "decidir_propuestasArguments",
+        "type": "object"
+      },
+      "nombre": "decidir_propuestas"
+    },
+    {
+      "descripcion": "Cierra una propuesta que el usuario NO aprueba. Queda como 'descartada' con su motivo (no se borra: el\n    historial conserva qué se consideró y por qué no se adoptó). Solo por indicación explícita del usuario.",
+      "esquema_entrada": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "motivo": {
+            "title": "Motivo",
+            "type": "string"
+          },
+          "proyecto": {
+            "title": "Proyecto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proyecto",
+          "id",
+          "motivo"
+        ],
+        "title": "descartar_decisionArguments",
+        "type": "object"
+      },
+      "nombre": "descartar_decision"
+    },
+    {
+      "descripcion": "Devuelve una tarea en revisión para que el agente de código la corrija en la MISMA rama.\n    Úsala solo cuando el usuario, tras revisar el resultado, decida pedir cambios.\n    `observaciones`: qué se aprueba y qué falla, con el porqué. `criterios_adicionales`: lista verificable de lo que\n    debe cumplir la corrección (se suma a los criterios originales). La tarea queda 'devuelta' y se reejecuta\n    con /tarea T-NNN, que continúa sobre la rama existente sin reescribir los commits anteriores.",
+      "esquema_entrada": {
+        "properties": {
+          "criterios_adicionales": {
+            "default": "",
+            "title": "Criterios Adicionales",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "observaciones": {
+            "title": "Observaciones",
+            "type": "string"
+          },
+          "proyecto": {
+            "title": "Proyecto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proyecto",
+          "id",
+          "observaciones"
+        ],
+        "title": "devolver_tareaArguments",
+        "type": "object"
+      },
+      "nombre": "devolver_tarea"
+    },
+    {
+      "descripcion": "Modifica un archivo de texto EXISTENTE en una zona autorizada. modo: 'reemplazar' | 'anexar'.\n    Para crear un archivo nuevo usa crear_documento.",
+      "esquema_entrada": {
+        "properties": {
+          "contenido": {
+            "title": "Contenido",
+            "type": "string"
+          },
+          "modo": {
+            "default": "reemplazar",
+            "title": "Modo",
+            "type": "string"
+          },
+          "motivo": {
+            "default": "",
+            "title": "Motivo",
+            "type": "string"
+          },
+          "proyecto": {
+            "title": "Proyecto",
+            "type": "string"
+          },
+          "ruta": {
+            "title": "Ruta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proyecto",
+          "ruta",
+          "contenido"
+        ],
+        "title": "guardar_documentoArguments",
+        "type": "object"
+      },
+      "nombre": "guardar_documento"
+    },
+    {
+      "descripcion": "Crea la estructura .project/ vacía de un proyecto registrado (idempotente).",
+      "esquema_entrada": {
+        "properties": {
+          "proyecto": {
+            "title": "Proyecto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proyecto"
+        ],
+        "title": "inicializar_memoriaArguments",
+        "type": "object"
+      },
+      "nombre": "inicializar_memoria"
+    },
+    {
+      "descripcion": "Devuelve, listas para copiar, las instrucciones del proyecto de Claude y el bloque para CLAUDE.md/AGENTS.md\n    con el nombre correcto del proyecto. Entrégaselas al usuario tal cual, sin resumir.",
+      "esquema_entrada": {
+        "properties": {
+          "proyecto": {
+            "title": "Proyecto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proyecto"
+        ],
+        "title": "instrucciones_proyectoArguments",
+        "type": "object"
+      },
+      "nombre": "instrucciones_proyecto"
+    },
+    {
+      "descripcion": "Lee un archivo de texto del proyecto, opcionalmente un rango de líneas (1-indexado).",
+      "esquema_entrada": {
+        "properties": {
+          "desde_linea": {
+            "default": 1,
+            "title": "Desde Linea",
+            "type": "integer"
+          },
+          "hasta_linea": {
+            "default": 0,
+            "title": "Hasta Linea",
+            "type": "integer"
+          },
+          "proyecto": {
+            "title": "Proyecto",
+            "type": "string"
+          },
+          "ruta": {
+            "title": "Ruta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proyecto",
+          "ruta"
+        ],
+        "title": "leer_documentoArguments",
+        "type": "object"
+      },
+      "nombre": "leer_documento"
+    },
+    {
+      "descripcion": "Lista archivos (con tamaño) bajo una carpeta del proyecto.",
+      "esquema_entrada": {
+        "properties": {
+          "carpeta": {
+            "default": "docs",
+            "title": "Carpeta",
+            "type": "string"
+          },
+          "proyecto": {
+            "title": "Proyecto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proyecto"
+        ],
+        "title": "listar_documentosArguments",
+        "type": "object"
+      },
+      "nombre": "listar_documentos"
+    },
+    {
+      "descripcion": "Lista los proyectos registrados, su carpeta de código y si ya tienen memoria.",
+      "esquema_entrada": {
+        "properties": {},
+        "title": "listar_proyectosArguments",
+        "type": "object"
+      },
+      "nombre": "listar_proyectos"
+    },
+    {
+      "descripcion": "Lista las tareas de Claude Code con su estado y rama.",
+      "esquema_entrada": {
+        "properties": {
+          "incluir_cerradas": {
+            "default": false,
+            "title": "Incluir Cerradas",
+            "type": "boolean"
+          },
+          "proyecto": {
+            "title": "Proyecto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proyecto"
+        ],
+        "title": "listar_tareasArguments",
+        "type": "object"
+      },
+      "nombre": "listar_tareas"
+    },
+    {
+      "descripcion": "Carga inicial de un chat: devuelve INDEX.md y las decisiones abiertas. Llamar antes de responder.",
+      "esquema_entrada": {
+        "properties": {
+          "proyecto": {
+            "title": "Proyecto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proyecto"
+        ],
+        "title": "obtener_contextoArguments",
+        "type": "object"
+      },
+      "nombre": "obtener_contexto"
+    },
+    {
+      "descripcion": "Marca una decisión como reemplazada por otra ya registrada (las decisiones no se borran).",
+      "esquema_entrada": {
+        "properties": {
+          "id_anterior": {
+            "title": "Id Anterior",
+            "type": "string"
+          },
+          "id_nuevo": {
+            "title": "Id Nuevo",
+            "type": "string"
+          },
+          "proyecto": {
+            "title": "Proyecto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proyecto",
+          "id_anterior",
+          "id_nuevo"
+        ],
+        "title": "reemplazar_decisionArguments",
+        "type": "object"
+      },
+      "nombre": "reemplazar_decision"
+    },
+    {
+      "descripcion": "Crea un ADR. SIEMPRE queda como 'propuesta'. Para acordarla, llama después confirmar_decision:\n    esa herramienta pide la aprobación del usuario. `resumen`: una línea para la vista de acuerdos.\n    Idempotente (ADR-019): si ya hay un ADR con este título (sin distinguir mayúsculas ni espacios) creado en\n    los últimos minutos Y TODAVÍA en estado 'propuesta', no crea nada nuevo y devuelve el id existente. Si ese\n    ADR ya cambió de estado (p. ej. descartada: el usuario pidió otra versión), un humano ya intervino, así\n    que se registra una ADR nueva.",
+      "esquema_entrada": {
+        "properties": {
+          "alternativas": {
+            "default": "",
+            "title": "Alternativas",
+            "type": "string"
+          },
+          "decision": {
+            "title": "Decision",
+            "type": "string"
+          },
+          "justificacion": {
+            "title": "Justificacion",
+            "type": "string"
+          },
+          "proyecto": {
+            "title": "Proyecto",
+            "type": "string"
+          },
+          "resumen": {
+            "default": "",
+            "title": "Resumen",
+            "type": "string"
+          },
+          "titulo": {
+            "title": "Titulo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proyecto",
+          "titulo",
+          "decision",
+          "justificacion"
+        ],
+        "title": "registrar_decisionArguments",
+        "type": "object"
+      },
+      "nombre": "registrar_decision"
+    },
+    {
+      "descripcion": "Registra una decisión abierta o tema sin resolver. Idempotente (ADR-019): si ya hay un pendiente con\n    este tema (sin distinguir mayúsculas ni espacios) creado en los últimos minutos Y TODAVÍA en estado\n    'abierta', no crea nada nuevo y devuelve el id existente. Si ese pendiente ya se cerró, un humano ya\n    intervino, así que se registra un pendiente nuevo.",
+      "esquema_entrada": {
+        "properties": {
+          "contexto": {
+            "title": "Contexto",
+            "type": "string"
+          },
+          "dueno": {
+            "default": "",
+            "title": "Dueno",
+            "type": "string"
+          },
+          "proyecto": {
+            "title": "Proyecto",
+            "type": "string"
+          },
+          "tema": {
+            "title": "Tema",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proyecto",
+          "tema",
+          "contexto"
+        ],
+        "title": "registrar_pendienteArguments",
+        "type": "object"
+      },
+      "nombre": "registrar_pendiente"
+    },
+    {
+      "descripcion": "Da de alta un proyecto: lo agrega a projects.json, inicializa su memoria (repo git propio) y devuelve las\n    instrucciones para pegar en Claude y en CLAUDE.md/AGENTS.md. `ruta`: carpeta del código (debe existir dentro de\n    la carpeta de proyectos). `memoria`: opcional; por defecto <carpeta de proyectos>/.memorias/<nombre>,\n    fuera del repositorio del código. `pruebas`: comando para correr las pruebas; si se omite se detecta\n    (Maven, Gradle, npm/pnpm/yarn, Godot, pytest, cargo, go). Solo con confirmación del usuario.",
+      "esquema_entrada": {
+        "properties": {
+          "memoria": {
+            "default": "",
+            "title": "Memoria",
+            "type": "string"
+          },
+          "nombre": {
+            "title": "Nombre",
+            "type": "string"
+          },
+          "pruebas": {
+            "default": "",
+            "title": "Pruebas",
+            "type": "string"
+          },
+          "ruta": {
+            "title": "Ruta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "nombre",
+          "ruta"
+        ],
+        "title": "registrar_proyectoArguments",
+        "type": "object"
+      },
+      "nombre": "registrar_proyecto"
+    },
+    {
+      "descripcion": "Cierre de chat (/cierre): anexa el resumen de la sesión a sesiones/AAAA-MM-DD.md.",
+      "esquema_entrada": {
+        "properties": {
+          "proyecto": {
+            "title": "Proyecto",
+            "type": "string"
+          },
+          "resumen": {
+            "title": "Resumen",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proyecto",
+          "resumen"
+        ],
+        "title": "registrar_sesionArguments",
+        "type": "object"
+      },
+      "nombre": "registrar_sesion"
+    },
+    {
+      "descripcion": "Crea una especificación de trabajo para Claude Code en .project/tareas/T-NNN.md (estado 'pendiente').\n    En proyectos de varios repos, `repositorio` (obligatorio) indica la carpeta donde se trabaja.\n    Debe ser autosuficiente: Claude Code la ejecuta sin este chat. `criterios_aceptacion`: lista verificable\n    (pruebas que deben pasar, comportamiento observable). `decisiones`: ids de ADR aplicables.\n    `archivos`: rutas que probablemente se tocan. El usuario la ejecuta con /tarea T-NNN en Claude Code.\n    Idempotente (ADR-019): si ya hay una tarea con este título (sin distinguir mayúsculas ni espacios) creada\n    en los últimos minutos Y TODAVÍA en estado 'pendiente', no crea nada nuevo y devuelve el id existente\n    (con el comando /tarea para repetírselo al usuario). Si esa tarea ya cambió de estado (p. ej. en_curso:\n    ya se está ejecutando), un humano o el agente de código ya intervino, así que se registra una tarea\n    nueva.",
+      "esquema_entrada": {
+        "properties": {
+          "archivos": {
+            "default": "",
+            "title": "Archivos",
+            "type": "string"
+          },
+          "criterios_aceptacion": {
+            "title": "Criterios Aceptacion",
+            "type": "string"
+          },
+          "decisiones": {
+            "default": "",
+            "title": "Decisiones",
+            "type": "string"
+          },
+          "fuera_de_alcance": {
+            "default": "",
+            "title": "Fuera De Alcance",
+            "type": "string"
+          },
+          "notas": {
+            "default": "",
+            "title": "Notas",
+            "type": "string"
+          },
+          "objetivo": {
+            "title": "Objetivo",
+            "type": "string"
+          },
+          "proyecto": {
+            "title": "Proyecto",
+            "type": "string"
+          },
+          "repositorio": {
+            "default": "",
+            "title": "Repositorio",
+            "type": "string"
+          },
+          "titulo": {
+            "title": "Titulo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proyecto",
+          "titulo",
+          "objetivo",
+          "criterios_aceptacion"
+        ],
+        "title": "registrar_tareaArguments",
+        "type": "object"
+      },
+      "nombre": "registrar_tarea"
+    },
+    {
+      "descripcion": "Devuelve las decisiones en estado 'propuesta' para que el usuario decida confirmar, ajustar o descartar.\n    Paginado: `cantidad` por página (máx. 25) a partir de `desde_id` (p. ej. \"ADR-020\"). Con `resumen=True`\n    devuelve una línea por propuesta (útil para ver el panorama antes de entrar al detalle).",
+      "esquema_entrada": {
+        "properties": {
+          "cantidad": {
+            "default": 10,
+            "title": "Cantidad",
+            "type": "integer"
+          },
+          "desde_id": {
+            "default": "",
+            "title": "Desde Id",
+            "type": "string"
+          },
+          "proyecto": {
+            "title": "Proyecto",
+            "type": "string"
+          },
+          "resumen": {
+            "default": false,
+            "title": "Resumen",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "proyecto"
+        ],
+        "title": "revisar_propuestasArguments",
+        "type": "object"
+      },
+      "nombre": "revisar_propuestas"
+    }
+  ],
+  "prompts": [
+    {
+      "argumentos": [
+        {
+          "descripcion": null,
+          "nombre": "proyecto",
+          "requerido": false
+        }
+      ],
+      "descripcion": "Cierra la sesión: registra decisiones, pendientes y bitácora, y regenera INDEX.md",
+      "nombre": "cierre"
+    },
+    {
+      "argumentos": [
+        {
+          "descripcion": null,
+          "nombre": "proyecto",
+          "requerido": false
+        }
+      ],
+      "descripcion": "Carga el contexto del proyecto antes de empezar a trabajar",
+      "nombre": "inicio"
+    }
+  ]
+}
