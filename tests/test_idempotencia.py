@@ -113,6 +113,73 @@ def test_dentro_de_la_ventana_justo_en_el_limite_se_considera_duplicado(srv, pro
 
 # ───────────────────────── telemetría (criterio 6) ─────────────────────────
 
+def test_tarea_duplicada_incluye_comando_tarea(srv, proyecto):
+    r1 = srv.registrar_tarea(proyecto="demo", titulo="Ranuras de forma", objetivo="Dos ranuras",
+                              criterios_aceptacion="- pruebas verdes")
+    assert "T-001 registrada" in r1
+
+    r2 = srv.registrar_tarea(proyecto="demo", titulo="Ranuras de forma", objetivo="otro objetivo",
+                              criterios_aceptacion="- otros criterios")
+
+    assert srv.MARCA_DUPLICADO in r2
+    assert "Ejecutar en Claude Code: /tarea T-001" in r2
+
+
+# ───────── un registro que ya cambió de estado (humano intervino) nunca es duplicado ─────────
+
+def test_decision_descartada_y_registrada_de_nuevo_crea_un_adr_nuevo(srv, proyecto):
+    r1 = srv.registrar_decision(proyecto="demo", titulo="Usar X", decision="v1", justificacion="j")
+    assert "ADR-001 registrada" in r1
+    historial_antes = log_git(proyecto["mem"])
+
+    srv.descartar_decision(proyecto="demo", id="ADR-001", motivo="el usuario pidió otra versión")
+
+    r3 = srv.registrar_decision(proyecto="demo", titulo="Usar X", decision="v2 corregida", justificacion="j2")
+
+    assert "ADR-002 registrada" in r3
+    assert srv.MARCA_DUPLICADO not in r3
+    assert (proyecto["mem"] / "decisiones" / "ADR-002-usar-x.md").exists()
+    historial_despues = log_git(proyecto["mem"])
+    assert len(historial_despues) == len(historial_antes) + 2   # descartar + registrar de nuevo
+    assert any("ADR-002" in linea for linea in historial_despues)
+
+
+def test_pendiente_cerrado_y_registrado_de_nuevo_crea_un_pendiente_nuevo(srv, proyecto):
+    r1 = srv.registrar_pendiente(proyecto="demo", tema="Parry", contexto="Sin decidir")
+    assert "P-001 registrado" in r1
+    historial_antes = log_git(proyecto["mem"])
+
+    srv.cerrar_pendiente(proyecto="demo", id="P-001", resolucion="se decidió en ADR-001")
+
+    r3 = srv.registrar_pendiente(proyecto="demo", tema="Parry", contexto="Sin decidir, de nuevo")
+
+    assert "P-002 registrado" in r3
+    assert srv.MARCA_DUPLICADO not in r3
+    assert (proyecto["mem"] / "pendientes" / "P-002-parry.md").exists()
+    historial_despues = log_git(proyecto["mem"])
+    assert len(historial_despues) == len(historial_antes) + 2   # cerrar + registrar de nuevo
+    assert any("P-002" in linea for linea in historial_despues)
+
+
+def test_tarea_cambiada_de_estado_y_registrada_de_nuevo_crea_una_tarea_nueva(srv, proyecto):
+    r1 = srv.registrar_tarea(proyecto="demo", titulo="Ranuras de forma", objetivo="Dos ranuras",
+                              criterios_aceptacion="- pruebas verdes")
+    assert "T-001 registrada" in r1
+    historial_antes = log_git(proyecto["mem"])
+
+    srv.actualizar_tarea(proyecto="demo", id="T-001", estado="en_curso")
+
+    r3 = srv.registrar_tarea(proyecto="demo", titulo="Ranuras de forma", objetivo="Dos ranuras, de nuevo",
+                              criterios_aceptacion="- pruebas verdes")
+
+    assert "T-002 registrada" in r3
+    assert srv.MARCA_DUPLICADO not in r3
+    assert (proyecto["mem"] / "tareas" / "T-002-ranuras-de-forma.md").exists()
+    historial_despues = log_git(proyecto["mem"])
+    assert len(historial_despues) == len(historial_antes) + 2   # actualizar_tarea + registrar de nuevo
+    assert any("T-002" in linea for linea in historial_despues)
+
+
 def test_telemetria_marca_duplicado_sin_error(srv, proyecto, entorno):
     srv.registrar_decision(proyecto="demo", titulo="Usar Godot", decision="d", justificacion="j")
     srv.registrar_decision(proyecto="demo", titulo="usar   godot", decision="d", justificacion="j")

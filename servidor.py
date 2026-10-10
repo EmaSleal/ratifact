@@ -430,12 +430,15 @@ def _normalizar_titulo(t: str) -> str:
     return re.sub(r"\s+", " ", t.strip().lower())
 
 
-def _duplicado_reciente(carpeta: Path, prefijo: str, campo: str, valor: str) -> dict | None:
+def _duplicado_reciente(carpeta: Path, prefijo: str, campo: str, valor: str, estado_inicial: str) -> dict | None:
     """Si ya existe un registro `{prefijo}-*.md` en `carpeta` con el mismo título normalizado en `campo`,
-    creado dentro de VENTANA_IDEMPOTENCIA_MINUTOS, devuelve su frontmatter (el más reciente, si hay más de
-    uno); si no hay ninguno, None. El prefijo (ADR/P/T) ya aísla los tipos entre sí: un ADR y una tarea con
-    el mismo título textual nunca son duplicados entre sí. Registros sin `creado` (de antes de ADR-019)
-    nunca cuentan como duplicado."""
+    TODAVÍA en su estado inicial (`estado_inicial`: "propuesta" para ADR, "abierta" para pendientes,
+    "pendiente" para tareas) y creado dentro de VENTANA_IDEMPOTENCIA_MINUTOS, devuelve su frontmatter (el
+    más reciente, si hay más de uno); si no hay ninguno, None. El prefijo (ADR/P/T) ya aísla los tipos entre
+    sí: un ADR y una tarea con el mismo título textual nunca son duplicados entre sí. Registros sin `creado`
+    (de antes de ADR-019) nunca cuentan como duplicado. Un registro que YA cambió de estado (descartada,
+    reemplazada, cerrada, en_curso, integrada, etc.) significa que un humano ya intervino: no es un
+    reintento perdido, así que nunca cuenta como duplicado aunque sea reciente."""
     if not carpeta.exists():
         return None
     objetivo = _normalizar_titulo(valor)
@@ -444,6 +447,8 @@ def _duplicado_reciente(carpeta: Path, prefijo: str, campo: str, valor: str) -> 
     for p in carpeta.glob(f"{prefijo}-*.md"):
         meta, _ = _leer_registro(p)
         if _normalizar_titulo(meta.get(campo, "")) != objetivo:
+            continue
+        if meta.get("estado") != estado_inicial:
             continue
         creado = meta.get("creado")
         if not creado:
@@ -457,9 +462,10 @@ def _duplicado_reciente(carpeta: Path, prefijo: str, campo: str, valor: str) -> 
     return max(encontrados, key=lambda par: par[0])[1] if encontrados else None
 
 
-def _mensaje_duplicado(id_: str) -> str:
-    return (f"{id_} {MARCA_DUPLICADO}: ya hay un registro con este título creado hace menos de "
+def _mensaje_duplicado(id_: str, extra: str = "") -> str:
+    base = (f"{id_} {MARCA_DUPLICADO}: ya hay un registro con este título creado hace menos de "
             f"{VENTANA_IDEMPOTENCIA_MINUTOS} minutos; no se creó nada nuevo.")
+    return f"{base}\n{extra}" if extra else base
 
 
 def _regenerar_vistas(proyecto: str) -> list[Path]:
@@ -594,12 +600,14 @@ def registrar_decision(proyecto: str, titulo: str, decision: str, justificacion:
     """Crea un ADR. SIEMPRE queda como 'propuesta'. Para acordarla, llama después confirmar_decision:
     esa herramienta pide la aprobación del usuario. `resumen`: una línea para la vista de acuerdos.
     Idempotente (ADR-019): si ya hay un ADR con este título (sin distinguir mayúsculas ni espacios) creado en
-    los últimos minutos, no crea nada nuevo y devuelve el id existente."""
+    los últimos minutos Y TODAVÍA en estado 'propuesta', no crea nada nuevo y devuelve el id existente. Si ese
+    ADR ya cambió de estado (p. ej. descartada: el usuario pidió otra versión), un humano ya intervino, así
+    que se registra una ADR nueva."""
     def f():
         with _bloqueo(proyecto):
             carpeta = _mem(proyecto) / "decisiones"
             carpeta.mkdir(parents=True, exist_ok=True)
-            dup = _duplicado_reciente(carpeta, "ADR", "titulo", titulo)
+            dup = _duplicado_reciente(carpeta, "ADR", "titulo", titulo, "propuesta")
             if dup:
                 return _mensaje_duplicado(dup["id"])
             id_ = _siguiente_id(carpeta, "ADR")
@@ -810,13 +818,14 @@ def reemplazar_decision(proyecto: str, id_anterior: str, id_nuevo: str) -> str:
 @herramienta
 def registrar_pendiente(proyecto: str, tema: str, contexto: str, dueno: str = "") -> str:
     """Registra una decisión abierta o tema sin resolver. Idempotente (ADR-019): si ya hay un pendiente con
-    este tema (sin distinguir mayúsculas ni espacios) creado en los últimos minutos, no crea nada nuevo y
-    devuelve el id existente."""
+    este tema (sin distinguir mayúsculas ni espacios) creado en los últimos minutos Y TODAVÍA en estado
+    'abierta', no crea nada nuevo y devuelve el id existente. Si ese pendiente ya se cerró, un humano ya
+    intervino, así que se registra un pendiente nuevo."""
     def f():
         with _bloqueo(proyecto):
             carpeta = _mem(proyecto) / "pendientes"
             carpeta.mkdir(parents=True, exist_ok=True)
-            dup = _duplicado_reciente(carpeta, "P", "tema", tema)
+            dup = _duplicado_reciente(carpeta, "P", "tema", tema, "abierta")
             if dup:
                 return _mensaje_duplicado(dup["id"])
             id_ = _siguiente_id(carpeta, "P")
@@ -1026,7 +1035,10 @@ def registrar_tarea(proyecto: str, titulo: str, objetivo: str, criterios_aceptac
     (pruebas que deben pasar, comportamiento observable). `decisiones`: ids de ADR aplicables.
     `archivos`: rutas que probablemente se tocan. El usuario la ejecuta con /tarea T-NNN en Claude Code.
     Idempotente (ADR-019): si ya hay una tarea con este título (sin distinguir mayúsculas ni espacios) creada
-    en los últimos minutos, no crea nada nuevo y devuelve el id existente."""
+    en los últimos minutos Y TODAVÍA en estado 'pendiente', no crea nada nuevo y devuelve el id existente
+    (con el comando /tarea para repetírselo al usuario). Si esa tarea ya cambió de estado (p. ej. en_curso:
+    ya se está ejecutando), un humano o el agente de código ya intervino, así que se registra una tarea
+    nueva."""
     def f():
         repos = _repos(proyecto)
         if repos and repositorio not in repos:
@@ -1036,9 +1048,9 @@ def registrar_tarea(proyecto: str, titulo: str, objetivo: str, criterios_aceptac
         with _bloqueo(proyecto):
             carpeta = _mem(proyecto) / "tareas"
             carpeta.mkdir(parents=True, exist_ok=True)
-            dup = _duplicado_reciente(carpeta, "T", "titulo", titulo)
+            dup = _duplicado_reciente(carpeta, "T", "titulo", titulo, "pendiente")
             if dup:
-                return _mensaje_duplicado(dup["id"])
+                return _mensaje_duplicado(dup["id"], f"Ejecutar en Claude Code: /tarea {dup['id']}")
             id_ = _siguiente_id(carpeta, "T")
             ruta = carpeta / f"{id_}-{_slug(titulo)}.md"
             meta = {"id": id_, "titulo": titulo, "estado": "pendiente", "fecha": _hoy(),
