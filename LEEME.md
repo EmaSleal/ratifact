@@ -93,6 +93,8 @@ de la rama activa. Recomendado para todos los proyectos. Las herramientas siguen
 ## 7. Telemetría
 Cada llamada a una herramienta agrega una línea a `logs/uso.jsonl` (herramienta, proyecto, tamaños, duración, error; nunca
 el contenido). Resumen: `python3 ~/Projects/.memoria-proyectos/analizar_uso.py --dias 7` (opcional `--proyecto game`).
+El script lee el mismo log que escribe el servidor: `--log <ruta>` si se indica, si no `MEMORIA_PROYECTOS_LOG`, y si no
+`logs/uso.jsonl`. Si el archivo no existe, lo informa con su ruta y termina con error.
 `obtener_contexto` avisa cuando INDEX.md acumula 5 o más cambios sin regenerarse.
 
 ## 8. Confirmación de decisiones

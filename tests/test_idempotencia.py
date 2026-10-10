@@ -201,8 +201,7 @@ def test_analizar_uso_reporta_duplicados(srv, proyecto, entorno, monkeypatch, ca
     import analizar_uso
     importlib_reload = __import__("importlib").reload
     importlib_reload(analizar_uso)
-    monkeypatch.setattr(analizar_uso, "LOG", Path(entorno["env"]["MEMORIA_PROYECTOS_LOG"]))
-    monkeypatch.setattr(sys, "argv", ["analizar_uso.py"])
+    monkeypatch.setattr(sys, "argv", ["analizar_uso.py"])   # MEMORIA_PROYECTOS_LOG ya apunta al log de la prueba
 
     analizar_uso.main()
 

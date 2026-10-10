@@ -1,28 +1,38 @@
 #!/usr/bin/env python3
 """Resumen del uso de memoria-proyectos a partir de logs/uso.jsonl.
 
-Uso:  python3 analizar_uso.py [--dias N] [--proyecto game]
+Uso:  python3 analizar_uso.py [--dias N] [--proyecto game] [--log RUTA]
+Log: --log, si no MEMORIA_PROYECTOS_LOG, si no <repo>/logs/uso.jsonl (el mismo que escribe el servidor).
 Tokens estimados = caracteres / 4 (aproximación; el texto en español suele rondar 3,5–4,5).
 """
 import argparse
 import datetime as dt
 import json
+import os
+import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
-LOG = Path(__file__).resolve().parent / "logs" / "uso.jsonl"
+LOG_POR_DEFECTO = Path(__file__).resolve().parent / "logs" / "uso.jsonl"   # igual que LOG_USO del servidor
+
+
+def ruta_log(argumento: str | None) -> Path:
+    """--log gana sobre MEMORIA_PROYECTOS_LOG, que gana sobre la ruta por defecto (resuelto en cada llamada)."""
+    return Path(argumento or os.environ.get("MEMORIA_PROYECTOS_LOG") or LOG_POR_DEFECTO)
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dias", type=int, default=7)
     ap.add_argument("--proyecto")
+    ap.add_argument("--log", help="ruta del log (por defecto MEMORIA_PROYECTOS_LOG o logs/uso.jsonl)")
     a = ap.parse_args()
-    if not LOG.exists():
-        print(f"Sin datos todavía: {LOG}")
-        return
+    log = ruta_log(a.log)
+    if not log.is_file():
+        print(f"No existe el log de uso: {log}", file=sys.stderr)
+        sys.exit(1)
     desde = dt.datetime.now() - dt.timedelta(days=a.dias)
-    filas = [json.loads(l) for l in LOG.read_text(encoding="utf-8").splitlines() if l.strip()]
+    filas = [json.loads(l) for l in log.read_text(encoding="utf-8").splitlines() if l.strip()]
     filas = [f for f in filas if dt.datetime.fromisoformat(f["ts"]) >= desde
              and (not a.proyecto or f.get("proyecto") == a.proyecto)]
     if not filas:
