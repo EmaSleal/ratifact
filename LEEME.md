@@ -168,3 +168,18 @@ de forma nativa, pero solo desde la raíz del repo git hacia abajo: en proyectos
 carpeta raíz (si abre Codex ahí) y en el `AGENTS.md` de cada repo. Si hay otra memoria de agente instalada (engram),
 el servidor declara en sus instrucciones MCP que memoria-proyectos es la fuente de verdad del proyecto.
 
+## 15. Idempotencia de creación (ADR-019)
+
+`registrar_decision`, `registrar_pendiente` y `registrar_tarea` son idempotentes: si ya existe un registro del
+mismo tipo (un ADR no compite con una tarea ni con un pendiente, aunque el texto del título coincida) con el
+mismo título normalizado (sin distinguir mayúsculas, recortando los extremos y colapsando espacios internos)
+**creado en los últimos `VENTANA_IDEMPOTENCIA_MINUTOS` minutos** (10 por defecto) en el mismo proyecto, la
+llamada no crea ningún archivo nuevo, no hace commit, y devuelve el id del registro existente avisando que ya
+estaba registrado.
+
+Esto existe porque la llamada a una tool puede perderse en la capa del cliente (p. ej. Claude Desktop con un
+timeout de 120 s) sin que el modelo sepa si el servidor llegó a ejecutarla; con esto, reintentar a ciegas es
+seguro. No hay idempotency key del cliente (fuera de alcance v1): la detección es solo por título + antigüedad.
+La telemetría registra estas llamadas como exitosas (`error: false`) con un flag `duplicado: true`, y
+`analizar_uso.py` reporta cuántas creaciones fueron duplicados detectados.
+

@@ -66,6 +66,12 @@ def main():
         print(f"- Decisiones propuestas: {len(dec)} · confirmadas por el usuario: "
               f"{sum(1 for f in conf if not f['error'])} · confirmaciones con error: "
               f"{sum(1 for f in conf if f['error'])}")
+    creaciones = [f for nombre in ("registrar_decision", "registrar_pendiente", "registrar_tarea")
+                  for f in por.get(nombre, [])]
+    duplicados = sum(1 for f in creaciones if f.get("duplicado"))
+    if creaciones:
+        print(f"- Creaciones idempotentes (ADR-019): {len(creaciones)} llamadas · duplicados detectados "
+              f"(reintento sin efecto): {duplicados}")
     internos = [f for f in filas if f["error"] and f.get("tipo_error") == "interno"]
     rechazos = [f for f in filas if f["error"] and f.get("tipo_error") != "interno"]
     tasa = len(internos) / len(filas) * 100

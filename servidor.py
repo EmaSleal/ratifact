@@ -96,6 +96,8 @@ def _registrar_uso(nombre: str, kwargs: dict, respuesta, ms: float) -> None:
             fila["ruta"] = kwargs["ruta"]
         if nombre == "buscar":
             fila["resultados"] = 0 if texto == "(sin coincidencias)" else texto.count("\n") + 1
+        if nombre in ("registrar_decision", "registrar_pendiente", "registrar_tarea"):
+            fila["duplicado"] = MARCA_DUPLICADO in texto
         LOG_USO.parent.mkdir(parents=True, exist_ok=True)
         with open(LOG_USO, "a", encoding="utf-8") as f:
             f.write(json.dumps(fila, ensure_ascii=False) + "\n")
@@ -366,6 +368,13 @@ def _hoy() -> str:
     return _dt.date.today().isoformat()
 
 
+def _ahora() -> _dt.datetime:
+    """Hora actual con resolución de segundos. Separada de `_hoy()` (solo fecha) porque la ventana de
+    idempotencia de creación (ADR-019) necesita hora; las pruebas la monkeypatchean para simular el paso
+    del tiempo sin usar `time.sleep`."""
+    return _dt.datetime.now()
+
+
 # ───────────────────────── registros con frontmatter ─────────────────────────
 
 def _leer_registro(ruta: Path) -> tuple[dict, str]:
@@ -404,6 +413,53 @@ def _slug(t: str) -> str:
     for a, b in zip("áéíóúñü", "aeiounu"):
         t = t.replace(a, b)
     return re.sub(r"[^a-z0-9]+", "-", t).strip("-")[:40]
+
+
+# ───────────────────────── idempotencia de creación (ADR-019) ─────────────────────────
+# registrar_decision / registrar_pendiente / registrar_tarea son idempotentes dentro de esta ventana: el cliente
+# (p. ej. Claude Desktop, timeout de 120s) puede perder la respuesta sin que el modelo sepa si el servidor llegó
+# a ejecutar, y reintentar a ciegas no debe duplicar el registro. Se detecta por (proyecto, tipo, título
+# normalizado, antigüedad) — sin idempotency key del cliente (fuera de alcance v1).
+VENTANA_IDEMPOTENCIA_MINUTOS = 10
+MARCA_DUPLICADO = "ya estaba registrado"
+
+
+def _normalizar_titulo(t: str) -> str:
+    """Case-insensitive, recorta los extremos y colapsa espacios internos, para que "Usar Godot " y
+    "usar   godot" se reconozcan como el mismo título."""
+    return re.sub(r"\s+", " ", t.strip().lower())
+
+
+def _duplicado_reciente(carpeta: Path, prefijo: str, campo: str, valor: str) -> dict | None:
+    """Si ya existe un registro `{prefijo}-*.md` en `carpeta` con el mismo título normalizado en `campo`,
+    creado dentro de VENTANA_IDEMPOTENCIA_MINUTOS, devuelve su frontmatter (el más reciente, si hay más de
+    uno); si no hay ninguno, None. El prefijo (ADR/P/T) ya aísla los tipos entre sí: un ADR y una tarea con
+    el mismo título textual nunca son duplicados entre sí. Registros sin `creado` (de antes de ADR-019)
+    nunca cuentan como duplicado."""
+    if not carpeta.exists():
+        return None
+    objetivo = _normalizar_titulo(valor)
+    limite = _ahora() - _dt.timedelta(minutes=VENTANA_IDEMPOTENCIA_MINUTOS)
+    encontrados = []
+    for p in carpeta.glob(f"{prefijo}-*.md"):
+        meta, _ = _leer_registro(p)
+        if _normalizar_titulo(meta.get(campo, "")) != objetivo:
+            continue
+        creado = meta.get("creado")
+        if not creado:
+            continue
+        try:
+            ts = _dt.datetime.fromisoformat(creado)
+        except ValueError:
+            continue
+        if ts >= limite:
+            encontrados.append((ts, meta))
+    return max(encontrados, key=lambda par: par[0])[1] if encontrados else None
+
+
+def _mensaje_duplicado(id_: str) -> str:
+    return (f"{id_} {MARCA_DUPLICADO}: ya hay un registro con este título creado hace menos de "
+            f"{VENTANA_IDEMPOTENCIA_MINUTOS} minutos; no se creó nada nuevo.")
 
 
 def _regenerar_vistas(proyecto: str) -> list[Path]:
@@ -536,15 +592,21 @@ def obtener_contexto(proyecto: str) -> str:
 def registrar_decision(proyecto: str, titulo: str, decision: str, justificacion: str,
                        alternativas: str = "", resumen: str = "") -> str:
     """Crea un ADR. SIEMPRE queda como 'propuesta'. Para acordarla, llama después confirmar_decision:
-    esa herramienta pide la aprobación del usuario. `resumen`: una línea para la vista de acuerdos."""
+    esa herramienta pide la aprobación del usuario. `resumen`: una línea para la vista de acuerdos.
+    Idempotente (ADR-019): si ya hay un ADR con este título (sin distinguir mayúsculas ni espacios) creado en
+    los últimos minutos, no crea nada nuevo y devuelve el id existente."""
     def f():
         with _bloqueo(proyecto):
             carpeta = _mem(proyecto) / "decisiones"
             carpeta.mkdir(parents=True, exist_ok=True)
+            dup = _duplicado_reciente(carpeta, "ADR", "titulo", titulo)
+            if dup:
+                return _mensaje_duplicado(dup["id"])
             id_ = _siguiente_id(carpeta, "ADR")
             ruta = carpeta / f"{id_}-{_slug(titulo)}.md"
-            meta = {"id": id_, "titulo": titulo, "estado": "propuesta",
-                    "fecha": _hoy(), "resumen": (resumen or decision.splitlines()[0])[:160]}
+            meta = {"id": id_, "titulo": titulo, "estado": "propuesta", "fecha": _hoy(),
+                    "creado": _ahora().isoformat(timespec="seconds"),
+                    "resumen": (resumen or decision.splitlines()[0])[:160]}
             cuerpo = f"# {id_} — {titulo}\n\n## Decisión\n{decision}\n\n## Justificación\n{justificacion}\n"
             if alternativas:
                 cuerpo += f"\n## Alternativas consideradas\n{alternativas}\n"
@@ -747,14 +809,20 @@ def reemplazar_decision(proyecto: str, id_anterior: str, id_nuevo: str) -> str:
 
 @herramienta
 def registrar_pendiente(proyecto: str, tema: str, contexto: str, dueno: str = "") -> str:
-    """Registra una decisión abierta o tema sin resolver."""
+    """Registra una decisión abierta o tema sin resolver. Idempotente (ADR-019): si ya hay un pendiente con
+    este tema (sin distinguir mayúsculas ni espacios) creado en los últimos minutos, no crea nada nuevo y
+    devuelve el id existente."""
     def f():
         with _bloqueo(proyecto):
             carpeta = _mem(proyecto) / "pendientes"
             carpeta.mkdir(parents=True, exist_ok=True)
+            dup = _duplicado_reciente(carpeta, "P", "tema", tema)
+            if dup:
+                return _mensaje_duplicado(dup["id"])
             id_ = _siguiente_id(carpeta, "P")
             ruta = carpeta / f"{id_}-{_slug(tema)}.md"
-            meta = {"id": id_, "tema": tema, "estado": "abierta", "fecha": _hoy()}
+            meta = {"id": id_, "tema": tema, "estado": "abierta", "fecha": _hoy(),
+                    "creado": _ahora().isoformat(timespec="seconds")}
             if dueno:
                 meta["dueno"] = dueno
             _escribir_registro(ruta, meta, contexto)
@@ -956,7 +1024,9 @@ def registrar_tarea(proyecto: str, titulo: str, objetivo: str, criterios_aceptac
     En proyectos de varios repos, `repositorio` (obligatorio) indica la carpeta donde se trabaja.
     Debe ser autosuficiente: Claude Code la ejecuta sin este chat. `criterios_aceptacion`: lista verificable
     (pruebas que deben pasar, comportamiento observable). `decisiones`: ids de ADR aplicables.
-    `archivos`: rutas que probablemente se tocan. El usuario la ejecuta con /tarea T-NNN en Claude Code."""
+    `archivos`: rutas que probablemente se tocan. El usuario la ejecuta con /tarea T-NNN en Claude Code.
+    Idempotente (ADR-019): si ya hay una tarea con este título (sin distinguir mayúsculas ni espacios) creada
+    en los últimos minutos, no crea nada nuevo y devuelve el id existente."""
     def f():
         repos = _repos(proyecto)
         if repos and repositorio not in repos:
@@ -966,9 +1036,13 @@ def registrar_tarea(proyecto: str, titulo: str, objetivo: str, criterios_aceptac
         with _bloqueo(proyecto):
             carpeta = _mem(proyecto) / "tareas"
             carpeta.mkdir(parents=True, exist_ok=True)
+            dup = _duplicado_reciente(carpeta, "T", "titulo", titulo)
+            if dup:
+                return _mensaje_duplicado(dup["id"])
             id_ = _siguiente_id(carpeta, "T")
             ruta = carpeta / f"{id_}-{_slug(titulo)}.md"
             meta = {"id": id_, "titulo": titulo, "estado": "pendiente", "fecha": _hoy(),
+                    "creado": _ahora().isoformat(timespec="seconds"),
                     "rama": f"{id_.lower()}-{_slug(titulo)}"}
             if repositorio:
                 meta["repositorio"] = repositorio
