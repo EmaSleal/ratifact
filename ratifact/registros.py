@@ -91,10 +91,26 @@ def _siguiente_id(carpeta: Path, prefijo: str) -> str:
     return f"{prefijo}-{(max(nums) + 1 if nums else 1):03d}"
 
 
+def _normalizar_id(id_: str) -> str:
+    """"adr-18" → "ADR-018", "T-1" → "T-001"; 4+ cifras quedan tal cual ("ADR-1000"). Sin forma PREFIJO-número,
+    solo pasa a mayúsculas."""
+    m = re.fullmatch(r"([A-Za-z]+)-(\d+)", id_.strip())
+    return f"{m.group(1).upper()}-{int(m.group(2)):03d}" if m else id_.strip().upper()
+
+
+def _numero_id(id_: str) -> int | None:
+    """Parte numérica de un id o nombre de archivo ("ADR-1000-slug" → 1000), para ordenar y comparar numéricamente."""
+    m = re.match(r"[A-Za-z]+-(\d+)", id_.strip())
+    return int(m.group(1)) if m else None
+
+
 def _buscar_registro(carpeta: Path, id_: str) -> Path:
-    candidatos = list(carpeta.glob(f"{id_.upper()}*.md"))
+    """Búsqueda exacta: solo "<ID>.md" o "<ID>-*.md" con el id normalizado ("ADR-01" nunca es ADR-010)."""
+    objetivo = _normalizar_id(id_)
+    candidatos = sorted(p for p in carpeta.glob("*.md")
+                        if p.name == f"{objetivo}.md" or p.name.startswith(f"{objetivo}-")) if carpeta.exists() else []
     if not candidatos:
-        raise ErrorMemoria(f"No existe {id_}.")
+        raise ErrorMemoria(f"No existe {objetivo}.")
     return candidatos[0]
 
 

@@ -1,4 +1,4 @@
-"""Instancia FastMCP `mcp`, decoradores `herramienta`/`herramienta_async`, telemetría y `_ejecutar`."""
+"""Instancia FastMCP `mcp`, decoradores `herramienta`/`herramienta_async`, telemetría y `_ejecutar`/`_ejecutar_async`."""
 from __future__ import annotations
 
 import datetime as _dt
@@ -97,15 +97,32 @@ def herramienta_async(fn):
     return mcp.tool()(envoltura)
 
 
+def _mensaje_error(e: Exception) -> str:
+    """'ERROR:' = rechazo de validación (uso esperado); 'ERROR INTERNO:' = falla del servidor (la que mide ADR-009).
+    El detalle técnico de una falla interna va a stderr (log del cliente)."""
+    if isinstance(e, ErrorMemoria):
+        return f"ERROR: {e}"
+    import sys
+    import traceback
+    traceback.print_exc(file=sys.stderr)
+    return f"ERROR INTERNO: {type(e).__name__}: {e}"
+
+
 def _ejecutar(fn):
-    """Convierte errores en mensajes legibles para el modelo. 'ERROR:' = rechazo de validación (uso esperado);
-    'ERROR INTERNO:' = falla del servidor (la que mide ADR-009). El detalle técnico va a stderr (log del cliente)."""
+    """Convierte errores en mensajes legibles para el modelo (ver `_mensaje_error`)."""
     try:
         return fn()
-    except ErrorMemoria as e:
-        return f"ERROR: {e}"
     except Exception as e:
-        import sys
-        import traceback
-        traceback.print_exc(file=sys.stderr)
-        return f"ERROR INTERNO: {type(e).__name__}: {e}"
+        return _mensaje_error(e)
+
+
+def _ejecutar_async(fn):
+    """Equivalente de `_ejecutar` para herramientas asíncronas, como decorador (va debajo de `herramienta_async`).
+    functools.wraps conserva firma y docstring, así FastMCP genera el mismo esquema."""
+    @functools.wraps(fn)
+    async def envoltura(*args, **kwargs):
+        try:
+            return await fn(*args, **kwargs)
+        except Exception as e:
+            return _mensaje_error(e)
+    return envoltura

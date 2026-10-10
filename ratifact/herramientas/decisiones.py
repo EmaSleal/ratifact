@@ -8,11 +8,12 @@ from mcp.server.fastmcp import Context
 from pydantic import BaseModel, Field
 
 from ratifact import registros as _registros  # _ahora se busca en su módulo: las pruebas la reemplazan ahí
-from ratifact.app import _ejecutar, herramienta, herramienta_async
+from ratifact.app import _ejecutar, _ejecutar_async, herramienta, herramienta_async
 from ratifact.config import ErrorMemoria, _mem
 from ratifact.esquema import _bloqueo
 from ratifact.registros import (_buscar_registro, _commit, _duplicado_reciente, _escribir_registro, _hoy,
-                                _leer_registro, _mensaje_duplicado, _regenerar_vistas, _siguiente_id, _slug)
+                                _leer_registro, _mensaje_duplicado, _numero_id, _regenerar_vistas, _siguiente_id,
+                                _slug)
 
 
 @herramienta
@@ -104,11 +105,16 @@ def revisar_propuestas(proyecto: str, desde_id: str = "", cantidad: int = 10, re
     Paginado: `cantidad` por página (máx. 25) a partir de `desde_id` (p. ej. "ADR-020"). Con `resumen=True`
     devuelve una línea por propuesta (útil para ver el panorama antes de entrar al detalle)."""
     def f():
+        desde = _numero_id(desde_id) if desde_id else 0
+        if desde is None:
+            raise ErrorMemoria(f"desde_id inválido: '{desde_id}' (usa la forma \"ADR-020\").")
         carpeta = _mem(proyecto) / "decisiones"
+        archivos = sorted(carpeta.glob("ADR-*.md"), key=lambda a: (_numero_id(a.name) or 0, a.name)) \
+            if carpeta.exists() else []
         propuestas = []
-        for p in sorted(carpeta.glob("ADR-*.md")) if carpeta.exists() else []:
+        for p in archivos:   # orden y filtro numéricos: ADR-1000 va después de ADR-999
             m, cuerpo = _leer_registro(p)
-            if m.get("estado") == "propuesta" and (not desde_id or m.get("id", "") >= desde_id.upper()):
+            if m.get("estado") == "propuesta" and (_numero_id(m.get("id", "")) or 0) >= desde:
                 propuestas.append((m, cuerpo))
         if not propuestas:
             return "(no hay propuestas pendientes)"
@@ -142,6 +148,7 @@ def _texto_propuesta(cuerpo: str, limite: int = 1200) -> str:
 
 
 @herramienta_async
+@_ejecutar_async
 async def decidir_propuestas(proyecto: str, ctx: Context) -> str:
     """SOLO para aplicaciones que soportan formularios MCP (elicitation), como Claude Code. En Claude Desktop o
     claude.ai NO la uses: llama revisar_propuestas y presenta las opciones (confirmar / ajustar / descartar /

@@ -1,8 +1,6 @@
 """Herramientas de pendientes (registrar_pendiente, cerrar_pendiente) y bitácora de sesiones (registrar_sesion)."""
 from __future__ import annotations
 
-import datetime as _dt
-
 from ratifact import registros as _registros  # _ahora se busca en su módulo: las pruebas la reemplazan ahí
 from ratifact.app import _ejecutar, herramienta
 from ratifact.config import _mem
@@ -58,7 +56,7 @@ def registrar_sesion(proyecto: str, resumen: str) -> str:
         with _bloqueo(proyecto):
             p = _mem(proyecto) / "sesiones" / f"{_hoy()}.md"
             previo = p.read_text(encoding="utf-8") if p.exists() else f"# Sesiones {_hoy()}\n"
-            hora = _dt.datetime.now().strftime("%H:%M")
+            hora = _registros._ahora().strftime("%H:%M")
             _escribir_atomico(p, previo.rstrip("\n") + f"\n\n## {hora}\n{resumen.strip()}\n")
             return f"Sesión registrada · commit {_commit(proyecto, [p], f'sesión {_hoy()} {hora}')}"
     return _ejecutar(f)
