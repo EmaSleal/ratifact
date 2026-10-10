@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from conftest import log_git
+from ratifact import registros
 
 
 # ───────────────────────── registrar_decision ─────────────────────────
@@ -87,12 +88,12 @@ def test_tipos_distintos_nunca_coinciden_entre_si(srv, proyecto):
 
 def test_fuera_de_la_ventana_se_crea_normalmente(srv, proyecto, monkeypatch):
     t0 = dt.datetime(2026, 1, 1, 12, 0, 0)
-    monkeypatch.setattr(srv, "_ahora", lambda: t0)
+    monkeypatch.setattr(registros, "_ahora", lambda: t0)
     r1 = srv.registrar_decision(proyecto="demo", titulo="Usar Godot", decision="d", justificacion="j")
     assert "ADR-001 registrada" in r1
 
     despues = t0 + dt.timedelta(minutes=srv.VENTANA_IDEMPOTENCIA_MINUTOS + 1)
-    monkeypatch.setattr(srv, "_ahora", lambda: despues)
+    monkeypatch.setattr(registros, "_ahora", lambda: despues)
     r2 = srv.registrar_decision(proyecto="demo", titulo="Usar Godot", decision="d", justificacion="j")
 
     assert "ADR-002 registrada" in r2
@@ -102,11 +103,11 @@ def test_fuera_de_la_ventana_se_crea_normalmente(srv, proyecto, monkeypatch):
 
 def test_dentro_de_la_ventana_justo_en_el_limite_se_considera_duplicado(srv, proyecto, monkeypatch):
     t0 = dt.datetime(2026, 1, 1, 12, 0, 0)
-    monkeypatch.setattr(srv, "_ahora", lambda: t0)
+    monkeypatch.setattr(registros, "_ahora", lambda: t0)
     srv.registrar_pendiente(proyecto="demo", tema="Parry", contexto="c")
 
     casi = t0 + dt.timedelta(minutes=srv.VENTANA_IDEMPOTENCIA_MINUTOS - 1)
-    monkeypatch.setattr(srv, "_ahora", lambda: casi)
+    monkeypatch.setattr(registros, "_ahora", lambda: casi)
     r2 = srv.registrar_pendiente(proyecto="demo", tema="Parry", contexto="c")
     assert srv.MARCA_DUPLICADO in r2
 

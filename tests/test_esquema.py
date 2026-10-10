@@ -4,6 +4,7 @@ import json
 import subprocess
 
 from conftest import log_git
+from ratifact import esquema
 
 
 def _version(mem):
@@ -50,8 +51,8 @@ def test_cadena_de_migraciones_en_orden(srv, proyecto, monkeypatch):
     def a_v3(mem):
         llamadas.append(3)
         return []
-    monkeypatch.setattr(srv, "VERSION_ESQUEMA", 3)
-    monkeypatch.setattr(srv, "MIGRACIONES", {**srv.MIGRACIONES, 2: a_v2, 3: a_v3})
+    monkeypatch.setattr(esquema, "VERSION_ESQUEMA", 3)
+    monkeypatch.setattr(esquema, "MIGRACIONES", {**srv.MIGRACIONES, 2: a_v2, 3: a_v3})
     srv.registrar_pendiente(proyecto="demo", tema="T", contexto="c")
     assert llamadas == [2, 3] and _version(proyecto["mem"]) == 3
     assert log_git(proyecto["mem"])[1] == "memoria: migrar esquema v1 → v3"
@@ -80,7 +81,7 @@ def test_esquema_danado_es_rechazo_legible(srv, proyecto):
 def test_migracion_sin_commit_se_deshace(srv, proyecto, monkeypatch):
     """Hallazgo al migrar Fractall: si git no puede commitear, la migración no debe quedar a medias."""
     _quitar_esquema(proyecto["mem"])
-    monkeypatch.setattr(srv, "_commit", lambda *a, **k: "(git falló: Author identity unknown)")
+    monkeypatch.setattr(esquema, "_commit", lambda *a, **k: "(git falló: Author identity unknown)")
     salida = srv.registrar_pendiente(proyecto="demo", tema="T", contexto="c")
     assert salida.startswith("ERROR:") and "Author identity unknown" in salida
     assert not (proyecto["mem"] / "esquema.json").exists()

@@ -191,3 +191,26 @@ seguro. No hay idempotency key del cliente (fuera de alcance v1): la detección 
 antigüedad. La telemetría registra estas llamadas como exitosas (`error: false`) con un flag `duplicado: true`,
 y `analizar_uso.py` reporta cuántas creaciones fueron duplicados detectados.
 
+
+## 16. Code layout
+
+`servidor.py` es solo el punto de entrada (cabecera PEP 723, agrega su carpeta a `sys.path`, importa el paquete
+`ratifact/` y ejecuta `mcp.run()`); los clientes se siguen configurando con `servidor.py` como arriba. El código
+vive en `ratifact/` (ADR-020); ningún módulo supera 300 líneas y no hay importaciones circulares:
+
+| Módulo | Responsabilidad |
+|---|---|
+| `ratifact/app.py` | Instancia FastMCP `mcp`, decoradores `herramienta`/`herramienta_async`, telemetría (`LOG_USO`, `_registrar_uso`) y `_ejecutar`. |
+| `ratifact/config.py` | Rutas y configuración: `CONFIG` (projects.json), `BASE_PROYECTOS`, `ErrorMemoria`, `_proyectos`, `_raiz`, `_mem`, ayudantes de repositorios, `_ruta_segura`, `_zonas_escritura`. |
+| `ratifact/esquema.py` | `VERSION_ESQUEMA`, `MIGRACIONES`, funciones de migración y `_bloqueo` (el bloqueo de escritura que aplica las migraciones). |
+| `ratifact/registros.py` | Frontmatter (lectura/escritura), `_escribir_atomico`, `_commit`, ids y slugs, idempotencia (ADR-019), `_regenerar_vistas`, `_resumen_tareas`, `_hoy`/`_ahora`. |
+| `ratifact/plantillas.py` | `PLANTILLA_INSTRUCCIONES`, `PLANTILLA_AGENTES` y `TEXTO_CIERRE`. |
+| `ratifact/prompts.py` | Prompts `inicio` y `cierre`. |
+| `ratifact/herramientas/contexto_documentos.py` | `listar_proyectos`, `obtener_contexto`, `buscar`, `listar_documentos`, `leer_documento`, `crear_documento`, `guardar_documento`, `actualizar_indice`. |
+| `ratifact/herramientas/decisiones.py` | `registrar_decision`, `confirmar_decision`, `confirmar_decisiones_lote`, `revisar_propuestas`, `decidir_propuestas`, `descartar_decision`, `reemplazar_decision`. |
+| `ratifact/herramientas/pendientes_sesiones.py` | `registrar_pendiente`, `cerrar_pendiente`, `registrar_sesion`. |
+| `ratifact/herramientas/tareas.py` | `registrar_tarea`, `actualizar_tarea`, `devolver_tarea`, `listar_tareas` (y `_comando_pruebas`). |
+| `ratifact/herramientas/proyectos.py` | `inicializar_memoria`, `instrucciones_proyecto`, `registrar_proyecto`, `actualizar_proyecto` y la detección del comando de pruebas. |
+
+`tests/contrato_herramientas.json` es la instantánea del contrato MCP (nombre, descripción y esquema de cada
+herramienta y prompt); `tests/test_contrato.py` falla si cambia.

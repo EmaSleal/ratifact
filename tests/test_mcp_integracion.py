@@ -1,6 +1,7 @@
 """Pruebas de punta a punta por el protocolo MCP (stdio), como lo usan Claude Desktop, Claude Code y Pi."""
 import asyncio
 import os
+import shutil
 import sys
 
 import pytest
@@ -96,3 +97,23 @@ def test_confirmar_lote_acepta_lista_por_mcp(srv, proyecto, entorno):
     esquema, salida = _correr(entorno, cuerpo)
     assert esquema["properties"]["ids"]["type"] == "array"
     assert "2 acordadas" in salida
+
+
+@pytest.mark.parametrize("comando", [[sys.executable], ["uv", "run", "--script"]], ids=["python", "uv"])
+def test_arranca_desde_cualquier_carpeta(entorno, tmp_path, comando):
+    """servidor.py importa el paquete ratifact aunque el cwd esté fuera del repositorio."""
+    if comando[0] == "uv" and not shutil.which("uv"):
+        pytest.skip("uv no está instalado")
+    cwd = tmp_path / "otra_carpeta"
+    cwd.mkdir()
+    assert RAIZ_REPO not in cwd.resolve().parents
+
+    async def principal():
+        params = StdioServerParameters(command=comando[0], args=[*comando[1:], str(RAIZ_REPO / "servidor.py")],
+                                       env={**os.environ, **entorno["env"]}, cwd=str(cwd))
+        async with stdio_client(params) as (r, w):
+            async with ClientSession(r, w) as s:
+                await s.initialize()
+                return {t.name for t in (await s.list_tools()).tools}
+    herramientas = asyncio.run(principal())
+    assert len(herramientas) == 26 and {"obtener_contexto", "registrar_proyecto"} <= herramientas

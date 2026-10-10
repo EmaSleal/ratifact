@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 
 from conftest import crear_repo, log_git, RAIZ_REPO
+from ratifact.herramientas import pendientes_sesiones
 
 
 def test_alta_crea_memoria_con_repo_propio_e_instrucciones(srv, proyecto, entorno):
@@ -83,7 +84,7 @@ def test_telemetria_registra_y_clasifica_errores(srv, proyecto, entorno):
 def test_falla_inesperada_se_registra_como_interna(srv, proyecto, entorno, monkeypatch):
     def rota(*a, **k):
         raise OSError("disco lleno")
-    monkeypatch.setattr(srv, "_regenerar_vistas", rota)
+    monkeypatch.setattr(pendientes_sesiones, "_regenerar_vistas", rota)
     salida = srv.registrar_pendiente(proyecto="demo", tema="t", contexto="c")
     assert salida.startswith("ERROR INTERNO: OSError")
     fila = json.loads(Path(entorno["env"]["MEMORIA_PROYECTOS_LOG"]).read_text().splitlines()[-1])
@@ -92,7 +93,7 @@ def test_falla_inesperada_se_registra_como_interna(srv, proyecto, entorno, monke
 
 def test_sin_nombres_de_proyecto_fijos_en_el_codigo():
     """Regresión: 'game' como valor por defecto hizo que 'inicio' cargara otro proyecto."""
-    codigo = (RAIZ_REPO / "servidor.py").read_text()
+    codigo = "\n".join(p.read_text() for p in [RAIZ_REPO / "servidor.py", *sorted((RAIZ_REPO / "ratifact").rglob("*.py"))])
     sin_docstring = codigo.split('"""', 2)[2]
     assert "game" not in sin_docstring
     assert not re.search(r'proyecto: str = "[^"]+"', sin_docstring)

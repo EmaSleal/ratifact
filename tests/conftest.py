@@ -34,11 +34,29 @@ def entorno(tmp_path, monkeypatch):
     return {"base": base, "tmp": tmp_path, "env": variables}
 
 
+# Módulos de ratifact en orden de dependencias. app va antes que las herramientas: al recargarlo se crea un `mcp`
+# nuevo, y al recargar cada módulo de herramientas sus decoradores las registran en ese `mcp` (sin duplicados).
+MODULOS_RATIFACT = [
+    "ratifact.config", "ratifact.registros", "ratifact.esquema", "ratifact.plantillas", "ratifact.app",
+    "ratifact.herramientas.contexto_documentos", "ratifact.herramientas.decisiones",
+    "ratifact.herramientas.pendientes_sesiones", "ratifact.herramientas.tareas", "ratifact.herramientas.proyectos",
+    "ratifact.herramientas", "ratifact.prompts",
+]
+
+
+def recargar_servidor():
+    """Recarga cada módulo de ratifact (en orden de dependencias) y luego servidor, para que lean las variables
+    de entorno actuales (MEMORIA_PROYECTOS_CONFIG / _LOG / _BASE se leen al importar)."""
+    import servidor
+    for nombre in MODULOS_RATIFACT:
+        importlib.reload(importlib.import_module(nombre))
+    return importlib.reload(servidor)
+
+
 @pytest.fixture
 def srv(entorno):
     """Módulo del servidor recargado para que lea la configuración del entorno de prueba."""
-    import servidor
-    return importlib.reload(servidor)
+    return recargar_servidor()
 
 
 def crear_repo(ruta: Path) -> Path:
