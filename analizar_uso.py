@@ -33,6 +33,7 @@ def main():
         sys.exit(1)
     desde = dt.datetime.now() - dt.timedelta(days=a.dias)
     filas = [json.loads(l) for l in log.read_text(encoding="utf-8").splitlines() if l.strip()]
+    primera = min((dt.datetime.fromisoformat(f["ts"]) for f in filas), default=None)
     filas = [f for f in filas if dt.datetime.fromisoformat(f["ts"]) >= desde
              and (not a.proyecto or f.get("proyecto") == a.proyecto)]
     if not filas:
@@ -88,9 +89,13 @@ def main():
     print(f"- Fallas internas del servidor: {len(internos)} ({tasa:.2f} %) · rechazos de validación: {len(rechazos)} "
           "(uso esperado: p. ej. confirmar sin cita o un nombre inválido)")
     dias = {f["ts"][:10] for f in filas}
-    cumple = len(filas) >= 300 and tasa < 1 and len(dias) >= min(a.dias, 14)
-    print(f"- ADR-009 criterio 2 (≥300 llamadas, <1 % de fallas internas, 14 días): "
-          f"{len(filas)} llamadas en {len(dias)} días con uso → {'CUMPLE' if cumple else 'aún no'}")
+    # ADR-009: "14 días consecutivos de telemetría" = la telemetría cubre todo el período (días corridos desde el
+    # primer registro), no 14 días con uso; un día sin llamadas no rompe la ventana.
+    corridos = (dt.datetime.now() - primera).days if primera else 0
+    cumple = len(filas) >= 300 and tasa < 1 and a.dias >= 14 and corridos >= 14
+    print(f"- ADR-009 criterio 2 (≥300 llamadas, <1 % de fallas internas, 14 días corridos de telemetría): "
+          f"{len(filas)} llamadas · {corridos} días corridos desde el primer registro · {len(dias)} días con uso "
+          f"→ {'CUMPLE' if cumple else 'aún no'}")
     errores = internos + rechazos
     if errores:
         print("\nÚltimos errores")

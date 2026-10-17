@@ -50,3 +50,28 @@ def test_archivo_inexistente_avisa_y_sale_con_error(entorno, monkeypatch, capsys
         _correr(monkeypatch, "--log", str(faltante))
     assert salida.value.code != 0
     assert str(faltante) in capsys.readouterr().err
+
+
+def _log_diario(ruta: Path, dias_atras: list[int], llamadas_por_dia: int) -> Path:
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    ahora = dt.datetime.now()
+    filas = [{"ts": (ahora - dt.timedelta(days=d, minutes=i)).isoformat(timespec="seconds"), "herramienta": "buscar",
+              "proyecto": "demo", "ms": 1.0, "resp_chars": 40, "error": False}
+             for d in dias_atras for i in range(llamadas_por_dia)]
+    ruta.write_text("\n".join(json.dumps(f) for f in filas) + "\n", encoding="utf-8")
+    return ruta
+
+
+def test_criterio_2_cuenta_dias_corridos_no_dias_con_uso(entorno, monkeypatch, capsys):
+    """ADR-009 pide 14 días consecutivos de telemetría: un día sin llamadas no rompe la ventana (caso real 2026-10-17:
+    1202 llamadas, 0,08 %, telemetría desde el 3 de octubre pero 13 días con uso)."""
+    dias = [d for d in range(0, 15) if d != 12]                      # 14 días cubiertos, uno sin uso
+    log = _log_diario(entorno["tmp"] / "log" / "uso.jsonl", dias + [14], 25)
+    _correr(monkeypatch, "--log", str(log), "--dias", "15")
+    assert "→ CUMPLE" in capsys.readouterr().out
+
+
+def test_criterio_2_no_cumple_con_menos_de_14_dias_de_telemetria(entorno, monkeypatch, capsys):
+    log = _log_diario(entorno["tmp"] / "log" / "uso.jsonl", list(range(0, 10)), 40)   # 400 llamadas en 10 días
+    _correr(monkeypatch, "--log", str(log), "--dias", "14")
+    assert "→ aún no" in capsys.readouterr().out
