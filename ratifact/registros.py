@@ -104,6 +104,11 @@ def _numero_id(id_: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
+def _clave_id(nombre: str) -> tuple[int, str]:
+    """Clave de orden numérico por id ("ADR-101" antes que "ADR-1000"); el nombre desempata."""
+    return _numero_id(nombre) or 0, nombre
+
+
 def _buscar_registro(carpeta: Path, id_: str) -> Path:
     """Búsqueda exacta: solo "<ID>.md" o "<ID>-*.md" con el id normalizado ("ADR-01" nunca es ADR-010)."""
     objetivo = _normalizar_id(id_)
@@ -182,11 +187,11 @@ def _regenerar_vistas(proyecto: str) -> list[Path]:
     pen.mkdir(parents=True, exist_ok=True)
 
     grupos = {"acordada": [], "propuesta": [], "reemplazada": [], "descartada": []}
-    for p in sorted(dec.glob("ADR-*.md")):
+    for p in sorted(dec.glob("ADR-*.md"), key=lambda a: _clave_id(a.name)):
         m, _ = _leer_registro(p)
         linea = f"- **{m.get('id')}** {m.get('titulo')} — {m.get('resumen', '')} ({m.get('fecha')}) → `decisiones/{p.name}`"
         if m.get("estado") == "reemplazada":
-            linea += f" · reemplazada por {m.get('reemplazada_por', '?')}"
+            linea += f" · reemplazada por {_normalizar_id(m.get('reemplazada_por', '?'))}"
         grupos.setdefault(m.get("estado", "propuesta"), []).append(linea)
     acuerdos = ["# Acuerdos", "", "_Vista generada por memoria-proyectos. No editar a mano._", ""]
     for titulo, clave in (("Acordadas (vigentes)", "acordada"), ("Propuestas (sin confirmar)", "propuesta"),
@@ -194,7 +199,7 @@ def _regenerar_vistas(proyecto: str) -> list[Path]:
         acuerdos += [f"## {titulo}", *(grupos.get(clave) or ["- (ninguna)"]), ""]
 
     abiertas, cerradas = [], []
-    for p in sorted(pen.glob("P-*.md")):
+    for p in sorted(pen.glob("P-*.md"), key=lambda a: _clave_id(a.name)):
         m, cuerpo = _leer_registro(p)
         if m.get("estado") == "abierta":
             dueno = f" · dueño: {m['dueno']}" if m.get("dueno") else ""
@@ -214,7 +219,7 @@ def _regenerar_vistas(proyecto: str) -> list[Path]:
 def _resumen_tareas(proyecto: str, solo_activas: bool = True) -> list[str]:
     carpeta = _mem(proyecto) / "tareas"
     filas = []
-    for p in sorted(carpeta.glob("T-*.md")) if carpeta.exists() else []:
+    for p in sorted(carpeta.glob("T-*.md"), key=lambda a: _clave_id(a.name)) if carpeta.exists() else []:
         m, _ = _leer_registro(p)
         if solo_activas and m.get("estado") in ("integrada", "descartada"):
             continue

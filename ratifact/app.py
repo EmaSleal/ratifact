@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import functools
+import inspect
 import json
 import os
 import time
@@ -65,34 +66,47 @@ def _registrar_uso(nombre: str, kwargs: dict, respuesta, ms: float) -> None:
         pass   # la telemetría nunca rompe una herramienta
 
 
+def _argumentos(firma: inspect.Signature, args: tuple, kwargs: dict) -> dict:
+    """Argumentos por nombre aunque la llamada sea posicional, para que la telemetría registre lo mismo
+    (proyecto, args_chars, params). Sin defaults: igual que una llamada por nombre que los omite."""
+    try:
+        return dict(firma.bind_partial(*args, **kwargs).arguments)
+    except TypeError:   # llamada inválida: la función fallará igual; se registra lo que vino por nombre
+        return kwargs
+
+
 def herramienta(fn):
     """Registra la función como herramienta MCP y mide cada llamada."""
+    firma = inspect.signature(fn)
+
     @functools.wraps(fn)
     def envoltura(*args, **kwargs):
         inicio = time.perf_counter()
         try:
             respuesta = fn(*args, **kwargs)
         except Exception as e:   # algo escapó de _ejecutar: se registra como falla interna y se propaga
-            _registrar_uso(fn.__name__, kwargs, f"ERROR INTERNO: {type(e).__name__}: {e}",
+            _registrar_uso(fn.__name__, _argumentos(firma, args, kwargs), f"ERROR INTERNO: {type(e).__name__}: {e}",
                            (time.perf_counter() - inicio) * 1000)
             raise
-        _registrar_uso(fn.__name__, kwargs, respuesta, (time.perf_counter() - inicio) * 1000)
+        _registrar_uso(fn.__name__, _argumentos(firma, args, kwargs), respuesta, (time.perf_counter() - inicio) * 1000)
         return respuesta
     return mcp.tool()(envoltura)
 
 
 def herramienta_async(fn):
     """Igual que `herramienta`, para herramientas asíncronas (las que interactúan con el usuario)."""
+    firma = inspect.signature(fn)
+
     @functools.wraps(fn)
     async def envoltura(*args, **kwargs):
         inicio = time.perf_counter()
         try:
             respuesta = await fn(*args, **kwargs)
         except Exception as e:
-            _registrar_uso(fn.__name__, kwargs, f"ERROR INTERNO: {type(e).__name__}: {e}",
+            _registrar_uso(fn.__name__, _argumentos(firma, args, kwargs), f"ERROR INTERNO: {type(e).__name__}: {e}",
                            (time.perf_counter() - inicio) * 1000)
             raise
-        _registrar_uso(fn.__name__, kwargs, respuesta, (time.perf_counter() - inicio) * 1000)
+        _registrar_uso(fn.__name__, _argumentos(firma, args, kwargs), respuesta, (time.perf_counter() - inicio) * 1000)
         return respuesta
     return mcp.tool()(envoltura)
 

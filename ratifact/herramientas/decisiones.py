@@ -11,9 +11,9 @@ from ratifact import registros as _registros  # _ahora se busca en su módulo: l
 from ratifact.app import _ejecutar, _ejecutar_async, herramienta, herramienta_async
 from ratifact.config import ErrorMemoria, _mem
 from ratifact.esquema import _bloqueo
-from ratifact.registros import (_buscar_registro, _commit, _duplicado_reciente, _escribir_registro, _hoy,
-                                _leer_registro, _mensaje_duplicado, _numero_id, _regenerar_vistas, _siguiente_id,
-                                _slug)
+from ratifact.registros import (_buscar_registro, _clave_id, _commit, _duplicado_reciente, _escribir_registro, _hoy,
+                                _leer_registro, _mensaje_duplicado, _normalizar_id, _numero_id, _regenerar_vistas,
+                                _siguiente_id, _slug)
 
 
 @herramienta
@@ -75,7 +75,7 @@ def confirmar_decisiones_lote(proyecto: str, ids: list[str], cita_usuario: str) 
     def f():
         if len(cita_usuario.strip()) < 2:
             raise ErrorMemoria("Falta cita_usuario: el texto literal con que el usuario confirmó.")
-        unicos = list(dict.fromkeys(i.strip().upper() for i in ids if i.strip()))
+        unicos = list(dict.fromkeys(_normalizar_id(i) for i in ids if i.strip()))
         if not unicos:
             raise ErrorMemoria("La lista de ids está vacía.")
         if len(unicos) > 30:
@@ -109,7 +109,7 @@ def revisar_propuestas(proyecto: str, desde_id: str = "", cantidad: int = 10, re
         if desde is None:
             raise ErrorMemoria(f"desde_id inválido: '{desde_id}' (usa la forma \"ADR-020\").")
         carpeta = _mem(proyecto) / "decisiones"
-        archivos = sorted(carpeta.glob("ADR-*.md"), key=lambda a: (_numero_id(a.name) or 0, a.name)) \
+        archivos = sorted(carpeta.glob("ADR-*.md"), key=lambda a: _clave_id(a.name)) \
             if carpeta.exists() else []
         propuestas = []
         for p in archivos:   # orden y filtro numéricos: ADR-1000 va después de ADR-999
@@ -162,7 +162,7 @@ async def decidir_propuestas(proyecto: str, ctx: Context) -> str:
                 "propias tarjetas o preguntas de opción múltiple; luego confirmar_decision / descartar_decision.")
     carpeta = _mem(proyecto) / "decisiones"
     pendientes = []
-    for p in sorted(carpeta.glob("ADR-*.md")) if carpeta.exists() else []:
+    for p in sorted(carpeta.glob("ADR-*.md"), key=lambda a: _clave_id(a.name)) if carpeta.exists() else []:
         m, cuerpo = _leer_registro(p)
         if m.get("estado") == "propuesta":
             pendientes.append((m.get("id"), cuerpo))
@@ -234,10 +234,11 @@ def reemplazar_decision(proyecto: str, id_anterior: str, id_nuevo: str) -> str:
         with _bloqueo(proyecto):
             carpeta = _mem(proyecto) / "decisiones"
             _buscar_registro(carpeta, id_nuevo)
+            nuevo = _normalizar_id(id_nuevo)
             ruta = _buscar_registro(carpeta, id_anterior)
             meta, cuerpo = _leer_registro(ruta)
-            meta["estado"], meta["reemplazada_por"] = "reemplazada", id_nuevo.upper()
+            meta["estado"], meta["reemplazada_por"] = "reemplazada", nuevo
             _escribir_registro(ruta, meta, cuerpo)
-            sha = _commit(proyecto, [ruta, *_regenerar_vistas(proyecto)], f"{meta['id']} reemplazada por {id_nuevo}")
-            return f"{meta['id']} reemplazada por {id_nuevo.upper()} · commit {sha}"
+            sha = _commit(proyecto, [ruta, *_regenerar_vistas(proyecto)], f"{meta['id']} reemplazada por {nuevo}")
+            return f"{meta['id']} reemplazada por {nuevo} · commit {sha}"
     return _ejecutar(f)

@@ -6,7 +6,8 @@ from ratifact.app import _ejecutar, herramienta
 from ratifact.config import _mem
 from ratifact.esquema import _bloqueo
 from ratifact.registros import (_buscar_registro, _commit, _duplicado_reciente, _escribir_atomico, _escribir_registro,
-                                _hoy, _leer_registro, _mensaje_duplicado, _regenerar_vistas, _siguiente_id, _slug)
+                                _hoy, _leer_registro, _mensaje_duplicado, _normalizar_id, _regenerar_vistas,
+                                _siguiente_id, _slug)
 
 
 @herramienta
@@ -42,7 +43,7 @@ def cerrar_pendiente(proyecto: str, id: str, resolucion: str, id_decision: str =
             ruta = _buscar_registro(_mem(proyecto) / "pendientes", id)
             meta, cuerpo = _leer_registro(ruta)
             meta.update(estado="cerrada", cerrado=_hoy(),
-                        resolucion=(resolucion + (f" ({id_decision.upper()})" if id_decision else ""))[:200])
+                        resolucion=(resolucion + (f" ({_normalizar_id(id_decision)})" if id_decision else ""))[:200])
             _escribir_registro(ruta, meta, cuerpo + f"\n\n## Resolución ({_hoy()})\n{resolucion}\n")
             sha = _commit(proyecto, [ruta, *_regenerar_vistas(proyecto)], f"{meta['id']} cerrado")
             return f"{meta['id']} cerrado · commit {sha}"

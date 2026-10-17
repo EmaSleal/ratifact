@@ -11,7 +11,7 @@ from ratifact.app import _ejecutar, herramienta
 from ratifact.config import (CARPETAS_IGNORADAS, EXT_TEXTO, LIMITE_ARCHIVO_BUSQUEDA, LIMITE_INDICE, LIMITE_LECTURA,
                              MEM, ErrorMemoria, _es_repo, _mem, _proyectos, _raiz, _repos, _ruta_segura)
 from ratifact.esquema import _bloqueo, _version_esquema
-from ratifact.registros import _commit, _escribir_atomico, _leer_registro, _resumen_tareas
+from ratifact.registros import _clave_id, _commit, _escribir_atomico, _leer_registro, _resumen_tareas
 
 
 # ───────────────────────── herramientas ─────────────────────────
@@ -74,11 +74,11 @@ def obtener_contexto(proyecto: str) -> str:
         for nombre in ("INDEX.md", "abiertas.md"):
             r = mem / nombre
             partes.append(r.read_text(encoding="utf-8") if r.exists() else f"({nombre} no existe)")
-        propuestas = [p.stem for p in (mem / "decisiones").glob("ADR-*.md")
+        propuestas = ["-".join(p.stem.split("-", 2)[:2]) for p in (mem / "decisiones").glob("ADR-*.md")
                       if _leer_registro(p)[0].get("estado") == "propuesta"]
         if propuestas:
             partes.append("Decisiones propuestas pendientes de confirmar por el usuario: "
-                          + ", ".join(sorted(p.split("-", 2)[0] + "-" + p.split("-", 2)[1] for p in propuestas)))
+                          + ", ".join(sorted(propuestas, key=_clave_id)))
         tareas = _resumen_tareas(proyecto)
         if tareas:
             partes.append("# Tareas de código activas\n" + "\n".join(tareas))
