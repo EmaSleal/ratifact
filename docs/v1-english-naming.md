@@ -109,3 +109,7 @@ Implement after ADR-009 criterion 2 closes (~2026-10-17) so the stability window
 - Command: **`/run-task`** (`$run-task` in Codex).
 - Default memory root: **`<base>/.ratifact/<project>`**; the v1 → v2 migration moves existing memories from `.memorias/` and updates projects.json.
 Status of this document: approved spec; implementation after ADR-009 criterion 2 (~2026-10-17).
+
+## Addendum (2026-10-17, ADR-021) — new tool in v1
+- `amend_task(project, id, additional_criteria="", notes="")`: appends acceptance criteria and/or notes to a task in `todo` or `changes_requested`; rejects any other status. Written as an "Amendment N" block (date) in the task, one commit per amendment; original criteria untouched. No Spanish predecessor: it is born in English with the rename. Tool count in v1: 27.
+- Task section headings add: Amendment N → (new), with sub-labels "Additional criteria" and "Notes".
