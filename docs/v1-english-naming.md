@@ -113,3 +113,23 @@ Status of this document: approved spec; implementation after ADR-009 criterion 2
 ## Addendum (2026-10-17, ADR-021) — new tool in v1
 - `amend_task(project, id, additional_criteria="", notes="")`: appends acceptance criteria and/or notes to a task in `todo` or `changes_requested`; rejects any other status. Written as an "Amendment N" block (date) in the task, one commit per amendment; original criteria untouched. No Spanish predecessor: it is born in English with the rename. Tool count in v1: 27.
 - Task section headings add: Amendment N → (new), with sub-labels "Additional criteria" and "Notes".
+
+## Addendum (2026-10-18) — names added by T-007…T-009 and execution plan
+
+### New names to translate
+- Parameters: resuelve → resolves · integraciones → integrations · redetectar → redetect · repositorio → repo (already listed).
+- Parameter values: "(parcial)" marker in `resolves` → "(partial)"; the parser accepts both. Integration switch values `auto` / `off` unchanged.
+- Frontmatter: creado → created · resuelve → resolves (same value format).
+- Task section headings: Resuelve → Resolves · Cómo verificar → How to verify (already listed).
+- Integration module and descriptor fields (ratifact/integraciones/ → ratifact/integrations/): nombre → name · alcance → scope (proyecto → project, usuario → user) · detectar → detect · prefijo → prefix · rol → role · limite → boundary · guia → guidance (planificar → plan, ejecutar → execute, verificar → verify, cerrar → close).
+- Startup output: "# Pendientes abiertos (N)" → "# Open items (N)"; "Detalle: leer_documento(...)" → "Detail: read_document(...)"; "Integraciones:" → "Integrations:".
+- Catalog record types: decision / pendiente / tarea → decision / pending / task.
+
+### Execution plan (ADR-028)
+1. **Data migration (schema v2).** Inside each memory, automatic on first access under the lock: folders, frontmatter keys, state values, section headings, views (DECISIONS.md, OPEN.md), schema.json v2 with `content_language` ("es" for migrated memories, "en" for new ones). Safety: memory git status must be clean, tag `pre-v2` before, one commit `memory: migrate schema v1 → v2`. Tool names/parameters stay Spanish; state parameters accept Spanish and English; outputs use English states.
+2. **Contract rename.** Tools, parameters, descriptions and responses in English (27 tools with amend_task), `/run-task`, RATIFACT_* env vars with MEMORIA_PROYECTOS_* fallback + deprecation notice until 1.1, P-016 follow-ups.
+3. **Packaging.** PyPI via uvx and installer.
+
+### Proposed (ADR-029, pending the user's confirmation)
+- The `.memorias/` → `.ratifact/` root move and the projects.json key rename (§7) leave the automatic migration and become an explicit installer/upgrade step run with all clients closed (projects.json backup; custom memory paths never move). From step 1 on, the code reads both Spanish and English projects.json keys.
+- `content_language` lives in each memory's schema.json instead of projects.json (§7).
