@@ -112,6 +112,7 @@ def test_instrucciones_cubren_codex(srv, proyecto):
 
 
 def test_servidor_se_declara_fuente_de_verdad(srv):
-    """Hallazgo Codex/Fractall: con engram presente, "carga el contexto" consultó solo engram."""
+    """Hallazgo Codex/Fractall: con engram presente, "carga el contexto" consultó solo engram. T-008: la regla es
+    genérica (cualquier otra memoria de agente); lo específico de engram vive en su integración."""
     texto = srv.mcp.instructions
-    assert "obtener_contexto" in texto and "engram" in texto and "gana memoria-proyectos" in texto
+    assert "obtener_contexto" in texto and "otras memorias de agente" in texto and "gana memoria-proyectos" in texto

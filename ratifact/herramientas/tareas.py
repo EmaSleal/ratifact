@@ -5,6 +5,7 @@ from ratifact import registros as _registros  # _ahora se busca en su módulo: l
 from ratifact.app import _ejecutar, herramienta
 from ratifact.config import ErrorMemoria, _mem, _proyectos, _repos
 from ratifact.esquema import _bloqueo
+from ratifact.integraciones import registro as _integraciones
 from ratifact.registros import (_buscar_registro, _commit, _duplicado_reciente, _escribir_registro, _hoy,
                                 _leer_registro, _mensaje_duplicado, _resumen_tareas, _siguiente_id, _slug)
 
@@ -42,6 +43,7 @@ def registrar_tarea(proyecto: str, titulo: str, objetivo: str, criterios_aceptac
     Debe ser autosuficiente: Claude Code la ejecuta sin este chat. `criterios_aceptacion`: lista verificable
     (pruebas que deben pasar, comportamiento observable). `decisiones`: ids de ADR aplicables.
     `archivos`: rutas que probablemente se tocan. El usuario la ejecuta con /tarea T-NNN en Claude Code.
+    La respuesta agrega la línea de integraciones detectadas (no se escribe en la tarea).
     Idempotente (ADR-019): si ya hay una tarea con este título (sin distinguir mayúsculas ni espacios) creada
     en los últimos minutos Y TODAVÍA en estado 'pendiente', no crea nada nuevo y devuelve el id existente
     (con el comando /tarea para repetírselo al usuario). Si esa tarea ya cambió de estado (p. ej. en_curso:
@@ -81,8 +83,9 @@ def registrar_tarea(proyecto: str, titulo: str, objetivo: str, criterios_aceptac
             secciones += ["## Resultado", MARCA_RESULTADO]
             _escribir_registro(ruta, meta, "\n\n".join(secciones))
             sha = _commit(proyecto, [ruta], f"{id_} {titulo} (pendiente)")
+            linea = _integraciones._linea_integraciones(proyecto)
             return (f"{id_} registrada · rama sugerida {meta['rama']} · commit {sha}\nEjecutar en Claude Code: /tarea {id_}"
-                    + nota)
+                    + nota + (f"\n{linea}" if linea else ""))
     return _ejecutar(f)
 
 
@@ -91,7 +94,9 @@ def actualizar_tarea(proyecto: str, id: str, estado: str, resultado: str = "", c
     """Cambia el estado de una tarea (pendiente, en_curso, en_revision, fallida, integrada, descartada).
     `resultado`: qué se hizo, pruebas ejecutadas y su salida resumida, desvíos respecto de la spec.
     'integrada' y 'descartada' solo con confirmación explícita del usuario.
-    Para pedir correcciones tras revisar una tarea usa `devolver_tarea`, no este cambio de estado."""
+    Para pedir correcciones tras revisar una tarea usa `devolver_tarea`, no este cambio de estado.
+    Con 'en_curso', la respuesta trae la guía de integraciones activas (ejecutar, verificar, cerrar), calculada en
+    ese momento; es condicional: síguela solo si tienes esas herramientas. No se escribe en la tarea."""
     def f():
         if estado not in ESTADOS_TAREA:
             raise ErrorMemoria(f"Estado inválido. Usa: {', '.join(ESTADOS_TAREA)}")
@@ -110,7 +115,8 @@ def actualizar_tarea(proyecto: str, id: str, estado: str, resultado: str = "", c
                 cuerpo = _anexar_resultado(cuerpo, f"### {_hoy()} · {estado}\n{resultado.strip()}")
             _escribir_registro(ruta, meta, cuerpo)
             sha = _commit(proyecto, [ruta], f"{meta['id']} → {estado}")
-            return f"{meta['id']} → {estado} · commit {sha}"
+            guia = _integraciones._guia_en_curso(proyecto) if estado == "en_curso" else ""
+            return f"{meta['id']} → {estado} · commit {sha}" + (f"\n\n{guia}" if guia else "")
     return _ejecutar(f)
 
 

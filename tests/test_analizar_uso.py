@@ -112,3 +112,63 @@ def test_lecturas_de_codigo_por_proyecto_y_sin_indicador_sin_rango(entorno, monk
     assert "sin rango" not in salida
     linea = next(l for l in salida.splitlines() if l.startswith("- Lecturas de código"))
     assert "demo: 2 (150 caracteres)" in linea and "otro: 1 (70 caracteres)" in linea
+
+
+# ───────────────────────── T-008: indicador de decisiones desde la memoria ─────────────────────────
+
+def _adr(carpeta: Path, id_: str, estado: str, fecha: dt.date, titulo: str) -> None:
+    carpeta.mkdir(parents=True, exist_ok=True)
+    (carpeta / f"{id_}-x.md").write_text(
+        f"---\nid: {id_}\ntitulo: {titulo}\nestado: {estado}\nfecha: {fecha.isoformat()}\n"
+        f"creado: {fecha.isoformat()}T10:00:00\n---\n# {id_} — {titulo}\n", encoding="utf-8")
+
+
+def _memorias(entorno) -> dict:
+    """Dos proyectos: 'demo' con memoria explícita y 'otro' con la memoria por defecto (<base>/.memorias/otro)."""
+    hoy = dt.date.today()
+    mem_demo = entorno["tmp"] / "mem-demo"
+    _adr(mem_demo / "decisiones", "ADR-001", "acordada", hoy, "Usar git")
+    _adr(mem_demo / "decisiones", "ADR-002", "propuesta", hoy - dt.timedelta(days=2), "Reciente")
+    _adr(mem_demo / "decisiones", "ADR-003", "propuesta", hoy - dt.timedelta(days=9), "Vieja abierta")
+    _adr(mem_demo / "decisiones", "ADR-004", "reemplazada", hoy - dt.timedelta(days=1), "Cambiada")
+    _adr(mem_demo / "decisiones", "ADR-005", "acordada", hoy - dt.timedelta(days=40), "Fuera de ventana")
+    _adr(entorno["base"] / ".memorias" / "otro" / "decisiones", "ADR-010", "descartada", hoy, "No va")
+    config = {"demo": {"ruta": str(entorno["base"] / "demo"), "memoria": str(mem_demo)},
+              "otro": {"ruta": str(entorno["base"] / "otro")}}
+    Path(entorno["env"]["MEMORIA_PROYECTOS_CONFIG"]).write_text(json.dumps(config), encoding="utf-8")
+    return config
+
+
+def test_decisiones_por_estado_desde_la_memoria(entorno, monkeypatch, capsys):
+    _memorias(entorno)
+    log = _log_filas(entorno["tmp"] / "log" / "uso.jsonl",
+                     [{"herramienta": "confirmar_decision", "resp_chars": 10}] * 3)
+    _correr(monkeypatch, "--log", str(log), "--dias", "14")
+    salida = capsys.readouterr().out
+    assert "confirmadas por el usuario" not in salida
+    linea = next(l for l in salida.splitlines() if l.startswith("- Decisiones creadas en el período"))
+    assert "demo: acordada 1 · propuesta 2 · reemplazada 1 · descartada 0" in linea
+    assert "otro: acordada 0 · propuesta 0 · reemplazada 0 · descartada 1" in linea
+    viejas = salida.split("- Propuestas abiertas hoy: 2 · con más de 7 días: 1")[1].splitlines()
+    fecha = (dt.date.today() - dt.timedelta(days=9)).isoformat()
+    assert viejas[1] == f"  demo ADR-003 {fecha} Vieja abierta"
+
+
+def test_decisiones_respetan_el_filtro_de_proyecto(entorno, monkeypatch, capsys):
+    _memorias(entorno)
+    log = _log_filas(entorno["tmp"] / "log" / "uso.jsonl",
+                     [{"herramienta": "buscar", "resp_chars": 10, "proyecto": "otro"}])
+    _correr(monkeypatch, "--log", str(log), "--proyecto", "otro")
+    linea = next(l for l in capsys.readouterr().out.splitlines() if l.startswith("- Decisiones creadas"))
+    assert "otro:" in linea and "demo:" not in linea
+
+
+def test_decisiones_sin_projects_json_lo_dice(entorno, monkeypatch, capsys):
+    log = _log_filas(entorno["tmp"] / "log" / "uso.jsonl", [{"herramienta": "buscar", "resp_chars": 10}])
+    _correr(monkeypatch, "--log", str(log))
+    assert f"sin configuración ({entorno['env']['MEMORIA_PROYECTOS_CONFIG']})" in capsys.readouterr().out
+
+
+def test_ruta_de_configuracion_igual_que_el_servidor(monkeypatch):
+    monkeypatch.delenv("MEMORIA_PROYECTOS_CONFIG", raising=False)
+    assert analizar_uso.ruta_config() == Path.home() / ".config" / "memoria-proyectos" / "projects.json"

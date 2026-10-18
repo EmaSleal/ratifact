@@ -39,6 +39,8 @@ def entorno(tmp_path, monkeypatch):
 MODULOS_RATIFACT = [
     "ratifact.config", "ratifact.registros", "ratifact.catalogo", "ratifact.busqueda", "ratifact.listado",
     "ratifact.esquema", "ratifact.plantillas", "ratifact.app",
+    "ratifact.integraciones.base", "ratifact.integraciones.codegraph", "ratifact.integraciones.gentle_ai",
+    "ratifact.integraciones.engram", "ratifact.integraciones.registro", "ratifact.integraciones",
     "ratifact.herramientas.contexto_documentos", "ratifact.herramientas.decisiones",
     "ratifact.herramientas.pendientes_sesiones", "ratifact.herramientas.tareas", "ratifact.herramientas.proyectos",
     "ratifact.herramientas", "ratifact.prompts",

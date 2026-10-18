@@ -4,6 +4,10 @@
 Uso:  python3 analizar_uso.py [--dias N] [--proyecto game] [--log RUTA]
 Log: --log, si no MEMORIA_PROYECTOS_LOG, si no <repo>/logs/uso.jsonl (el mismo que escribe el servidor).
 Tokens estimados = caracteres / 4 (aproximación; el texto en español suele rondar 3,5–4,5).
+El indicador de decisiones no sale del log sino de la memoria de cada proyecto (projects.json): la configuración
+se resuelve igual que el servidor (MEMORIA_PROYECTOS_CONFIG o ~/.config/memoria-proyectos/projects.json) y la
+memoria con la clave "memoria" o <MEMORIA_PROYECTOS_BASE o ~/Projects>/.memorias/<nombre>. Se replica esa lógica
+(ratifact.config la fija al importarse) y se reutiliza el lector de frontmatter de ratifact.registros (sin mcp).
 """
 import argparse
 import datetime as dt
@@ -13,7 +17,12 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from ratifact.registros import _leer_registro  # noqa: E402  (solo biblioteca estándar: no requiere mcp)
+
 LOG_POR_DEFECTO = Path(__file__).resolve().parent / "logs" / "uso.jsonl"   # igual que LOG_USO del servidor
+ESTADOS_DECISION = ("acordada", "propuesta", "reemplazada", "descartada")
+DIAS_PROPUESTA_VIEJA = 7
 EXT_CODIGO = {".java", ".py", ".ts", ".js", ".vue", ".sql", ".xml", ".yml", ".yaml", ".kt"}
 
 
@@ -25,6 +34,58 @@ def percentil(valores: list, q: float):
 def ruta_log(argumento: str | None) -> Path:
     """--log gana sobre MEMORIA_PROYECTOS_LOG, que gana sobre la ruta por defecto (resuelto en cada llamada)."""
     return Path(argumento or os.environ.get("MEMORIA_PROYECTOS_LOG") or LOG_POR_DEFECTO)
+
+
+def ruta_config() -> Path:
+    """Igual que ratifact.config.CONFIG, resuelto en cada llamada."""
+    return Path(os.environ.get("MEMORIA_PROYECTOS_CONFIG",
+                               Path.home() / ".config" / "memoria-proyectos" / "projects.json")).expanduser()
+
+
+def _memoria(nombre: str, p: dict) -> Path:
+    """Igual que ratifact.config._mem (sin la validación ADR-010: aquí solo se lee)."""
+    if p.get("memoria"):
+        return Path(p["memoria"]).expanduser()
+    base = Path(os.environ.get("MEMORIA_PROYECTOS_BASE", Path.home() / "Projects")).expanduser()
+    return base / ".memorias" / nombre
+
+
+def _fecha(meta: dict) -> dt.date | None:
+    for clave in ("creado", "fecha"):
+        try:
+            return dt.datetime.fromisoformat(meta[clave]).date() if clave == "creado" else dt.date.fromisoformat(meta[clave])
+        except (KeyError, ValueError):
+            continue
+    return None
+
+
+def indicador_decisiones(desde: dt.datetime, proyecto: str | None) -> list[str]:
+    """Decisiones creadas en el período por estado (desde los archivos de la memoria) y propuestas abiertas viejas."""
+    config = ruta_config()
+    try:
+        proyectos = json.loads(config.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return [f"- Decisiones: sin configuración ({config})"]
+    por_proyecto, viejas, abiertas = {}, [], 0
+    limite_vieja = dt.date.today() - dt.timedelta(days=DIAS_PROPUESTA_VIEJA)
+    for nombre, p in proyectos.items():
+        if proyecto and nombre != proyecto:
+            continue
+        conteo = Counter()
+        for archivo in sorted((_memoria(nombre, p) / "decisiones").glob("ADR-*.md")):
+            meta, _ = _leer_registro(archivo)
+            fecha, estado = _fecha(meta), meta.get("estado", "")
+            if fecha and fecha >= desde.date():
+                conteo[estado] += 1
+            abiertas += estado == "propuesta"
+            if estado == "propuesta" and fecha and fecha < limite_vieja:
+                viejas.append(f"  {nombre} {meta.get('id', archivo.stem)} {fecha.isoformat()} {meta.get('titulo', '')}")
+        por_proyecto[nombre] = conteo
+    lineas = ["- Decisiones creadas en el período (según la memoria): "
+              + ("; ".join(f"{n}: " + " · ".join(f"{e} {c[e]}" for e in ESTADOS_DECISION)
+                           for n, c in por_proyecto.items()) or "ninguna")]
+    lineas.append(f"- Propuestas abiertas hoy: {abiertas} · con más de {DIAS_PROPUESTA_VIEJA} días: {len(viejas)}")
+    return lineas + viejas
 
 
 def main():
@@ -93,11 +154,8 @@ def main():
     sesiones, indices = len(por.get("registrar_sesion", [])), len(por.get("actualizar_indice", []))
     print(f"- Cierres de sesión: {sesiones} · regeneraciones de INDEX: {indices} "
           f"{'(nunca se usa /cierre: INDEX se queda viejo)' if ctx and not indices else ''}")
-    dec, conf = por.get("registrar_decision", []), por.get("confirmar_decision", [])
-    if dec or conf:
-        print(f"- Decisiones propuestas: {len(dec)} · confirmadas por el usuario: "
-              f"{sum(1 for f in conf if not f['error'])} · confirmaciones con error: "
-              f"{sum(1 for f in conf if f['error'])}")
+    for linea in indicador_decisiones(desde, a.proyecto):
+        print(linea)
     creaciones = [f for nombre in ("registrar_decision", "registrar_pendiente", "registrar_tarea")
                   for f in por.get(nombre, [])]
     duplicados = sum(1 for f in creaciones if f.get("duplicado"))

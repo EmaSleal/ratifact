@@ -25,10 +25,10 @@ El nombre del proyecto en `memoria-proyectos` está en el `CLAUDE.md` / `AGENTS.
    - **Ya existe** (siempre en `devuelta`, y a menudo en `fallida`): `git switch <rama>` y continúa sobre ella. No la recrees, no la rebases ni hagas `--amend` sobre commits anteriores: las correcciones van en commits nuevos.
    - **No existe:** créala **desde la rama principal** del repositorio (`main`, o `master` si no existe `main`): `git switch <principal> && git switch -c <rama>`.
    - Si la spec indica trabajar sobre otra rama existente, cámbiate a esa y no crees otra.
-6. Marca la tarea: `actualizar_tarea("<proyecto>", "$ARGUMENTS", "en_curso")`.
+6. Marca la tarea: `actualizar_tarea("<proyecto>", "$ARGUMENTS", "en_curso")`. Si la respuesta trae una **guía de integraciones** (p. ej. codegraph), síguela en los pasos 2–4: es condicional, úsala solo si tienes esas herramientas. Nunca guardes decisiones ni el estado de la tarea fuera de memoria-proyectos.
 
 ## 2. Ejecutar
-- Puedes apoyarte en el orquestador, los sub-agentes y las skills de tu entorno (p. ej. gentle-ai) para implementar; la spec define el contrato y los criterios de aceptación, no el método. Aprendizajes técnicos pueden ir a la memoria del agente (p. ej. engram); decisiones nuevas NO: proponlas al usuario para registrarlas en memoria-proyectos.
+- La spec define el contrato y los criterios de aceptación, no el método. Decisiones nuevas: proponlas al usuario para registrarlas en memoria-proyectos.
 - Implementa **solo** lo que pide la spec. Lo que esté en "Fuera de alcance" no se toca.
 - Si la spec es ambigua o contradice un ADR acordado, **detente y pregúntame** antes de decidir por tu cuenta.
 - Respeta las reglas del `CLAUDE.md` / `AGENTS.md` del repositorio.
@@ -41,6 +41,6 @@ Ejecuta el comando de la sección **"Cómo verificar"** de la spec, desde la ra�
 - **Pruebas en verde y criterios cumplidos:** haz commit en la rama (`T-NNN: <título>`; en una tarea devuelta, `T-NNN: correcciones de la revisión N`) y llama
   `actualizar_tarea("<proyecto>", "$ARGUMENTS", "en_revision", resultado=..., commit=<sha corto>)`.
 - **Algo falla y no se resuelve dentro del alcance:** haz commit del avance igualmente y llama `actualizar_tarea(..., "fallida", resultado=...)` explicando qué falla y por qué.
-- El `resultado` incluye: archivos tocados, pruebas ejecutadas con su conteo (pasan/fallan), criterio por criterio, y cualquier desvío respecto de la spec. En una tarea devuelta, recorre también cada criterio adicional de la revisión.
+- El `resultado` incluye: archivos tocados, pruebas ejecutadas con su conteo (pasan/fallan), criterio por criterio, cualquier desvío respecto de la spec, y una línea `Integraciones usadas: …` (p. ej. `codegraph (n consultas)`, o `ninguna`). En una tarea devuelta, recorre también cada criterio adicional de la revisión.
 - **No hagas merge a otra rama** ni marques la tarea como `integrada`: eso lo decido yo después de revisar.
 - **Nunca muevas, restaures, reescribas ni borres la rama principal ni ninguna rama que no sea la de la tarea** (nada de `git branch -f`, `git reset` sobre otras ramas, `git push --force` ni `git branch -D`), aunque veas que cambiaron mientras trabajabas: pudo haberlas integrado yo. Si notas un cambio inesperado, solo repórtalo en el `resultado`.

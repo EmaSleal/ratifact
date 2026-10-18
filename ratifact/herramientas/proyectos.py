@@ -11,6 +11,7 @@ from ratifact.app import _ejecutar, herramienta
 from ratifact.config import (BASE_PROYECTOS, CONFIG, MEM, _DIR, ErrorMemoria, _es_repo, _mem, _proyectos, _raiz,
                              _repos, _repos_de, _sugerencia_nombre)
 from ratifact.esquema import ARCHIVO_ESQUEMA, _bloqueo, _escribir_esquema
+from ratifact.integraciones.registro import _parsear_integraciones
 from ratifact.plantillas import PLANTILLA_AGENTES, PLANTILLA_INSTRUCCIONES
 from ratifact.registros import _commit, _escribir_atomico, _regenerar_vistas
 
@@ -177,10 +178,10 @@ def registrar_proyecto(nombre: str, ruta: str, memoria: str = "", pruebas: str =
 
 @herramienta
 def actualizar_proyecto(nombre: str, ruta: str = "", pruebas: str = "", repositorio: str = "",
-                        redetectar: bool = False) -> str:
+                        redetectar: bool = False, integraciones: str = "") -> str:
     """Actualiza un proyecto ya registrado en projects.json sin editarlo a mano. Reemplaza a configurar_pruebas
-    (eliminada). Indica al menos uno de `ruta`, `pruebas`, `repositorio` o `redetectar=True`; sin ninguno,
-    devuelve error y no toca el archivo.
+    (eliminada). Indica al menos uno de `ruta`, `pruebas`, `repositorio`, `redetectar=True` o `integraciones`;
+    sin ninguno, devuelve error y no toca el archivo.
     `ruta`: nueva carpeta del código, cuando se movió. Mismas validaciones que registrar_proyecto (debe quedar
     dentro de la carpeta de proyectos, ser una carpeta existente, y no contener la memoria del proyecto —
     ADR-010). Si el proyecto es de varios repos y el `pruebas` guardado queda con claves que ya no son repos
@@ -190,15 +191,18 @@ def actualizar_proyecto(nombre: str, ruta: str = "", pruebas: str = "", reposito
     `redetectar`: True para volver a detectar el comando a partir de los archivos del proyecto en vez de darlo
     con `pruebas` (ambos a la vez son incompatibles: no tiene sentido pedir redetección y dar el comando).
     En un proyecto de un solo repo redetecta el comando completo; en uno de varios repos redetecta todos, o
-    solo `repositorio` si se indica."""
+    solo `repositorio` si se indica.
+    `integraciones`: activa o apaga integraciones opcionales del proyecto, p. ej. "codegraph=off,gentle-ai=auto"
+    (valores auto|off; por defecto auto: se usan si se detectan). Una apagada no aparece en ninguna respuesta."""
     def f():
         proyectos = _proyectos()
         if nombre not in proyectos:
             sugerido = _sugerencia_nombre(nombre, proyectos)
             pista = f" ¿Quisiste decir '{sugerido}'?" if sugerido else f" Disponibles: {', '.join(proyectos)}"
             raise ErrorMemoria(f"Proyecto '{nombre}' no registrado.{pista}")
-        if not (ruta.strip() or pruebas.strip() or repositorio.strip() or redetectar):
-            raise ErrorMemoria("Nada para actualizar: indica `ruta`, `pruebas`, `repositorio` o `redetectar=True`.")
+        if not (ruta.strip() or pruebas.strip() or repositorio.strip() or redetectar or integraciones.strip()):
+            raise ErrorMemoria("Nada para actualizar: indica `ruta`, `pruebas`, `repositorio`, `redetectar=True` "
+                               "o `integraciones`.")
         if redetectar and pruebas.strip():
             raise ErrorMemoria("`redetectar` y `pruebas` son incompatibles: pedir que se redetecte el comando "
                                "y darlo a la vez no tiene sentido; usa uno de los dos.")
@@ -247,6 +251,14 @@ def actualizar_proyecto(nombre: str, ruta: str = "", pruebas: str = "", reposito
                 if huerfanas:
                     cambios.append(f"⚠ pruebas huérfanas (sin repo bajo la ruta nueva): {', '.join(huerfanas)}; "
                                    f"usa actualizar_proyecto('{nombre}', redetectar=True) para regenerarlas.")
+
+        if integraciones.strip():
+            nuevas, descripcion = _parsear_integraciones(integraciones, proyectos[nombre].get("integraciones"))
+            if nuevas:
+                proyectos[nombre]["integraciones"] = nuevas
+            else:
+                proyectos[nombre].pop("integraciones", None)
+            cambios.append(f"integraciones: {descripcion}")
 
         _escribir_atomico(CONFIG, json.dumps(proyectos, indent=2, ensure_ascii=False) + "\n")
         mensaje = f"'{nombre}' actualizado:\n" + "\n".join(f"- {c}" for c in cambios)

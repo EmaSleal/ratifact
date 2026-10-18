@@ -12,6 +12,7 @@ from ratifact.catalogo import _es_carpeta_de_registros, _linea, _registros_en, _
 from ratifact.config import (CARPETAS_IGNORADAS, EXT_TEXTO, LIMITE_INDICE, LIMITE_LECTURA, MEM, ErrorMemoria, _es_repo,
                              _mem, _proyectos, _raiz, _repos, _ruta_segura)
 from ratifact.esquema import _bloqueo, _version_esquema
+from ratifact.integraciones import registro as _integraciones
 from ratifact.listado import _listado
 from ratifact.registros import _clave_id, _commit, _escribir_atomico, _leer_registro, _resumen_tareas
 
@@ -61,7 +62,9 @@ def _aviso_indice(proyecto: str) -> str:
 
 @herramienta
 def obtener_contexto(proyecto: str) -> str:
-    """Carga inicial de un chat: devuelve INDEX.md y las decisiones abiertas. Llamar antes de responder."""
+    """Carga inicial de un chat: devuelve INDEX.md y las decisiones abiertas. Llamar antes de responder.
+    Al final, si hay integraciones activas (codegraph, gentle-ai, engram…), una línea con ellas y su guía para
+    planificar; esa guía es condicional: úsala solo si tienes sus herramientas."""
     def f():
         mem = _mem(proyecto)
         if _es_repo(mem):
@@ -87,6 +90,9 @@ def obtener_contexto(proyecto: str) -> str:
         aviso = _aviso_indice(proyecto)
         if aviso:
             partes.append(aviso)
+        integraciones = _integraciones._bloque_contexto(proyecto)
+        if integraciones:
+            partes.append(integraciones)
         return "\n\n---\n\n".join(partes)
     return _ejecutar(f)
 

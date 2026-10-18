@@ -48,7 +48,7 @@ Recomendado: marcar `registrar_proyecto` como "requiere aprobación" igual que `
 
 ### Actualizar un proyecto ya registrado
 
-`actualizar_proyecto(nombre, ruta="", pruebas="", repositorio="", redetectar=False)` corrige projects.json sin
+`actualizar_proyecto(nombre, ruta="", pruebas="", repositorio="", redetectar=False, integraciones="")` corrige projects.json sin
 editarlo a mano; reemplaza a la antigua `configurar_pruebas` (eliminada). Indique al menos uno de estos campos
 (sin ninguno, la herramienta falla y no toca el archivo):
 - `ruta`: nueva carpeta del código, cuando el proyecto se movió. Mismas validaciones que `registrar_proyecto`
@@ -64,6 +64,12 @@ editarlo a mano; reemplaza a la antigua `configurar_pruebas` (eliminada). Indiqu
   `pruebas` (ambos a la vez son incompatibles). En un proyecto de un solo repositorio redetecta el comando
   completo; en uno de varios repositorios redetecta todos, o solo `repositorio` si se indica. Es la forma de
   recuperar el comportamiento que antes tenía `configurar_pruebas()` llamada sin argumentos.
+- `integraciones`: activa o apaga integraciones opcionales, p. ej. `"codegraph=off,gentle-ai=auto"` (valores
+  `auto`|`off`; por defecto `auto`). Se guarda en `projects.json` bajo `"integraciones"` (solo las `off`). Un
+  nombre o valor desconocido se rechaza listando los válidos. codegraph (`.codegraph/`) y gentle-ai (`.atl/`) se
+  detectan en la carpeta del proyecto o en cualquiera de sus repos; engram no se detecta (solo guía condicional).
+  Las activas aparecen en `obtener_contexto` (una línea + guía para planificar), en `registrar_tarea` (la línea) y
+  en `actualizar_tarea(..., "en_curso")` (guía para ejecutar, verificar y cerrar); una apagada no aparece nunca.
 No cubre renombrar un proyecto ni mover la ubicación de su memoria (`.memorias/<nombre>` o la clave `"memoria"`):
 para eso edite `projects.json` a mano y mueva la carpeta con `git mv`/`mv` según corresponda.
 
@@ -211,6 +217,7 @@ vive en `ratifact/` (ADR-020); ningún módulo supera 300 líneas y no hay impor
 | `ratifact/listado.py` | Listado con profundidad adaptativa de `listar_documentos` (ADR-023): `_listado` (presupuesto `LIMITE_LISTADO_ENTRADAS`/`LIMITE_LISTADO_CARACTERES` en config). |
 | `ratifact/plantillas.py` | `PLANTILLA_INSTRUCCIONES`, `PLANTILLA_AGENTES` y `TEXTO_CIERRE`. |
 | `ratifact/prompts.py` | Prompts `inicio` y `cierre`. |
+| `ratifact/integraciones/` | Integraciones opcionales (ADR-024, ADR-025): `base.py` (descriptor `Integracion`, `FASES`), un módulo por integración (`codegraph.py`, `gentle_ai.py`, `engram.py`) y `registro.py` (`INTEGRACIONES`, detección en disco en cada llamada, guía para `obtener_contexto`/`registrar_tarea`/`actualizar_tarea` y el parseo de `integraciones`). Agregar una = un módulo + registrarlo. Nunca llama a otros MCP. |
 | `ratifact/herramientas/contexto_documentos.py` | `listar_proyectos`, `obtener_contexto`, `buscar`, `listar_documentos`, `leer_documento`, `crear_documento`, `guardar_documento`, `actualizar_indice`. |
 | `ratifact/herramientas/decisiones.py` | `registrar_decision`, `confirmar_decision`, `confirmar_decisiones_lote`, `revisar_propuestas`, `decidir_propuestas`, `descartar_decision`, `reemplazar_decision`. |
 | `ratifact/herramientas/pendientes_sesiones.py` | `registrar_pendiente`, `cerrar_pendiente`, `registrar_sesion`. |
