@@ -46,7 +46,7 @@ def test_contexto_incluye_indice_abiertas_propuestas_y_tareas(srv, proyecto):
     srv.registrar_decision(proyecto="demo", titulo="X", decision="d", justificacion="j")
     srv.registrar_tarea(proyecto="demo", titulo="T", objetivo="o", criterios_aceptacion="c")
     ctx = srv.obtener_contexto(proyecto="demo")
-    assert "Estado: fase A" in ctx and "Decisiones abiertas" in ctx
+    assert "Estado: fase A" in ctx and "# Pendientes abiertos (0)" in ctx
     assert "pendientes de confirmar por el usuario: ADR-001" in ctx and "T-001" in ctx
 
 

@@ -3,11 +3,13 @@ from __future__ import annotations
 
 from ratifact import registros as _registros  # _ahora se busca en su módulo: las pruebas la reemplazan ahí
 from ratifact.app import _ejecutar, herramienta
+from ratifact.catalogo import _registros_en
 from ratifact.config import ErrorMemoria, _mem, _proyectos, _repos
 from ratifact.esquema import _bloqueo
 from ratifact.integraciones import registro as _integraciones
 from ratifact.registros import (_buscar_registro, _commit, _duplicado_reciente, _escribir_registro, _hoy,
-                                _leer_registro, _mensaje_duplicado, _resumen_tareas, _siguiente_id, _slug)
+                                _ids_resuelve, _leer_registro, _mensaje_duplicado, _resumen_tareas, _siguiente_id,
+                                _slug, _texto_resuelve)
 
 
 # ───────────────────────── tareas para Claude Code ─────────────────────────
@@ -33,16 +35,37 @@ def _comando_pruebas(proyecto: str, repositorio: str = "") -> str:
     return cfg
 
 
+def _pendientes_abiertos(proyecto: str) -> dict[str, str]:
+    """Id → tema de cada pendiente abierto, desde el catálogo (ADR-022)."""
+    return {r.id: r.titulo for r in _registros_en(proyecto, "P") if r.estado == "abierta"}
+
+
+def _validar_resuelve(proyecto: str, resuelve: str) -> list[tuple[str, bool]]:
+    """`resuelve` de registrar_tarea (ADR-027): cada id debe existir y estar abierto; si no, ErrorMemoria con todos los
+    inválidos (y no se escribe nada)."""
+    ids = _ids_resuelve(resuelve)
+    abiertos = _pendientes_abiertos(proyecto)
+    existentes = {r.id for r in _registros_en(proyecto, "P")}
+    malos = [f"{i} ({'no está abierto' if i in existentes else 'no existe'})" for i, _ in ids if i not in abiertos]
+    if malos:
+        raise ErrorMemoria(f"`resuelve` inválido: {', '.join(malos)}. Solo pendientes abiertos (P-NNN, opcional "
+                           "\"(parcial)\").")
+    return ids
+
+
 @herramienta
 def registrar_tarea(proyecto: str, titulo: str, objetivo: str, criterios_aceptacion: str,
                     decisiones: str = "", archivos: str = "", fuera_de_alcance: str = "",
-                    notas: str = "", repositorio: str = "") -> str:
+                    notas: str = "", repositorio: str = "", resuelve: str = "") -> str:
     """Crea una especificación de trabajo para Claude Code en .project/tareas/T-NNN.md (estado 'pendiente').
     En proyectos de varios repos, `repositorio` (obligatorio) indica la carpeta donde se trabaja; en proyectos de
     un solo repositorio se ignora (la respuesta lo avisa).
     Debe ser autosuficiente: Claude Code la ejecuta sin este chat. `criterios_aceptacion`: lista verificable
     (pruebas que deben pasar, comportamiento observable). `decisiones`: ids de ADR aplicables.
     `archivos`: rutas que probablemente se tocan. El usuario la ejecuta con /tarea T-NNN en Claude Code.
+    `resuelve`: pendientes que la tarea resuelve, separados por coma, cada uno opcionalmente con "(parcial)"
+    (p. ej. "P-036, P-037 (parcial)"); deben existir y estar abiertos. Se guarda en la tarea (sección "Resuelve") y,
+    al integrarla, actualizar_tarea recuerda los que sigan abiertos. Nunca cierra pendientes.
     La respuesta agrega la línea de integraciones detectadas (no se escribe en la tarea).
     Idempotente (ADR-019): si ya hay una tarea con este título (sin distinguir mayúsculas ni espacios) creada
     en los últimos minutos Y TODAVÍA en estado 'pendiente', no crea nada nuevo y devuelve el id existente
@@ -62,6 +85,7 @@ def registrar_tarea(proyecto: str, titulo: str, objetivo: str, criterios_aceptac
             dup = _duplicado_reciente(carpeta, "T", "titulo", titulo, "pendiente")
             if dup:
                 return _mensaje_duplicado(dup["id"], f"Ejecutar en Claude Code: /tarea {dup['id']}") + nota
+            ids = _validar_resuelve(proyecto, resuelve) if resuelve.strip() else []
             id_ = _siguiente_id(carpeta, "T")
             ruta = carpeta / f"{id_}-{_slug(titulo)}.md"
             meta = {"id": id_, "titulo": titulo, "estado": "pendiente", "fecha": _hoy(),
@@ -69,8 +93,14 @@ def registrar_tarea(proyecto: str, titulo: str, objetivo: str, criterios_aceptac
                     "rama": f"{id_.lower()}-{_slug(titulo)}"}
             if repo:
                 meta["repositorio"] = repo
+            if ids:
+                meta["resuelve"] = _texto_resuelve(ids)
             secciones = [f"# {id_} — {titulo}", "## Objetivo", objetivo,
                          "## Criterios de aceptación", criterios_aceptacion]
+            if ids:
+                temas = _pendientes_abiertos(proyecto)
+                secciones += ["## Resuelve", "\n".join(f"- {i}{' (parcial)' if parcial else ''} · {temas[i]}"
+                                                        for i, parcial in ids)]
             for nombre, valor in (("Decisiones aplicables", decisiones), ("Archivos involucrados", archivos),
                                   ("Fuera de alcance", fuera_de_alcance), ("Notas", notas)):
                 if valor:
@@ -89,6 +119,14 @@ def registrar_tarea(proyecto: str, titulo: str, objetivo: str, criterios_aceptac
     return _ejecutar(f)
 
 
+def _recordatorio_resuelve(proyecto: str, resuelve: str) -> str:
+    """Al integrar (ADR-027): los pendientes declarados en `resuelve` que siguen abiertos, con qué hacer en cada caso."""
+    abiertos = _pendientes_abiertos(proyecto) if resuelve else {}
+    return "\n".join(f"{i} (parcial) sigue abierto: registra qué falta" if parcial else
+                     f'{i} sigue abierto: ciérralo con cerrar_pendiente("{proyecto}", "{i}", ...) si quedó resuelto'
+                     for i, parcial in _ids_resuelve(resuelve) if i in abiertos)
+
+
 @herramienta
 def actualizar_tarea(proyecto: str, id: str, estado: str, resultado: str = "", commit: str = "") -> str:
     """Cambia el estado de una tarea (pendiente, en_curso, en_revision, fallida, integrada, descartada).
@@ -96,7 +134,9 @@ def actualizar_tarea(proyecto: str, id: str, estado: str, resultado: str = "", c
     'integrada' y 'descartada' solo con confirmación explícita del usuario.
     Para pedir correcciones tras revisar una tarea usa `devolver_tarea`, no este cambio de estado.
     Con 'en_curso', la respuesta trae la guía de integraciones activas (ejecutar, verificar, cerrar), calculada en
-    ese momento; es condicional: síguela solo si tienes esas herramientas. No se escribe en la tarea."""
+    ese momento; es condicional: síguela solo si tienes esas herramientas. No se escribe en la tarea.
+    Con 'integrada', si la tarea declara `resuelve`, la respuesta recuerda los pendientes que siguen abiertos (no
+    cierra ni modifica ninguno)."""
     def f():
         if estado not in ESTADOS_TAREA:
             raise ErrorMemoria(f"Estado inválido. Usa: {', '.join(ESTADOS_TAREA)}")
@@ -116,6 +156,8 @@ def actualizar_tarea(proyecto: str, id: str, estado: str, resultado: str = "", c
             _escribir_registro(ruta, meta, cuerpo)
             sha = _commit(proyecto, [ruta], f"{meta['id']} → {estado}")
             guia = _integraciones._guia_en_curso(proyecto) if estado == "en_curso" else ""
+            if estado == "integrada":
+                guia = _recordatorio_resuelve(proyecto, meta.get("resuelve", ""))
             return f"{meta['id']} → {estado} · commit {sha}" + (f"\n\n{guia}" if guia else "")
     return _ejecutar(f)
 

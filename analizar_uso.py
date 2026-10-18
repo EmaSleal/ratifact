@@ -13,16 +13,19 @@ import argparse
 import datetime as dt
 import json
 import os
+import re
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from ratifact.registros import _leer_registro  # noqa: E402  (solo biblioteca estándar: no requiere mcp)
+from ratifact.registros import _ids_resuelve, _leer_registro, _normalizar_id, _numero_id as _numero  # noqa: E402
 
 LOG_POR_DEFECTO = Path(__file__).resolve().parent / "logs" / "uso.jsonl"   # igual que LOG_USO del servidor
 ESTADOS_DECISION = ("acordada", "propuesta", "reemplazada", "descartada")
 DIAS_PROPUESTA_VIEJA = 7
+TOKENS_ARRANQUE = 2000   # ADR-026: referencia de obtener_contexto (~8.000 caracteres)
+SECCIONES_EXCLUIDAS = {"Fuera de alcance", "Notas", "Cómo verificar", "Resuelve"}   # no cuentan como mención
 EXT_CODIGO = {".java", ".py", ".ts", ".js", ".vue", ".sql", ".xml", ".yml", ".yaml", ".kt"}
 
 
@@ -88,6 +91,87 @@ def indicador_decisiones(desde: dt.datetime, proyecto: str | None) -> list[str]:
     return lineas + viejas
 
 
+def tamano_contexto(filas: list[dict]) -> list[str]:
+    """ADR-026: tamaño de la respuesta de obtener_contexto por proyecto (p50/máx en caracteres y ~tokens = /4)."""
+    por = defaultdict(list)
+    for f in filas:
+        if f["herramienta"] == "obtener_contexto":
+            por[f.get("proyecto")].append(f["resp_chars"])
+    lineas = []
+    for nombre, tam in sorted(por.items(), key=lambda kv: str(kv[0])):
+        tam.sort()
+        p50, maximo = percentil(tam, 0.5), tam[-1]
+        aviso = f"  ⚠ > {TOKENS_ARRANQUE:,} tokens" if p50 / 4 > TOKENS_ARRANQUE else ""
+        lineas.append(f"  {nombre}: p50 {p50} caracteres (~{p50 // 4} tokens) · máx {maximo} (~{maximo // 4} tokens) "
+                      f"· {len(tam)} llamadas{aviso}")
+    return lineas
+
+
+def _fecha_integracion(meta: dict, cuerpo: str) -> str:
+    """Fecha de "### AAAA-MM-DD · integrada" en el Resultado (la última); si no está, `actualizada` o `fecha`."""
+    fechas = re.findall(r"^### (\d{4}-\d{2}-\d{2}) · integrada\b", cuerpo, re.M)
+    return fechas[-1] if fechas else meta.get("actualizada") or meta.get("fecha", "?")
+
+
+def _menciones(cuerpo: str) -> tuple[set, set]:
+    """Ids P-NNN del texto de una tarea, separados en (spec, resultado). Spec: todo fuera de "## Resultado" (título,
+    Objetivo, Criterios, Decisiones, Archivos) más los bloques "### Revisión N" del Resultado. Se excluyen Fuera de
+    alcance, Notas, Cómo verificar y Resuelve (lo declarado va aparte)."""
+    spec, resultado = set(), set()
+    seccion, revision = "", False
+    for linea in cuerpo.splitlines():
+        if linea.startswith("## "):
+            seccion, revision = linea[3:].strip(), False
+        elif linea.startswith("### ") and seccion == "Resultado":
+            revision = linea[4:].startswith("Revisión")
+        if seccion in SECCIONES_EXCLUIDAS:
+            continue
+        destino = resultado if seccion == "Resultado" and not revision else spec
+        destino.update(_normalizar_id(m) for m in re.findall(r"(?<![\w-])[Pp]-\d+\b", linea))
+    return spec, resultado
+
+
+def higiene_pendientes(proyecto: str | None) -> list[str]:
+    """ADR-027: pendientes abiertos referenciados por tareas integradas, por proyecto: declarados en `resuelve` y
+    mencionados en el texto (spec y Resultado), cada uno con la tarea y su fecha de integración."""
+    config = ruta_config()
+    try:
+        proyectos = json.loads(config.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return [f"- sin configuración ({config})"]
+    lineas = []
+    for nombre, p in proyectos.items():
+        if proyecto and nombre != proyecto:
+            continue
+        mem = _memoria(nombre, p)
+        abiertos = set()
+        for archivo in (mem / "pendientes").glob("P-*.md"):
+            meta, _ = _leer_registro(archivo)
+            if meta.get("estado") == "abierta":
+                abiertos.add(_normalizar_id(meta.get("id") or archivo.stem))
+        grupos = {"declarados en resuelve": defaultdict(list), "mencionados en la spec": defaultdict(list),
+                  "mencionados en el Resultado": defaultdict(list)}
+        for archivo in (mem / "tareas").glob("T-*.md"):
+            meta, cuerpo = _leer_registro(archivo)
+            if meta.get("estado") != "integrada":
+                continue
+            id_tarea = _normalizar_id(meta.get("id") or re.match(r"T-\d+", archivo.name).group(0))
+            ref = (id_tarea, _fecha_integracion(meta, cuerpo))
+            spec, resultado = _menciones(cuerpo)
+            for clave, ids in (("declarados en resuelve", {i for i, _ in _ids_resuelve(meta.get("resuelve", ""))}),
+                               ("mencionados en la spec", spec), ("mencionados en el Resultado", resultado)):
+                for i in ids & abiertos:
+                    grupos[clave][i].append(ref)
+        lineas.append(f"  {nombre}")
+        for clave, por_id in grupos.items():
+            lineas.append(f"    {clave}:" + ("" if por_id else " (ninguno)"))
+            for i in sorted(por_id, key=_numero):
+                refs = ", ".join(f"{t} (integrada {fecha})"
+                                 for t, fecha in sorted(por_id[i], key=lambda r: _numero(r[0])))
+                lineas.append(f"      {i}: {refs}")
+    return lineas
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dias", type=int, default=7)
@@ -132,6 +216,12 @@ def main():
     if ctx:
         print(f"- Costo de arranque por chat: ~{sum(f['resp_chars'] for f in ctx) / len(ctx) / 4:.0f} tokens "
               f"(objetivo < 2000). Chats iniciados: {len(ctx)}")
+    tamanos = tamano_contexto(filas)
+    if tamanos:
+        print(f"- Tamaño de obtener_contexto por proyecto (referencia {TOKENS_ARRANQUE:,} tokens = "
+              f"{TOKENS_ARRANQUE * 4:,} caracteres; aviso si el p50 la supera):")
+        for linea in tamanos:
+            print(linea)
     lecturas = por.get("leer_documento", [])
     busquedas = por.get("buscar", [])
     if lecturas or busquedas:
@@ -175,6 +265,9 @@ def main():
     print(f"- ADR-009 criterio 2 (≥300 llamadas, <1 % de fallas internas, 14 días corridos de telemetría): "
           f"{len(filas)} llamadas · {corridos} días corridos desde el primer registro · {len(dias)} días con uso "
           f"→ {'CUMPLE' if cumple else 'aún no'}")
+    print("\nPendientes abiertos referenciados por tareas integradas")
+    for linea in higiene_pendientes(a.proyecto):
+        print(linea)
     errores = internos + rechazos
     if errores:
         print("\nÚltimos errores")

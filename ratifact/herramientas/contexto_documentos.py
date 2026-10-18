@@ -8,7 +8,7 @@ from pathlib import Path
 
 from ratifact.app import _ejecutar, herramienta
 from ratifact.busqueda import _resultados
-from ratifact.catalogo import _es_carpeta_de_registros, _linea, _registros_en, _resolver_id
+from ratifact.catalogo import _bloque_pendientes, _es_carpeta_de_registros, _linea, _registros_en, _resolver_id
 from ratifact.config import (CARPETAS_IGNORADAS, EXT_TEXTO, LIMITE_INDICE, LIMITE_LECTURA, MEM, ErrorMemoria, _es_repo,
                              _mem, _proyectos, _raiz, _repos, _ruta_segura)
 from ratifact.esquema import _bloqueo, _version_esquema
@@ -62,7 +62,8 @@ def _aviso_indice(proyecto: str) -> str:
 
 @herramienta
 def obtener_contexto(proyecto: str) -> str:
-    """Carga inicial de un chat: devuelve INDEX.md y las decisiones abiertas. Llamar antes de responder.
+    """Carga inicial de un chat: devuelve INDEX.md y los pendientes abiertos (una línea cada uno: id, tema, fecha;
+    el detalle se lee con leer_documento). Llamar antes de responder.
     Al final, si hay integraciones activas (codegraph, gentle-ai, engram…), una línea con ellas y su guía para
     planificar; esa guía es condicional: úsala solo si tienes sus herramientas."""
     def f():
@@ -76,9 +77,9 @@ def obtener_contexto(proyecto: str) -> str:
             partes.append(f"⚠ La ruta registrada de '{proyecto}' ya no existe en disco ({raiz}); el contexto de "
                           f"memoria de abajo sigue siendo válido. Corrígela con actualizar_proyecto(\"{proyecto}\", "
                           "ruta=\"<ruta nueva>\").")
-        for nombre in ("INDEX.md", "abiertas.md"):
-            r = mem / nombre
-            partes.append(r.read_text(encoding="utf-8") if r.exists() else f"({nombre} no existe)")
+        indice = mem / "INDEX.md"
+        partes.append(indice.read_text(encoding="utf-8") if indice.exists() else "(INDEX.md no existe)")
+        partes.append(_bloque_pendientes(proyecto))     # ADR-026: del catálogo, no abiertas.md
         propuestas = ["-".join(p.stem.split("-", 2)[:2]) for p in (mem / "decisiones").glob("ADR-*.md")
                       if _leer_registro(p)[0].get("estado") == "propuesta"]
         if propuestas:

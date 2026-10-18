@@ -47,7 +47,8 @@ def test_catalogo_lee_el_frontmatter_en_cada_llamada_sin_escribir(srv, memoria):
     filas = catalogo._catalogo("demo")
     assert _archivos(memoria) == antes                                   # nada escrito en disco
     por_id = {r.id: r for r in filas}
-    assert por_id["T-024"] == ("T-024", "tarea", "Navegación por id", "pendiente", ".project/tareas/T-024-navegación-por-id.md")
+    assert por_id["T-024"] == ("T-024", "tarea", "Navegación por id", "pendiente",
+                               ".project/tareas/T-024-navegación-por-id.md", "")   # sin `fecha` en el frontmatter
     assert por_id["P-008"].titulo == "Tema 8" and por_id["P-008"].tipo == "pendiente"
     assert por_id["ADR-020"].ruta == f".project/decisiones/{ADR_020}" and por_id["ADR-020"].estado == "acordada"
     assert [r.id for r in filas if r.tipo == "tarea"] == ["T-001", "T-010", "T-024", "T-1000"]

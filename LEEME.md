@@ -92,6 +92,14 @@ Ciclo de revisión: `pendiente` → `en_curso` → `en_revision` → (`devuelta`
 Una tarea devuelta se corrige en la misma rama con commits nuevos; cada devolución queda como "Revisión N" en la tarea.
 `actualizar_tarea` rechaza pasar de `en_revision` a `pendiente`: devolver es siempre `devolver_tarea`.
 
+Pendientes que resuelve una tarea (ADR-027): `registrar_tarea(..., resuelve="P-036, P-037 (parcial)")` — ids separados por
+coma, cada uno opcionalmente con `(parcial)` (sin distinguir mayúsculas ni espacios; `p-36` vale como `P-036`). Cada id
+debe existir y estar abierto; si alguno no, la herramienta lo rechaza nombrando los inválidos y no escribe nada. Se guarda
+en el frontmatter (`resuelve: P-036, P-037 (parcial)`) y como sección "## Resuelve" de la tarea; sin `resuelve`, ni campo
+ni sección. Al marcar la tarea `integrada`, la respuesta recuerda cada pendiente declarado que siga abierto: los completos
+con la llamada a `cerrar_pendiente` y los parciales pidiendo registrar qué falta. Nunca se cierra ni se modifica un
+pendiente automáticamente.
+
 ## 6. Ubicación de la memoria
 Con la clave `"memoria"` en `projects.json`, la memoria vive fuera del repositorio del código (repo git propio) y no depende
 de la rama activa. Recomendado para todos los proyectos. Las herramientas siguen usando rutas `.project/...`.
@@ -102,6 +110,16 @@ el contenido). Resumen: `python3 ~/Projects/.memoria-proyectos/analizar_uso.py -
 El script lee el mismo log que escribe el servidor: `--log <ruta>` si se indica, si no `MEMORIA_PROYECTOS_LOG`, y si no
 `logs/uso.jsonl`. Si el archivo no existe, lo informa con su ruta y termina con error.
 `obtener_contexto` avisa cuando INDEX.md acumula 5 o más cambios sin regenerarse.
+Arranque compacto (ADR-026): `obtener_contexto` ya no incluye `abiertas.md`. Después de INDEX.md muestra
+"# Pendientes abiertos (N)" con una línea por pendiente abierto (`- P-NNN · <tema> (<fecha>)`, en orden numérico, tema
+cortado a 100 caracteres, sin extracto ni dueño) y cierra con `Detalle: leer_documento("<proyecto>", "P-NNN")`; sin
+pendientes abiertos, solo "# Pendientes abiertos (0)". "Cerradas recientemente" no sale en el arranque. `abiertas.md`
+sigue generándose en disco igual que antes.
+El resumen de `analizar_uso.py` agrega el tamaño de `obtener_contexto` por proyecto (p50/máx en caracteres y ~tokens,
+con aviso si el p50 supera la referencia de 2.000 tokens = 8.000 caracteres) y la sección "Pendientes abiertos
+referenciados por tareas integradas": por proyecto, los declarados en `resuelve` y los mencionados en el texto de la
+tarea (spec —objetivo, criterios, revisiones— y Resultado; no cuentan Fuera de alcance, Notas ni Cómo verificar), con
+la tarea y su fecha de integración.
 
 ## 8. Confirmación de decisiones
 Toda decisión nace como propuesta. La única vía a "acordada" es `confirmar_decision`, que exige la frase literal del
@@ -212,7 +230,7 @@ vive en `ratifact/` (ADR-020); ningún módulo supera 300 líneas y no hay impor
 | `ratifact/config.py` | Rutas y configuración: `CONFIG` (projects.json), `BASE_PROYECTOS`, `ErrorMemoria`, `_proyectos`, `_raiz`, `_mem`, ayudantes de repositorios, `_ruta_segura`, `_zonas_escritura`. |
 | `ratifact/esquema.py` | `VERSION_ESQUEMA`, `MIGRACIONES`, funciones de migración y `_bloqueo` (el bloqueo de escritura que aplica las migraciones). |
 | `ratifact/registros.py` | Frontmatter (lectura/escritura), `_escribir_atomico`, `_commit`, ids y slugs, idempotencia (ADR-019), `_regenerar_vistas`, `_resumen_tareas`, `_hoy`/`_ahora`. |
-| `ratifact/catalogo.py` | Catálogo de la memoria derivado en cada llamada (ADR-022): `_catalogo`, resolución de ids de `leer_documento` (`_resolver_id`), registros de `listar_documentos` y coincidencias por id/título de `buscar` (id exacto y hasta 5 títulos al inicio de palabra). Sin índice, caché ni watcher. |
+| `ratifact/catalogo.py` | Catálogo de la memoria derivado en cada llamada (ADR-022): `_catalogo`, resolución de ids de `leer_documento` (`_resolver_id`), registros de `listar_documentos` y coincidencias por id/título de `buscar` (id exacto y hasta 5 títulos al inicio de palabra) y el bloque de pendientes abiertos de `obtener_contexto` (`_bloque_pendientes`, ADR-026). Sin índice, caché ni watcher. |
 | `ratifact/busqueda.py` | Respuesta de `buscar` con cuotas por sección: catálogo, luego memoria y código a partes iguales (lo que un lado no usa pasa al otro), y la línea final con lo omitido por sección. |
 | `ratifact/listado.py` | Listado con profundidad adaptativa de `listar_documentos` (ADR-023): `_listado` (presupuesto `LIMITE_LISTADO_ENTRADAS`/`LIMITE_LISTADO_CARACTERES` en config). |
 | `ratifact/plantillas.py` | `PLANTILLA_INSTRUCCIONES`, `PLANTILLA_AGENTES` y `TEXTO_CIERRE`. |

@@ -1,6 +1,7 @@
 """Catálogo de la memoria (ADR-022): id, tipo, título, estado y ruta de cada registro de .project/decisiones,
 pendientes y tareas, leído del frontmatter en cada llamada. No se guarda nada en disco: sin índice, sin caché, sin
-watcher. Alimenta la resolución de ids de leer_documento, el listado de registros y los resultados de buscar."""
+watcher. Alimenta la resolución de ids de leer_documento, el listado de registros, los resultados de buscar y
+los pendientes abiertos de obtener_contexto."""
 from __future__ import annotations
 
 import re
@@ -22,6 +23,7 @@ class Registro(NamedTuple):
     titulo: str
     estado: str
     ruta: str        # relativa al proyecto: ".project/<carpeta>/<archivo>"
+    fecha: str = ""  # fecha de creación del frontmatter (AAAA-MM-DD)
 
 
 def _registros_de(mem: Path, prefijo: str) -> list[Registro]:
@@ -34,7 +36,7 @@ def _registros_de(mem: Path, prefijo: str) -> list[Registro]:
         meta, _ = _leer_registro(p)
         id_ = _normalizar_id(meta.get("id") or re.match(rf"{prefijo}-\d+", p.name).group(0))
         filas.append(Registro(id_, tipo, meta.get("titulo") or meta.get("tema", ""), meta.get("estado", ""),
-                              f"{MEM}/{carpeta}/{p.name}"))
+                              f"{MEM}/{carpeta}/{p.name}", meta.get("fecha", "")))
     return filas
 
 
@@ -46,6 +48,22 @@ def _catalogo(proyecto: str) -> list[Registro]:
 
 def _linea(r: Registro, separador: str = " ") -> str:
     return f"{r.id} · {r.estado} · {r.titulo}{separador}({r.ruta})"
+
+
+TOPE_TEMA = 100   # caracteres del tema de un pendiente en el arranque; más largo se corta a 99 + "…"
+
+
+def _bloque_pendientes(proyecto: str) -> str:
+    """Pendientes abiertos para obtener_contexto (ADR-026): una línea por pendiente, en orden numérico de id, desde el
+    catálogo (sin extracto ni dueño). abiertas.md sigue en disco con su formato; el arranque ya no lo incluye."""
+    abiertos = [r for r in _registros_en(proyecto, "P") if r.estado == "abierta"]
+    lineas = [f"# Pendientes abiertos ({len(abiertos)})"]
+    for r in abiertos:
+        tema = r.titulo if len(r.titulo) <= TOPE_TEMA else r.titulo[:TOPE_TEMA - 1] + "…"
+        lineas.append(f"- {r.id} · {tema} ({r.fecha})")
+    if abiertos:
+        lineas.append(f'Detalle: leer_documento("{proyecto}", "P-NNN")')
+    return "\n".join(lineas)
 
 
 def _id_de_ruta(ruta: str) -> str | None:

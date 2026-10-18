@@ -65,7 +65,7 @@
       "nombre": "actualizar_proyecto"
     },
     {
-      "descripcion": "Cambia el estado de una tarea (pendiente, en_curso, en_revision, fallida, integrada, descartada).\n    `resultado`: qué se hizo, pruebas ejecutadas y su salida resumida, desvíos respecto de la spec.\n    'integrada' y 'descartada' solo con confirmación explícita del usuario.\n    Para pedir correcciones tras revisar una tarea usa `devolver_tarea`, no este cambio de estado.\n    Con 'en_curso', la respuesta trae la guía de integraciones activas (ejecutar, verificar, cerrar), calculada en\n    ese momento; es condicional: síguela solo si tienes esas herramientas. No se escribe en la tarea.",
+      "descripcion": "Cambia el estado de una tarea (pendiente, en_curso, en_revision, fallida, integrada, descartada).\n    `resultado`: qué se hizo, pruebas ejecutadas y su salida resumida, desvíos respecto de la spec.\n    'integrada' y 'descartada' solo con confirmación explícita del usuario.\n    Para pedir correcciones tras revisar una tarea usa `devolver_tarea`, no este cambio de estado.\n    Con 'en_curso', la respuesta trae la guía de integraciones activas (ejecutar, verificar, cerrar), calculada en\n    ese momento; es condicional: síguela solo si tienes esas herramientas. No se escribe en la tarea.\n    Con 'integrada', si la tarea declara `resuelve`, la respuesta recuerda los pendientes que siguen abiertos (no\n    cierra ni modifica ninguno).",
       "esquema_entrada": {
         "properties": {
           "commit": {
@@ -482,7 +482,7 @@
       "nombre": "listar_tareas"
     },
     {
-      "descripcion": "Carga inicial de un chat: devuelve INDEX.md y las decisiones abiertas. Llamar antes de responder.\n    Al final, si hay integraciones activas (codegraph, gentle-ai, engram…), una línea con ellas y su guía para\n    planificar; esa guía es condicional: úsala solo si tienes sus herramientas.",
+      "descripcion": "Carga inicial de un chat: devuelve INDEX.md y los pendientes abiertos (una línea cada uno: id, tema, fecha;\n    el detalle se lee con leer_documento). Llamar antes de responder.\n    Al final, si hay integraciones activas (codegraph, gentle-ai, engram…), una línea con ellas y su guía para\n    planificar; esa guía es condicional: úsala solo si tienes sus herramientas.",
       "esquema_entrada": {
         "properties": {
           "proyecto": {
@@ -654,7 +654,7 @@
       "nombre": "registrar_sesion"
     },
     {
-      "descripcion": "Crea una especificación de trabajo para Claude Code en .project/tareas/T-NNN.md (estado 'pendiente').\n    En proyectos de varios repos, `repositorio` (obligatorio) indica la carpeta donde se trabaja; en proyectos de\n    un solo repositorio se ignora (la respuesta lo avisa).\n    Debe ser autosuficiente: Claude Code la ejecuta sin este chat. `criterios_aceptacion`: lista verificable\n    (pruebas que deben pasar, comportamiento observable). `decisiones`: ids de ADR aplicables.\n    `archivos`: rutas que probablemente se tocan. El usuario la ejecuta con /tarea T-NNN en Claude Code.\n    La respuesta agrega la línea de integraciones detectadas (no se escribe en la tarea).\n    Idempotente (ADR-019): si ya hay una tarea con este título (sin distinguir mayúsculas ni espacios) creada\n    en los últimos minutos Y TODAVÍA en estado 'pendiente', no crea nada nuevo y devuelve el id existente\n    (con el comando /tarea para repetírselo al usuario). Si esa tarea ya cambió de estado (p. ej. en_curso:\n    ya se está ejecutando), un humano o el agente de código ya intervino, así que se registra una tarea\n    nueva.",
+      "descripcion": "Crea una especificación de trabajo para Claude Code en .project/tareas/T-NNN.md (estado 'pendiente').\n    En proyectos de varios repos, `repositorio` (obligatorio) indica la carpeta donde se trabaja; en proyectos de\n    un solo repositorio se ignora (la respuesta lo avisa).\n    Debe ser autosuficiente: Claude Code la ejecuta sin este chat. `criterios_aceptacion`: lista verificable\n    (pruebas que deben pasar, comportamiento observable). `decisiones`: ids de ADR aplicables.\n    `archivos`: rutas que probablemente se tocan. El usuario la ejecuta con /tarea T-NNN en Claude Code.\n    `resuelve`: pendientes que la tarea resuelve, separados por coma, cada uno opcionalmente con \"(parcial)\"\n    (p. ej. \"P-036, P-037 (parcial)\"); deben existir y estar abiertos. Se guarda en la tarea (sección \"Resuelve\") y,\n    al integrarla, actualizar_tarea recuerda los que sigan abiertos. Nunca cierra pendientes.\n    La respuesta agrega la línea de integraciones detectadas (no se escribe en la tarea).\n    Idempotente (ADR-019): si ya hay una tarea con este título (sin distinguir mayúsculas ni espacios) creada\n    en los últimos minutos Y TODAVÍA en estado 'pendiente', no crea nada nuevo y devuelve el id existente\n    (con el comando /tarea para repetírselo al usuario). Si esa tarea ya cambió de estado (p. ej. en_curso:\n    ya se está ejecutando), un humano o el agente de código ya intervino, así que se registra una tarea\n    nueva.",
       "esquema_entrada": {
         "properties": {
           "archivos": {
@@ -692,6 +692,11 @@
           "repositorio": {
             "default": "",
             "title": "Repositorio",
+            "type": "string"
+          },
+          "resuelve": {
+            "default": "",
+            "title": "Resuelve",
             "type": "string"
           },
           "titulo": {

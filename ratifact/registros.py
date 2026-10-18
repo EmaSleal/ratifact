@@ -98,6 +98,22 @@ def _normalizar_id(id_: str) -> str:
     return f"{m.group(1).upper()}-{int(m.group(2)):03d}" if m else id_.strip().upper()
 
 
+def _ids_resuelve(texto: str) -> list[tuple[str, bool]]:
+    """`resuelve` de una tarea (ADR-027): "P-36, p-037 (parcial)" → [("P-036", False), ("P-037", True)]. "(parcial)"
+    sin distinguir mayúsculas ni espacios; ids normalizados, sin repetidos (gana el primero). No valida existencia."""
+    salida: dict[str, bool] = {}
+    for parte in texto.split(","):
+        m = re.fullmatch(r"(.*?)\s*(\(\s*parcial\s*\))?", parte.strip(), re.I)
+        if m.group(1):
+            salida.setdefault(_normalizar_id(m.group(1)), bool(m.group(2)))
+    return list(salida.items())
+
+
+def _texto_resuelve(ids: list[tuple[str, bool]]) -> str:
+    """Forma guardada en el frontmatter: "P-036, P-037 (parcial)"."""
+    return ", ".join(id_ + (" (parcial)" if parcial else "") for id_, parcial in ids)
+
+
 def _numero_id(id_: str) -> int | None:
     """Parte numérica de un id o nombre de archivo ("ADR-1000-slug" → 1000), para ordenar y comparar numéricamente."""
     m = re.match(r"[A-Za-z]+-(\d+)", id_.strip())
