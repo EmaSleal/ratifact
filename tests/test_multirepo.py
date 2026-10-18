@@ -48,9 +48,10 @@ def test_tarea_exige_repositorio_y_verifica_en_el_suyo(srv, multi):
     assert "en backend/" in srv.listar_tareas(proyecto="fractall")
 
 
-def test_un_solo_repo_rechaza_repositorio(srv, proyecto):
-    assert "un solo repositorio" in srv.registrar_tarea(proyecto="demo", titulo="T", objetivo="o",
-                                                        criterios_aceptacion="c", repositorio="x")
+def test_un_solo_repo_ignora_repositorio(srv, proyecto):
+    """T-007: antes era un error; ahora el valor se ignora y la respuesta lo avisa (ver test_catalogo.py)."""
+    salida = srv.registrar_tarea(proyecto="demo", titulo="T", objetivo="o", criterios_aceptacion="c", repositorio="x")
+    assert not salida.startswith("ERROR") and "se ignoró `repositorio`" in salida
 
 
 def test_buscar_respeta_el_gitignore_de_cada_repo(srv, multi):

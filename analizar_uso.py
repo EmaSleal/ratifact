@@ -14,6 +14,12 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 LOG_POR_DEFECTO = Path(__file__).resolve().parent / "logs" / "uso.jsonl"   # igual que LOG_USO del servidor
+EXT_CODIGO = {".java", ".py", ".ts", ".js", ".vue", ".sql", ".xml", ".yml", ".yaml", ".kt"}
+
+
+def percentil(valores: list, q: float):
+    """Percentil por rango más cercano sobre `valores` ordenados (el mismo criterio que el p95 de ms)."""
+    return valores[min(len(valores) - 1, int(len(valores) * q))]
 
 
 def ruta_log(argumento: str | None) -> Path:
@@ -46,10 +52,19 @@ def main():
         por[f["herramienta"]].append(f)
     print(f"{'herramienta':<22}{'llamadas':>9}{'errores':>9}{'tokens resp. (prom)':>21}{'ms (p95)':>10}")
     for nombre, fs in sorted(por.items(), key=lambda kv: -len(kv[1])):
-        ms = sorted(f["ms"] for f in fs)
-        p95 = ms[min(len(ms) - 1, int(len(ms) * 0.95))]
+        p95 = percentil(sorted(f["ms"] for f in fs), 0.95)
         prom = sum(f["resp_chars"] for f in fs) / len(fs) / 4
         print(f"{nombre:<22}{len(fs):>9}{sum(f['error'] for f in fs):>9}{prom:>21.0f}{p95:>10.0f}")
+
+    print("\nTamaño de respuesta por herramienta (caracteres)")
+    print(f"{'herramienta':<22}{'p50':>9}{'p90':>9}{'máx':>9}")
+    for nombre, fs in sorted(por.items(), key=lambda kv: -len(kv[1])):
+        tam = sorted(f["resp_chars"] for f in fs)
+        print(f"{nombre:<22}{percentil(tam, 0.5):>9}{percentil(tam, 0.9):>9}{tam[-1]:>9}")
+    print("\nRespuestas más grandes")
+    for f in sorted(filas, key=lambda f: (-f["resp_chars"], f["ts"]))[:5]:
+        print(f"  {f['ts']} {f['herramienta']} [{f.get('proyecto')}] {f['resp_chars']} caracteres"
+              + (f" · {f.get('ruta') or f.get('carpeta')}" if f.get("ruta") or f.get("carpeta") else ""))
 
     print("\nIndicadores")
     ctx = por.get("obtener_contexto", [])
@@ -59,10 +74,16 @@ def main():
     lecturas = por.get("leer_documento", [])
     busquedas = por.get("buscar", [])
     if lecturas or busquedas:
-        completas = [f for f in lecturas if f.get("params", {}).get("desde_linea", 1) <= 1
-                     and not f.get("params", {}).get("hasta_linea", 0)]
-        print(f"- Lecturas: {len(lecturas)} ({len(completas)} sin rango) vs búsquedas: {len(busquedas)}. "
-              "Muchas lecturas completas y pocas búsquedas = se está gastando contexto de más.")
+        print(f"- Lecturas: {len(lecturas)} vs búsquedas: {len(busquedas)}. "
+              "Muchas lecturas y pocas búsquedas = se está gastando contexto de más.")
+        codigo = defaultdict(lambda: [0, 0])
+        for f in lecturas:
+            if Path(f.get("ruta") or "").suffix.lower() in EXT_CODIGO:
+                codigo[f.get("proyecto")][0] += 1
+                codigo[f.get("proyecto")][1] += f["resp_chars"]
+        print("- Lecturas de código con leer_documento: "
+              + (", ".join(f"{p}: {n} ({c} caracteres)" for p, (n, c) in sorted(codigo.items(), key=lambda kv: -kv[1][1]))
+                 or "ninguna"))
         vacias = sum(1 for f in busquedas if f.get("resultados") == 0)
         if busquedas:
             print(f"- Búsquedas sin resultado: {vacias}/{len(busquedas)}")

@@ -15,6 +15,9 @@ CONFIG = Path(os.environ.get(
 MEM = ".project"
 LIMITE_INDICE = 6000          # caracteres (~1.5k tokens)
 LIMITE_LECTURA = 40_000       # caracteres por lectura de documento
+# Presupuesto de listar_documentos (ADR-023): si el listado completo lo supera, se resume por niveles.
+LIMITE_LISTADO_ENTRADAS = 200
+LIMITE_LISTADO_CARACTERES = 8000
 EXT_TEXTO = {".md", ".txt", ".json", ".gd", ".py", ".sh", ".cfg", ".tscn", ".csv", ".yaml", ".yml", ".toml",
              ".java", ".kt", ".gradle", ".properties", ".xml", ".sql", ".ts", ".tsx", ".js", ".jsx", ".vue",
              ".html", ".css", ".scss", ".go", ".rs", ".env.example", ".ini"}

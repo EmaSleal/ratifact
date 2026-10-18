@@ -55,6 +55,8 @@ def _registrar_uso(nombre: str, kwargs: dict, respuesta, ms: float) -> None:
             fila["detalle"] = texto[:160]
         if nombre in ("leer_documento", "guardar_documento", "crear_documento") and "ruta" in kwargs:
             fila["ruta"] = kwargs["ruta"]
+        if nombre == "listar_documentos" and "carpeta" in kwargs:
+            fila["carpeta"] = kwargs["carpeta"]
         if nombre == "buscar":
             fila["resultados"] = 0 if texto == "(sin coincidencias)" else texto.count("\n") + 1
         if nombre in ("registrar_decision", "registrar_pendiente", "registrar_tarea"):

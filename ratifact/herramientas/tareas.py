@@ -37,7 +37,8 @@ def registrar_tarea(proyecto: str, titulo: str, objetivo: str, criterios_aceptac
                     decisiones: str = "", archivos: str = "", fuera_de_alcance: str = "",
                     notas: str = "", repositorio: str = "") -> str:
     """Crea una especificación de trabajo para Claude Code en .project/tareas/T-NNN.md (estado 'pendiente').
-    En proyectos de varios repos, `repositorio` (obligatorio) indica la carpeta donde se trabaja.
+    En proyectos de varios repos, `repositorio` (obligatorio) indica la carpeta donde se trabaja; en proyectos de
+    un solo repositorio se ignora (la respuesta lo avisa).
     Debe ser autosuficiente: Claude Code la ejecuta sin este chat. `criterios_aceptacion`: lista verificable
     (pruebas que deben pasar, comportamiento observable). `decisiones`: ids de ADR aplicables.
     `archivos`: rutas que probablemente se tocan. El usuario la ejecuta con /tarea T-NNN en Claude Code.
@@ -47,39 +48,41 @@ def registrar_tarea(proyecto: str, titulo: str, objetivo: str, criterios_aceptac
     ya se está ejecutando), un humano o el agente de código ya intervino, así que se registra una tarea
     nueva."""
     def f():
-        repos = _repos(proyecto)
+        repos, repo = _repos(proyecto), repositorio
         if repos and repositorio not in repos:
             raise ErrorMemoria(f"Proyecto de varios repositorios: indica `repositorio` ({', '.join(repos)}).")
-        if not repos and repositorio:
-            raise ErrorMemoria("Este proyecto tiene un solo repositorio; omite `repositorio`.")
+        nota = ""
+        if not repos and repositorio:     # no es un error: el valor no cambia nada, solo se avisa que se ignoró
+            repo, nota = "", "\n(proyecto de un solo repositorio: se ignoró `repositorio`)"
         with _bloqueo(proyecto):
             carpeta = _mem(proyecto) / "tareas"
             carpeta.mkdir(parents=True, exist_ok=True)
             dup = _duplicado_reciente(carpeta, "T", "titulo", titulo, "pendiente")
             if dup:
-                return _mensaje_duplicado(dup["id"], f"Ejecutar en Claude Code: /tarea {dup['id']}")
+                return _mensaje_duplicado(dup["id"], f"Ejecutar en Claude Code: /tarea {dup['id']}") + nota
             id_ = _siguiente_id(carpeta, "T")
             ruta = carpeta / f"{id_}-{_slug(titulo)}.md"
             meta = {"id": id_, "titulo": titulo, "estado": "pendiente", "fecha": _hoy(),
                     "creado": _registros._ahora().isoformat(timespec="seconds"),
                     "rama": f"{id_.lower()}-{_slug(titulo)}"}
-            if repositorio:
-                meta["repositorio"] = repositorio
+            if repo:
+                meta["repositorio"] = repo
             secciones = [f"# {id_} — {titulo}", "## Objetivo", objetivo,
                          "## Criterios de aceptación", criterios_aceptacion]
             for nombre, valor in (("Decisiones aplicables", decisiones), ("Archivos involucrados", archivos),
                                   ("Fuera de alcance", fuera_de_alcance), ("Notas", notas)):
                 if valor:
                     secciones += [f"## {nombre}", valor]
-            cmd = _comando_pruebas(proyecto, repositorio)
-            donde = f"Desde `{repositorio}/`" if repositorio else "Desde la raíz del repositorio"
+            cmd = _comando_pruebas(proyecto, repo)
+            donde = f"Desde `{repo}/`" if repo else "Desde la raíz del repositorio"
             secciones += ["## Cómo verificar",
                           f"{donde}: `{cmd}`" if cmd else
                           "(sin comando de pruebas configurado: pregúntale al usuario o usa actualizar_proyecto)"]
             secciones += ["## Resultado", MARCA_RESULTADO]
             _escribir_registro(ruta, meta, "\n\n".join(secciones))
             sha = _commit(proyecto, [ruta], f"{id_} {titulo} (pendiente)")
-            return f"{id_} registrada · rama sugerida {meta['rama']} · commit {sha}\nEjecutar en Claude Code: /tarea {id_}"
+            return (f"{id_} registrada · rama sugerida {meta['rama']} · commit {sha}\nEjecutar en Claude Code: /tarea {id_}"
+                    + nota)
     return _ejecutar(f)
 
 

@@ -75,3 +75,40 @@ def test_criterio_2_no_cumple_con_menos_de_14_dias_de_telemetria(entorno, monkey
     log = _log_diario(entorno["tmp"] / "log" / "uso.jsonl", list(range(0, 10)), 40)   # 400 llamadas en 10 días
     _correr(monkeypatch, "--log", str(log), "--dias", "14")
     assert "→ aún no" in capsys.readouterr().out
+
+
+def _log_filas(ruta: Path, filas: list[dict]) -> Path:
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    ahora = dt.datetime.now()
+    base = {"proyecto": "demo", "ms": 1.0, "error": False}
+    ruta.write_text("\n".join(json.dumps({**base, "ts": (ahora - dt.timedelta(minutes=i)).isoformat(timespec="seconds"), **f})
+                              for i, f in enumerate(filas)) + "\n", encoding="utf-8")
+    return ruta
+
+
+def test_tamanos_de_respuesta_por_herramienta(entorno, monkeypatch, capsys):
+    """T-007: p50/p90/máx de resp_chars por herramienta y las 5 respuestas más grandes."""
+    filas = [{"herramienta": "buscar", "resp_chars": c} for c in range(10, 110, 10)]          # 10..100
+    filas += [{"herramienta": "leer_documento", "resp_chars": 5000, "ruta": "docs/grande.md", "proyecto": "otro"}]
+    log = _log_filas(entorno["tmp"] / "log" / "uso.jsonl", filas)
+    _correr(monkeypatch, "--log", str(log))
+    salida = capsys.readouterr().out
+    tamanos = salida.split("Tamaño de respuesta por herramienta")[1].split("\n\n")[0].splitlines()
+    assert next(l for l in tamanos if l.startswith("buscar")).split()[1:] == ["60", "100", "100"]
+    seccion = salida.split("Respuestas más grandes")[1].splitlines()
+    assert "leer_documento" in seccion[1] and "otro" in seccion[1] and "5000" in seccion[1] and "docs/grande.md" in seccion[1]
+    assert len([l for l in seccion[1:] if l.startswith("  ")]) == 5
+
+
+def test_lecturas_de_codigo_por_proyecto_y_sin_indicador_sin_rango(entorno, monkeypatch, capsys):
+    filas = [{"herramienta": "leer_documento", "resp_chars": 100, "ruta": "src/A.java"},
+             {"herramienta": "leer_documento", "resp_chars": 50, "ruta": "web/b.vue"},
+             {"herramienta": "leer_documento", "resp_chars": 70, "ruta": "x.yaml", "proyecto": "otro"},
+             {"herramienta": "leer_documento", "resp_chars": 999, "ruta": ".project/INDEX.md"},
+             {"herramienta": "buscar", "resp_chars": 10}]
+    log = _log_filas(entorno["tmp"] / "log" / "uso.jsonl", filas)
+    _correr(monkeypatch, "--log", str(log))
+    salida = capsys.readouterr().out
+    assert "sin rango" not in salida
+    linea = next(l for l in salida.splitlines() if l.startswith("- Lecturas de código"))
+    assert "demo: 2 (150 caracteres)" in linea and "otro: 1 (70 caracteres)" in linea

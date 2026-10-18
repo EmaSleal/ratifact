@@ -97,7 +97,7 @@
       "nombre": "actualizar_tarea"
     },
     {
-      "descripcion": "Busca texto (sin distinguir mayúsculas) en archivos de texto del proyecto y devuelve\n    fragmentos con ruta y línea. Úsala antes de leer documentos completos.",
+      "descripcion": "Busca texto (sin distinguir mayúsculas) en archivos de texto del proyecto y devuelve\n    fragmentos con ruta y línea. Úsala antes de leer documentos completos.\n    Primero salen los registros de la memoria (\"ID · estado · título (ruta)\"): el que tiene `texto` como id (p. ej.\n    \"T-1\", \"adr-20\") y hasta 5 cuyo título lo contiene al inicio de una palabra; luego las líneas de la memoria y\n    las del código, repartiendo el resto a partes iguales. En cada sección van primero los archivos cuyo nombre\n    contiene `texto` al inicio de una palabra o tramo camelCase (si ninguna línea coincide: \"ruta: (coincide el\n    nombre del archivo)\"), y se muestra una línea por archivo antes de repetir archivos. `max_resultados` cuenta\n    todas las líneas; si se omite algo, la última línea dice cuántas líneas (y archivos) por sección.",
       "esquema_entrada": {
         "properties": {
           "max_resultados": {
@@ -392,7 +392,7 @@
       "nombre": "instrucciones_proyecto"
     },
     {
-      "descripcion": "Lee un archivo de texto del proyecto, opcionalmente un rango de líneas (1-indexado).",
+      "descripcion": "Lee un archivo de texto del proyecto, opcionalmente un rango de líneas (1-indexado).\n    Acepta también el id de un registro de la memoria (\"T-24\", \"tareas/T-024.md\", \"ADR-020-slug.md\"): si la ruta no\n    existe, lee el registro real y antepone la línea \"(→ .project/<carpeta>/<archivo>)\".",
       "esquema_entrada": {
         "properties": {
           "desde_linea": {
@@ -424,7 +424,7 @@
       "nombre": "leer_documento"
     },
     {
-      "descripcion": "Lista archivos (con tamaño) bajo una carpeta del proyecto.",
+      "descripcion": "Lista archivos (con tamaño) bajo una carpeta del proyecto.\n    En .project/decisiones, pendientes y tareas lista un registro por línea: \"ID · estado · título  (ruta)\".\n    Si el listado completo es demasiado grande, lo resume por niveles: carpetas sin expandir con su cantidad de\n    archivos (\"modulo/ (38 archivos)\"); pide una `carpeta` más específica para ver el detalle.",
       "esquema_entrada": {
         "properties": {
           "carpeta": {
@@ -649,7 +649,7 @@
       "nombre": "registrar_sesion"
     },
     {
-      "descripcion": "Crea una especificación de trabajo para Claude Code en .project/tareas/T-NNN.md (estado 'pendiente').\n    En proyectos de varios repos, `repositorio` (obligatorio) indica la carpeta donde se trabaja.\n    Debe ser autosuficiente: Claude Code la ejecuta sin este chat. `criterios_aceptacion`: lista verificable\n    (pruebas que deben pasar, comportamiento observable). `decisiones`: ids de ADR aplicables.\n    `archivos`: rutas que probablemente se tocan. El usuario la ejecuta con /tarea T-NNN en Claude Code.\n    Idempotente (ADR-019): si ya hay una tarea con este título (sin distinguir mayúsculas ni espacios) creada\n    en los últimos minutos Y TODAVÍA en estado 'pendiente', no crea nada nuevo y devuelve el id existente\n    (con el comando /tarea para repetírselo al usuario). Si esa tarea ya cambió de estado (p. ej. en_curso:\n    ya se está ejecutando), un humano o el agente de código ya intervino, así que se registra una tarea\n    nueva.",
+      "descripcion": "Crea una especificación de trabajo para Claude Code en .project/tareas/T-NNN.md (estado 'pendiente').\n    En proyectos de varios repos, `repositorio` (obligatorio) indica la carpeta donde se trabaja; en proyectos de\n    un solo repositorio se ignora (la respuesta lo avisa).\n    Debe ser autosuficiente: Claude Code la ejecuta sin este chat. `criterios_aceptacion`: lista verificable\n    (pruebas que deben pasar, comportamiento observable). `decisiones`: ids de ADR aplicables.\n    `archivos`: rutas que probablemente se tocan. El usuario la ejecuta con /tarea T-NNN en Claude Code.\n    Idempotente (ADR-019): si ya hay una tarea con este título (sin distinguir mayúsculas ni espacios) creada\n    en los últimos minutos Y TODAVÍA en estado 'pendiente', no crea nada nuevo y devuelve el id existente\n    (con el comando /tarea para repetírselo al usuario). Si esa tarea ya cambió de estado (p. ej. en_curso:\n    ya se está ejecutando), un humano o el agente de código ya intervino, así que se registra una tarea\n    nueva.",
       "esquema_entrada": {
         "properties": {
           "archivos": {

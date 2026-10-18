@@ -206,6 +206,9 @@ vive en `ratifact/` (ADR-020); ningún módulo supera 300 líneas y no hay impor
 | `ratifact/config.py` | Rutas y configuración: `CONFIG` (projects.json), `BASE_PROYECTOS`, `ErrorMemoria`, `_proyectos`, `_raiz`, `_mem`, ayudantes de repositorios, `_ruta_segura`, `_zonas_escritura`. |
 | `ratifact/esquema.py` | `VERSION_ESQUEMA`, `MIGRACIONES`, funciones de migración y `_bloqueo` (el bloqueo de escritura que aplica las migraciones). |
 | `ratifact/registros.py` | Frontmatter (lectura/escritura), `_escribir_atomico`, `_commit`, ids y slugs, idempotencia (ADR-019), `_regenerar_vistas`, `_resumen_tareas`, `_hoy`/`_ahora`. |
+| `ratifact/catalogo.py` | Catálogo de la memoria derivado en cada llamada (ADR-022): `_catalogo`, resolución de ids de `leer_documento` (`_resolver_id`), registros de `listar_documentos` y coincidencias por id/título de `buscar` (id exacto y hasta 5 títulos al inicio de palabra). Sin índice, caché ni watcher. |
+| `ratifact/busqueda.py` | Respuesta de `buscar` con cuotas por sección: catálogo, luego memoria y código a partes iguales (lo que un lado no usa pasa al otro), y la línea final con lo omitido por sección. |
+| `ratifact/listado.py` | Listado con profundidad adaptativa de `listar_documentos` (ADR-023): `_listado` (presupuesto `LIMITE_LISTADO_ENTRADAS`/`LIMITE_LISTADO_CARACTERES` en config). |
 | `ratifact/plantillas.py` | `PLANTILLA_INSTRUCCIONES`, `PLANTILLA_AGENTES` y `TEXTO_CIERRE`. |
 | `ratifact/prompts.py` | Prompts `inicio` y `cierre`. |
 | `ratifact/herramientas/contexto_documentos.py` | `listar_proyectos`, `obtener_contexto`, `buscar`, `listar_documentos`, `leer_documento`, `crear_documento`, `guardar_documento`, `actualizar_indice`. |

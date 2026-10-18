@@ -11,7 +11,7 @@ Ejecuta la tarea **$ARGUMENTS** del proyecto de este repositorio.
 El nombre del proyecto en `memoria-proyectos` está en el `CLAUDE.md` / `AGENTS.md` de este repositorio ("con el proyecto `<nombre>`"). Si no lo encuentras, llama `listar_proyectos` y elige el proyecto cuya ruta contiene el directorio actual (en proyectos de varios repos, la ruta es la carpeta que los agrupa); si sigue sin estar claro, pregúntame. En adelante, `<proyecto>` es ese nombre.
 
 ## 1. Preparar
-1. Lee la especificación con la herramienta MCP `memoria-proyectos` → `leer_documento("<proyecto>", ".project/tareas/<archivo de $ARGUMENTS>")` (usa `listar_tareas("<proyecto>")` si no conoces el nombre exacto).
+1. Lee la especificación con la herramienta MCP `memoria-proyectos` → `leer_documento("<proyecto>", "$ARGUMENTS")` con el id (p. ej. `leer_documento("<proyecto>", "T-007")`: resuelve el archivo real y lo indica en la primera línea). Si el id no existe, usa `listar_tareas("<proyecto>")` para encontrar la tarea.
 2. Según su estado:
    - `pendiente`: primera ejecución.
    - `devuelta`: el usuario revisó una ejecución anterior y pide correcciones. Lee la **última** sección "Revisión N" del Resultado: sus observaciones y criterios adicionales se suman a los criterios originales, que siguen vigentes. Lo que la revisión aprueba no se rehace.

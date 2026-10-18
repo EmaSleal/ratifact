@@ -3,14 +3,16 @@ documentos y actualizar_indice."""
 from __future__ import annotations
 
 import os
-import re
 import subprocess
 from pathlib import Path
 
 from ratifact.app import _ejecutar, herramienta
-from ratifact.config import (CARPETAS_IGNORADAS, EXT_TEXTO, LIMITE_ARCHIVO_BUSQUEDA, LIMITE_INDICE, LIMITE_LECTURA,
-                             MEM, ErrorMemoria, _es_repo, _mem, _proyectos, _raiz, _repos, _ruta_segura)
+from ratifact.busqueda import _resultados
+from ratifact.catalogo import _es_carpeta_de_registros, _linea, _registros_en, _resolver_id
+from ratifact.config import (CARPETAS_IGNORADAS, EXT_TEXTO, LIMITE_INDICE, LIMITE_LECTURA, MEM, ErrorMemoria, _es_repo,
+                             _mem, _proyectos, _raiz, _repos, _ruta_segura)
 from ratifact.esquema import _bloqueo, _version_esquema
+from ratifact.listado import _listado
 from ratifact.registros import _clave_id, _commit, _escribir_atomico, _leer_registro, _resumen_tareas
 
 
@@ -115,50 +117,60 @@ def _archivos_proyecto(base: Path, usar_git: bool = True) -> list[Path]:
 @herramienta
 def buscar(proyecto: str, texto: str, max_resultados: int = 20) -> str:
     """Busca texto (sin distinguir mayúsculas) en archivos de texto del proyecto y devuelve
-    fragmentos con ruta y línea. Úsala antes de leer documentos completos."""
+    fragmentos con ruta y línea. Úsala antes de leer documentos completos.
+    Primero salen los registros de la memoria ("ID · estado · título (ruta)"): el que tiene `texto` como id (p. ej.
+    "T-1", "adr-20") y hasta 5 cuyo título lo contiene al inicio de una palabra; luego las líneas de la memoria y
+    las del código, repartiendo el resto a partes iguales. En cada sección van primero los archivos cuyo nombre
+    contiene `texto` al inicio de una palabra o tramo camelCase (si ninguna línea coincide: "ruta: (coincide el
+    nombre del archivo)"), y se muestra una línea por archivo antes de repetir archivos. `max_resultados` cuenta
+    todas las líneas; si se omite algo, la última línea dice cuántas líneas (y archivos) por sección."""
     def f():
         raiz, mem = _raiz(proyecto), _mem(proyecto)
-        patron = re.compile(re.escape(texto), re.I)
-        res = []
         codigo = [p for p in _archivos_proyecto(raiz) if p != mem and mem not in p.parents]
-        for base, prefijo, archivos in ((raiz, "", codigo), (mem, MEM + "/", _archivos_proyecto(mem, usar_git=False))):
-            for p in archivos:
-                if p.suffix not in EXT_TEXTO:
-                    continue
-                try:
-                    if p.stat().st_size > LIMITE_ARCHIVO_BUSQUEDA:
-                        continue
-                    for n, linea in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
-                        if patron.search(linea):
-                            res.append(f"{prefijo}{p.relative_to(base)}:{n}: {linea.strip()[:200]}")
-                            if len(res) >= max_resultados:
-                                return "\n".join(res) + "\n(… más resultados; refina la búsqueda)"
-                except (UnicodeDecodeError, OSError):
-                    continue
-        return "\n".join(res) or "(sin coincidencias)"
+        return _resultados(proyecto, texto, max_resultados, (mem, MEM + "/", _archivos_proyecto(mem, usar_git=False)),
+                           (raiz, "", codigo))
     return _ejecutar(f)
 
 
 @herramienta
 def listar_documentos(proyecto: str, carpeta: str = "docs") -> str:
-    """Lista archivos (con tamaño) bajo una carpeta del proyecto."""
+    """Lista archivos (con tamaño) bajo una carpeta del proyecto.
+    En .project/decisiones, pendientes y tareas lista un registro por línea: "ID · estado · título  (ruta)".
+    Si el listado completo es demasiado grande, lo resume por niveles: carpetas sin expandir con su cantidad de
+    archivos ("modulo/ (38 archivos)"); pide una `carpeta` más específica para ver el detalle."""
     def f():
         base = _ruta_segura(proyecto, carpeta)
+        prefijo = _es_carpeta_de_registros(carpeta)
         en_memoria = carpeta.split("/")[0] == MEM
         repo = _mem(proyecto) if en_memoria else _raiz(proyecto)
         archivos = [p for p in _archivos_proyecto(repo, usar_git=not en_memoria) if p == base or base in p.parents]
-        filas = [f"{carpeta.rstrip('/')}/{p.relative_to(base)}  ({p.stat().st_size} B)" for p in archivos]
-        return "\n".join(filas) or "(vacío)"
+        if prefijo:
+            registros = _registros_en(proyecto, prefijo)
+            vistos = {r.ruta.rsplit("/", 1)[1] for r in registros}
+            otros = [f"{carpeta.rstrip('/')}/{p.relative_to(base)}  ({p.stat().st_size} B)" for p in archivos
+                     if p.relative_to(base).as_posix() not in vistos]
+            return "\n".join([_linea(r, "  ") for r in registros] + otros) or "(vacío)"
+        entradas = [(p.relative_to(base).as_posix(), p.stat().st_size) for p in archivos]
+        return _listado(carpeta, entradas) or "(vacío)"
     return _ejecutar(f)
 
 
 @herramienta
 def leer_documento(proyecto: str, ruta: str, desde_linea: int = 1, hasta_linea: int = 0) -> str:
-    """Lee un archivo de texto del proyecto, opcionalmente un rango de líneas (1-indexado)."""
+    """Lee un archivo de texto del proyecto, opcionalmente un rango de líneas (1-indexado).
+    Acepta también el id de un registro de la memoria ("T-24", "tareas/T-024.md", "ADR-020-slug.md"): si la ruta no
+    existe, lee el registro real y antepone la línea "(→ .project/<carpeta>/<archivo>)"."""
     def f():
         p = _ruta_segura(proyecto, ruta)
+        aviso = ""
+        if p.is_dir():
+            raise ErrorMemoria(f"{ruta} es una carpeta; para ver su contenido usa listar_documentos(\"{proyecto}\", "
+                               f"\"{ruta.rstrip('/')}\").")
         if not p.is_file():
-            raise ErrorMemoria(f"No existe {ruta}.")
+            real = _resolver_id(proyecto, ruta)
+            if real is None:
+                raise ErrorMemoria(f"No existe {ruta}.")
+            p, aviso = real, f"(→ {MEM}/{real.relative_to(_mem(proyecto)).as_posix()})\n"
         try:
             lineas = p.read_text(encoding="utf-8").splitlines()
         except UnicodeDecodeError:
@@ -168,7 +180,7 @@ def leer_documento(proyecto: str, ruta: str, desde_linea: int = 1, hasta_linea: 
         texto = "\n".join(lineas[max(desde_linea, 1) - 1:fin])
         if len(texto) > LIMITE_LECTURA:
             texto = texto[:LIMITE_LECTURA] + f"\n(… truncado; {len(lineas)} líneas en total, pide un rango)"
-        return texto
+        return aviso + texto
     return _ejecutar(f)
 
 
