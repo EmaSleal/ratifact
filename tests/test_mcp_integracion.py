@@ -51,8 +51,8 @@ def test_escrituras_en_paralelo_no_se_pisan(srv, proyecto, entorno):
         return await asyncio.gather(*[s.call_tool("registrar_decision", {
             "proyecto": "demo", "titulo": f"D{i}", "decision": "d", "justificacion": "j"}) for i in range(5)])
     salidas = [_texto(r) for r in _correr(entorno, cuerpo)]
-    assert all("registrada como propuesta" in s for s in salidas)
-    ids = sorted(p.name[:7] for p in (proyecto["mem"] / "decisiones").glob("ADR-*.md"))
+    assert all("registrada como proposed" in s for s in salidas)
+    ids = sorted(p.name[:7] for p in (proyecto["mem"] / "decisions").glob("ADR-*.md"))
     assert ids == [f"ADR-00{i}" for i in range(1, 6)]
 
 
@@ -80,9 +80,9 @@ def test_formulario_aplica_lo_que_elige_el_usuario(srv, proyecto, entorno):
     async def cuerpo(s):
         return _texto(await s.call_tool("decidir_propuestas", {"proyecto": "demo"}))
     salida = _correr(entorno, cuerpo, elicitar)
-    assert "ADR-001 acordada" in salida and "ADR-002 descartada" in salida
+    assert "ADR-001 → accepted" in salida and "ADR-002 → rejected" in salida
     assert "ADR-003: bajar a 2 semanas" in salida and "Siguen como propuesta: ADR-004" in salida
-    assert "[formulario] confirmar — me gusta" in next((proyecto["mem"] / "decisiones").glob("ADR-001*.md")).read_text()
+    assert "[formulario] confirmar — me gusta" in next((proyecto["mem"] / "decisions").glob("ADR-001*.md")).read_text()
 
 
 def test_confirmar_lote_acepta_lista_por_mcp(srv, proyecto, entorno):
@@ -96,7 +96,7 @@ def test_confirmar_lote_acepta_lista_por_mcp(srv, proyecto, entorno):
         return esquema, _texto(res)
     esquema, salida = _correr(entorno, cuerpo)
     assert esquema["properties"]["ids"]["type"] == "array"
-    assert "2 acordadas" in salida
+    assert "2 → accepted" in salida
 
 
 @pytest.mark.parametrize("comando", [[sys.executable], ["uv", "run", "--script"]], ids=["python", "uv"])

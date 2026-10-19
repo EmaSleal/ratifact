@@ -1,6 +1,6 @@
 """T-009: arranque compacto (ADR-026) y vínculo tarea ↔ pendiente con `resuelve` (ADR-027).
-obtener_contexto lista los pendientes abiertos desde el catálogo, una línea cada uno; abiertas.md no cambia.
-registrar_tarea valida y guarda `resuelve`; actualizar_tarea(..., "integrada") recuerda los que siguen abiertos sin
+obtener_contexto lista los pendientes abiertos desde el catálogo, una línea cada uno; OPEN.md no cambia.
+registrar_tarea valida y guarda `resuelve`; actualizar_tarea(..., "integrada" o "merged") recuerda los que siguen abiertos sin
 cerrar nada; analizar_uso.py reporta el tamaño del arranque y la higiene de pendientes referenciados."""
 import datetime as dt
 import json
@@ -12,12 +12,12 @@ from test_analizar_uso import _correr, _log_filas
 SEPARADOR = "\n\n---\n\n"
 
 
-def _pendiente(mem: Path, numero: int, tema: str, estado: str = "abierta", fecha: str = "2026-10-01") -> None:
+def _pendiente(mem: Path, numero: int, tema: str, estado: str = "open", fecha: str = "2026-10-01") -> None:
     """Pendiente escrito a mano (para ids que registrar_pendiente no generaría, p. ej. P-1000)."""
-    carpeta = mem / "pendientes"
+    carpeta = mem / "pending"
     carpeta.mkdir(parents=True, exist_ok=True)
     (carpeta / f"P-{numero:03d}-x.md").write_text(
-        f"---\nid: P-{numero:03d}\ntema: {tema}\nestado: {estado}\nfecha: {fecha}\n---\nCuerpo de P-{numero}\n",
+        f"---\nid: P-{numero:03d}\ntopic: {tema}\nstatus: {estado}\ndate: {fecha}\n---\nCuerpo de P-{numero}\n",
         encoding="utf-8")
 
 
@@ -43,7 +43,7 @@ def test_contexto_lista_pendientes_abiertos_una_linea_cada_uno(srv, proyecto):
         "- P-1000 · Mil (2026-10-05)",
         'Detalle: leer_documento("demo", "P-NNN")'])
     assert "Primera línea del cuerpo" not in ctx and "Emanuel" not in ctx
-    assert "Cerradas recientemente" not in ctx and "Decisiones abiertas" not in ctx and "P-002" not in ctx
+    assert "Recently closed" not in ctx and "# Open items" not in ctx and "P-002" not in ctx
 
 
 def test_tema_de_100_caracteres_no_se_corta(srv, proyecto):
@@ -57,7 +57,7 @@ def test_sin_pendientes_abiertos_solo_el_encabezado(srv, proyecto):
     assert _bloque(srv.obtener_contexto(proyecto="demo")) == "# Pendientes abiertos (0)"
 
 
-# ───────────────────────── criterio 2: el resto no cambia; abiertas.md intacto ─────────────────────────
+# ───────────────────────── criterio 2: el resto no cambia; OPEN.md intacto ─────────────────────────
 
 def test_orden_de_las_partes_del_contexto(srv, proyecto, entorno):
     import shutil
@@ -75,17 +75,18 @@ def test_orden_de_las_partes_del_contexto(srv, proyecto, entorno):
     assert partes[3].startswith("Decisiones propuestas pendientes de confirmar por el usuario: ADR-001")
     assert partes[4].startswith("# Tareas de código activas\n- **T-001**")
     assert partes[5].startswith("⚠ INDEX.md está desactualizado")
-    assert partes[6] == "Integraciones: engram (si está disponible)" and len(partes) == 7
+    assert partes[6].startswith("Idioma del contenido: en — ")                # T-010, criterio 11
+    assert partes[7] == "Integraciones: engram (si está disponible)" and len(partes) == 8
 
 
-def test_abiertas_md_igual_antes_y_despues(srv, proyecto):
+def test_open_md_igual_antes_y_despues(srv, proyecto):
     srv.registrar_pendiente(proyecto="demo", tema="Parry", contexto="Cuerpo", dueno="Emanuel")
     srv.registrar_pendiente(proyecto="demo", tema="Esquiva", contexto="Otro")
     srv.registrar_pendiente(proyecto="demo", tema="Viejo", contexto="c")
     srv.cerrar_pendiente(proyecto="demo", id="P-003", resolucion="r")
-    vista = proyecto["mem"] / "abiertas.md"
+    vista = proyecto["mem"] / "OPEN.md"
     antes = vista.read_bytes()
-    assert b"## Cerradas recientemente" in antes and b"Cuerpo" in antes and "dueño: Emanuel".encode() in antes
+    assert b"## Recently closed" in antes and b"Cuerpo" in antes and b"owner: Emanuel" in antes
     srv.obtener_contexto(proyecto="demo")
     srv.registrar_tarea(proyecto="demo", titulo="T", objetivo="o", criterios_aceptacion="c",
                         resuelve="P-1, P-2 (parcial)")
@@ -110,7 +111,7 @@ def test_analizar_uso_tamano_de_contexto_por_proyecto(entorno, monkeypatch, caps
 # ───────────────────────── criterio 4: registrar_tarea con resuelve ─────────────────────────
 
 def _tarea(mem: Path, id_: str = "T-001") -> str:
-    return next((mem / "tareas").glob(f"{id_}-*.md")).read_text(encoding="utf-8")
+    return next((mem / "tasks").glob(f"{id_}-*.md")).read_text(encoding="utf-8")
 
 
 def test_resuelve_normaliza_guarda_y_muestra_seccion(srv, proyecto):
@@ -120,8 +121,8 @@ def test_resuelve_normaliza_guarda_y_muestra_seccion(srv, proyecto):
                                  resuelve=" p-1 ,P-002( Parcial ) , P-01")
     assert salida.startswith("T-001 registrada"), salida
     texto = _tarea(proyecto["mem"])
-    assert "\nresuelve: P-001, P-002 (parcial)\n" in texto
-    assert "## Criterios de aceptación\n\nc\n\n## Resuelve\n\n- P-001 · Parry\n- P-002 (parcial) · Esquiva\n\n" in texto
+    assert "\nresolves: P-001, P-002 (partial)\n" in texto
+    assert "## Acceptance criteria\n\nc\n\n## Resolves\n\n- P-001 · Parry\n- P-002 (partial) · Esquiva\n\n" in texto
 
 
 def test_resuelve_invalido_nombra_los_malos_y_no_escribe(srv, proyecto):
@@ -133,13 +134,13 @@ def test_resuelve_invalido_nombra_los_malos_y_no_escribe(srv, proyecto):
                                  resuelve="P-1, P-2 (parcial), p-99, ADR-1")
     assert salida.startswith("ERROR:") and "P-001" not in salida, salida
     assert "P-002 (no está abierto)" in salida and "P-099 (no existe)" in salida and "ADR-001 (no existe)" in salida
-    assert not list((proyecto["mem"] / "tareas").glob("T-*.md")) and log_git(proyecto["mem"]) == commits
+    assert not list((proyecto["mem"] / "tasks").glob("T-*.md")) and log_git(proyecto["mem"]) == commits
 
 
 def test_sin_resuelve_no_hay_campo_ni_seccion(srv, proyecto):
     srv.registrar_tarea(proyecto="demo", titulo="T", objetivo="o", criterios_aceptacion="c", resuelve="  ")
     texto = _tarea(proyecto["mem"])
-    assert "resuelve" not in texto and "## Resuelve" not in texto
+    assert "resolves" not in texto and "## Resolves" not in texto
 
 
 def test_resuelve_no_rompe_la_idempotencia(srv, proyecto):
@@ -147,7 +148,7 @@ def test_resuelve_no_rompe_la_idempotencia(srv, proyecto):
     primera = srv.registrar_tarea(proyecto="demo", titulo="T", objetivo="o", criterios_aceptacion="c", resuelve="P-1")
     segunda = srv.registrar_tarea(proyecto="demo", titulo="t ", objetivo="o", criterios_aceptacion="c", resuelve="P-1")
     assert primera.startswith("T-001 registrada") and "T-001 ya estaba registrado" in segunda
-    assert len(list((proyecto["mem"] / "tareas").glob("T-*.md"))) == 1
+    assert len(list((proyecto["mem"] / "tasks").glob("T-*.md"))) == 1
 
 
 # ───────────────────────── criterio 5: recordatorio al integrar ─────────────────────────
@@ -158,14 +159,14 @@ def test_integrada_recuerda_los_pendientes_abiertos_sin_tocarlos(srv, proyecto):
     srv.registrar_tarea(proyecto="demo", titulo="T", objetivo="o", criterios_aceptacion="c",
                         resuelve="P-1, P-2 (parcial), P-3")
     srv.cerrar_pendiente(proyecto="demo", id="P-3", resolucion="r")
-    pendientes = {p.name: p.read_bytes() for p in (proyecto["mem"] / "pendientes").glob("*.md")}
+    pendientes = {p.name: p.read_bytes() for p in (proyecto["mem"] / "pending").glob("*.md")}
     salida = srv.actualizar_tarea(proyecto="demo", id="T-1", estado="integrada")
     cabecera, recordatorio = salida.split("\n\n")
-    assert cabecera.startswith("T-001 → integrada · commit ")
+    assert cabecera.startswith("T-001 → merged · commit ")
     assert recordatorio.splitlines() == [
         'P-001 sigue abierto: ciérralo con cerrar_pendiente("demo", "P-001", ...) si quedó resuelto',
         "P-002 (parcial) sigue abierto: registra qué falta"]
-    assert {p.name: p.read_bytes() for p in (proyecto["mem"] / "pendientes").glob("*.md")} == pendientes
+    assert {p.name: p.read_bytes() for p in (proyecto["mem"] / "pending").glob("*.md")} == pendientes
 
 
 def test_integrada_sin_resuelve_o_todos_cerrados_no_cambia(srv, proyecto):
@@ -175,7 +176,7 @@ def test_integrada_sin_resuelve_o_todos_cerrados_no_cambia(srv, proyecto):
     srv.cerrar_pendiente(proyecto="demo", id="P-1", resolucion="r")
     for id_ in ("T-001", "T-002"):
         salida = srv.actualizar_tarea(proyecto="demo", id=id_, estado="integrada")
-        assert salida.startswith(f"{id_} → integrada · commit ") and "\n" not in salida, salida
+        assert salida.startswith(f"{id_} → merged · commit ") and "\n" not in salida, salida
 
 
 def test_otros_estados_no_recuerdan(srv, proyecto):
@@ -233,4 +234,4 @@ def test_contrato_registrar_tarea_tiene_resuelve():
     assert tarea["esquema_entrada"]["properties"]["resuelve"] == {"default": "", "title": "Resuelve", "type": "string"}
     assert "`resuelve`" in tarea["descripcion"] and "Nunca cierra pendientes" in tarea["descripcion"]
     assert "pendientes abiertos" in herramientas["obtener_contexto"]["descripcion"]
-    assert "'integrada'" in herramientas["actualizar_tarea"]["descripcion"]
+    assert "'merged'" in herramientas["actualizar_tarea"]["descripcion"]

@@ -43,8 +43,8 @@ def test_tarea_exige_repositorio_y_verifica_en_el_suyo(srv, multi):
                                                          criterios_aceptacion="c", repositorio="otro")
     srv.registrar_tarea(proyecto="fractall", titulo="Consecutivos", objetivo="o", criterios_aceptacion="c",
                         repositorio="backend")
-    tarea = next((multi["mem"] / "tareas").glob("T-001*.md")).read_text()
-    assert "repositorio: backend" in tarea and "Desde `backend/`: `./mvnw test`" in tarea
+    tarea = next((multi["mem"] / "tasks").glob("T-001*.md")).read_text()
+    assert "\nrepo: backend\n" in tarea and "Desde `backend/`: `./mvnw test`" in tarea
     assert "en backend/" in srv.listar_tareas(proyecto="fractall")
 
 

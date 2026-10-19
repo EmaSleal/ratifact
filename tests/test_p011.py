@@ -17,9 +17,9 @@ def _escribir_registro_a_mano(carpeta: Path, id_: str, campos: str) -> Path:
     return ruta
 
 
-def _adr(mem: Path, id_: str, estado: str = "propuesta", extra: str = "") -> Path:
-    campos = f"titulo: Titulo {id_}\nestado: {estado}\nfecha: 2026-01-01\nresumen: Resumen {id_}" + (f"\n{extra}" if extra else "")
-    return _escribir_registro_a_mano(mem / "decisiones", id_, campos)
+def _adr(mem: Path, id_: str, estado: str = "proposed", extra: str = "") -> Path:
+    campos = f"title: Titulo {id_}\nstatus: {estado}\ndate: 2026-01-01\nsummary: Resumen {id_}" + (f"\n{extra}" if extra else "")
+    return _escribir_registro_a_mano(mem / "decisions", id_, campos)
 
 
 def _antes(texto: str, primero: str, segundo: str) -> bool:
@@ -36,21 +36,21 @@ def test_acuerdos_ordena_ids_numericamente(srv, proyecto):
     _adr(proyecto["mem"], "ADR-1000")
     _adr(proyecto["mem"], "ADR-101")
     registros._regenerar_vistas("demo")
-    texto = (proyecto["mem"] / "acuerdos.md").read_text()
+    texto = (proyecto["mem"] / "DECISIONS.md").read_text()
     assert _antes(texto, "**ADR-101**", "**ADR-1000**"), texto
 
 
 def test_abiertas_ordena_pendientes_numericamente(srv, proyecto):
     for id_ in ("P-1000", "P-101"):
-        _escribir_registro_a_mano(proyecto["mem"] / "pendientes", id_, f"tema: Tema {id_}\nestado: abierta\nfecha: 2026-01-01")
+        _escribir_registro_a_mano(proyecto["mem"] / "pending", id_, f"topic: Tema {id_}\nstatus: open\ndate: 2026-01-01")
     registros._regenerar_vistas("demo")
-    texto = (proyecto["mem"] / "abiertas.md").read_text()
+    texto = (proyecto["mem"] / "OPEN.md").read_text()
     assert _antes(texto, "**P-101**", "**P-1000**"), texto
 
 
 def test_resumen_tareas_ordena_ids_numericamente(srv, proyecto):
     for id_ in ("T-1000", "T-101"):
-        _escribir_registro_a_mano(proyecto["mem"] / "tareas", id_, f"titulo: Tarea {id_}\nestado: pendiente\nfecha: 2026-01-01")
+        _escribir_registro_a_mano(proyecto["mem"] / "tasks", id_, f"title: Tarea {id_}\nstatus: todo\ndate: 2026-01-01")
     filas = registros._resumen_tareas("demo")
     assert [f.split("**")[1] for f in filas] == ["T-101", "T-1000"]
 
@@ -88,29 +88,29 @@ def test_confirmar_lote_con_ids_equivalentes_confirma_una_sola_vez(srv, proyecto
 
     salida = srv.confirmar_decisiones_lote(proyecto="demo", ids=["ADR-1", "adr-001", "ADR-001"], cita_usuario="sí, las dos")
 
-    assert salida.startswith("1 acordadas (ADR-001) · commit"), salida
+    assert salida.startswith("1 → accepted (ADR-001) · commit"), salida
     texto = ruta.read_text()
-    assert texto.count("## Confirmación") == 1 and "estado: acordada" in texto
+    assert texto.count("## Acceptance") == 1 and "status: accepted" in texto
     assert len(log_git(proyecto["mem"])) == commits_antes + 1
-    assert log_git(proyecto["mem"])[0] == "memoria: 1 decisiones acordadas en lote: ADR-001"
+    assert log_git(proyecto["mem"])[0] == "memoria: 1 decisions accepted in batch: ADR-001"
 
 
 def test_reemplazar_decision_guarda_y_muestra_id_normalizado(srv, proyecto):
-    ruta = _adr(proyecto["mem"], "ADR-001", estado="acordada")
+    ruta = _adr(proyecto["mem"], "ADR-001", estado="accepted")
     _adr(proyecto["mem"], "ADR-002")
 
     salida = srv.reemplazar_decision(proyecto="demo", id_anterior="adr-1", id_nuevo="ADR-2")
 
-    assert salida.startswith("ADR-001 reemplazada por ADR-002 · commit"), salida
-    assert "reemplazada_por: ADR-002" in ruta.read_text()
-    assert "reemplazada por ADR-002" in (proyecto["mem"] / "acuerdos.md").read_text()
-    assert log_git(proyecto["mem"])[0] == "memoria: ADR-001 reemplazada por ADR-002"
+    assert salida.startswith("ADR-001 → superseded (reemplazada por ADR-002) · commit"), salida
+    assert "superseded_by: ADR-002" in ruta.read_text()
+    assert "superseded by ADR-002" in (proyecto["mem"] / "DECISIONS.md").read_text()
+    assert log_git(proyecto["mem"])[0] == "memoria: ADR-001 superseded by ADR-002"
 
 
 def test_vista_normaliza_reemplazada_por_guardado_sin_normalizar(srv, proyecto):
-    _adr(proyecto["mem"], "ADR-001", estado="reemplazada", extra="reemplazada_por: ADR-5")
+    _adr(proyecto["mem"], "ADR-001", estado="superseded", extra="superseded_by: ADR-5")
     registros._regenerar_vistas("demo")
-    assert "reemplazada por ADR-005" in (proyecto["mem"] / "acuerdos.md").read_text()
+    assert "superseded by ADR-005" in (proyecto["mem"] / "DECISIONS.md").read_text()
 
 
 def test_cerrar_pendiente_guarda_id_decision_normalizado(srv, proyecto):
@@ -118,9 +118,9 @@ def test_cerrar_pendiente_guarda_id_decision_normalizado(srv, proyecto):
 
     salida = srv.cerrar_pendiente(proyecto="demo", id="P-1", resolucion="Godot", id_decision="adr-3")
 
-    assert salida.startswith("P-001 cerrado"), salida
-    meta, _ = registros._leer_registro(next((proyecto["mem"] / "pendientes").glob("P-001-*.md")))
-    assert meta["resolucion"] == "Godot (ADR-003)"
+    assert salida.startswith("P-001 → closed"), salida
+    meta, _ = registros._leer_registro(next((proyecto["mem"] / "pending").glob("P-001-*.md")))
+    assert meta["resolution"] == "Godot (ADR-003)"
 
 
 def test_ningun_upper_fuera_de_normalizar_id():

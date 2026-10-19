@@ -74,9 +74,9 @@ No cubre renombrar un proyecto ni mover la ubicación de su memoria (`.memorias/
 para eso edite `projects.json` a mano y mueva la carpeta con `git mv`/`mv` según corresponda.
 
 ## 5. Tareas de código (Claude Desktop → Claude Code)
-Flujo: en Claude Desktop se acuerda un cambio y se registra con `registrar_tarea` → queda `.project/tareas/T-NNN.md` →
+Flujo: en Claude Desktop se acuerda un cambio y se registra con `registrar_tarea` → queda `.project/tasks/T-NNN.md` →
 en Claude Code, dentro del repositorio, se ejecuta `/tarea T-NNN` → Claude Code crea la rama, implementa, corre las pruebas
-del proyecto ("Cómo verificar") y deja la tarea `en_revision` (o `fallida`) con el resultado → usted revisa la rama e integra.
+del proyecto ("How to verify") y deja la tarea `in_review` (o `failed`) con el resultado → usted revisa la rama e integra.
 
 Instalación del comando: una sola vez por equipo, con los enlaces globales de la sección 12 (no se copia por repositorio).
 Claude Code debe tener el MCP registrado (sección 2) para leer y actualizar la tarea.
@@ -86,23 +86,28 @@ Agregue a las instrucciones del proyecto en claude.ai:
 > criterios de aceptación verificables, ADR aplicables, archivos involucrados y fuera de alcance. Debe poder ejecutarse sin
 > este chat. Luego dime el comando `/tarea T-NNN`. Para revisar el resultado, usa `listar_tareas` y lee la tarea.
 > Si pido correcciones, usa `devolver_tarea` con mis observaciones y criterios adicionales verificables, y dime de
-> nuevo `/tarea T-NNN`. Marca `integrada` o `descartada` solo cuando yo lo confirme.
+> nuevo `/tarea T-NNN`. Marca `merged` o `discarded` solo cuando yo lo confirme.
 
-Ciclo de revisión: `pendiente` → `en_curso` → `en_revision` → (`devuelta` → `en_curso` → `en_revision`)* → `integrada`.
-Una tarea devuelta se corrige en la misma rama con commits nuevos; cada devolución queda como "Revisión N" en la tarea.
-`actualizar_tarea` rechaza pasar de `en_revision` a `pendiente`: devolver es siempre `devolver_tarea`.
+Ciclo de revisión: `todo` → `in_progress` → `in_review` → (`changes_requested` → `in_progress` → `in_review`)* →
+`merged`. Una tarea devuelta se corrige en la misma rama con commits nuevos; cada devolución queda como "Review N" en la
+tarea (con **Findings** y **Additional criteria**). `actualizar_tarea` rechaza pasar de `in_review` a `todo`: devolver es
+siempre `devolver_tarea`. El parámetro `estado` acepta también los nombres en español de antes del esquema v2
+(`pendiente`, `en_curso`, `en_revision`, `fallida`, `integrada`, `descartada`); se guarda y se responde en inglés.
 
 Pendientes que resuelve una tarea (ADR-027): `registrar_tarea(..., resuelve="P-036, P-037 (parcial)")` — ids separados por
-coma, cada uno opcionalmente con `(parcial)` (sin distinguir mayúsculas ni espacios; `p-36` vale como `P-036`). Cada id
+coma, cada uno opcionalmente con `(parcial)` o `(partial)` (sin distinguir mayúsculas ni espacios; `p-36` vale como `P-036`). Cada id
 debe existir y estar abierto; si alguno no, la herramienta lo rechaza nombrando los inválidos y no escribe nada. Se guarda
-en el frontmatter (`resuelve: P-036, P-037 (parcial)`) y como sección "## Resuelve" de la tarea; sin `resuelve`, ni campo
-ni sección. Al marcar la tarea `integrada`, la respuesta recuerda cada pendiente declarado que siga abierto: los completos
+en el frontmatter (`resolves: P-036, P-037 (partial)`) y como sección "## Resolves" de la tarea; sin `resuelve`, ni
+campo ni sección. Al marcar la tarea `merged`, la respuesta recuerda cada pendiente declarado que siga abierto: los completos
 con la llamada a `cerrar_pendiente` y los parciales pidiendo registrar qué falta. Nunca se cierra ni se modifica un
 pendiente automáticamente.
 
 ## 6. Ubicación de la memoria
 Con la clave `"memoria"` en `projects.json`, la memoria vive fuera del repositorio del código (repo git propio) y no depende
 de la rama activa. Recomendado para todos los proyectos. Las herramientas siguen usando rutas `.project/...`.
+Las claves de cada proyecto en `projects.json` se leen en español (`ruta`, `memoria`, `escritura`, `pruebas`) o en
+inglés (`path`, `memory`, `writable`, `tests`); si están las dos, gana la inglesa. Al escribir se conserva la grafía que
+ya tiene la entrada. Renombrar las claves es un paso del instalador (ADR-029), nunca de la migración automática.
 
 ## 7. Telemetría
 Cada llamada a una herramienta agrega una línea a `logs/uso.jsonl` (herramienta, proyecto, tamaños, duración, error; nunca
@@ -110,16 +115,18 @@ el contenido). Resumen: `python3 ~/Projects/.memoria-proyectos/analizar_uso.py -
 El script lee el mismo log que escribe el servidor: `--log <ruta>` si se indica, si no `MEMORIA_PROYECTOS_LOG`, y si no
 `logs/uso.jsonl`. Si el archivo no existe, lo informa con su ruta y termina con error.
 `obtener_contexto` avisa cuando INDEX.md acumula 5 o más cambios sin regenerarse.
-Arranque compacto (ADR-026): `obtener_contexto` ya no incluye `abiertas.md`. Después de INDEX.md muestra
+Arranque compacto (ADR-026): `obtener_contexto` ya no incluye `OPEN.md`. Después de INDEX.md muestra
 "# Pendientes abiertos (N)" con una línea por pendiente abierto (`- P-NNN · <tema> (<fecha>)`, en orden numérico, tema
 cortado a 100 caracteres, sin extracto ni dueño) y cierra con `Detalle: leer_documento("<proyecto>", "P-NNN")`; sin
-pendientes abiertos, solo "# Pendientes abiertos (0)". "Cerradas recientemente" no sale en el arranque. `abiertas.md`
-sigue generándose en disco igual que antes.
+pendientes abiertos, solo "# Pendientes abiertos (0)". "Recently closed" no sale en el arranque. `OPEN.md`
+sigue generándose en disco. Al final, la línea "Idioma del contenido: <content_language>" pide escribir el contenido de
+los registros en ese idioma (ADR-016).
 El resumen de `analizar_uso.py` agrega el tamaño de `obtener_contexto` por proyecto (p50/máx en caracteres y ~tokens,
 con aviso si el p50 supera la referencia de 2.000 tokens = 8.000 caracteres) y la sección "Pendientes abiertos
 referenciados por tareas integradas": por proyecto, los declarados en `resuelve` y los mencionados en el texto de la
-tarea (spec —objetivo, criterios, revisiones— y Resultado; no cuentan Fuera de alcance, Notas ni Cómo verificar), con
-la tarea y su fecha de integración.
+tarea (spec —objetivo, criterios, revisiones— y Result; no cuentan Out of scope, Notes, How to verify ni Resolves),
+con la tarea y su fecha de integración. Lee memorias v1 y v2. También cuenta, por proyecto, las rutas v1 traducidas
+(`alias_ruta` en el log; ver sección 13).
 
 ## 8. Confirmación de decisiones
 Toda decisión nace como propuesta. La única vía a "acordada" es `confirmar_decision`, que exige la frase literal del
@@ -163,16 +170,40 @@ Si usa gentle-shell independiente, repita el segundo enlace en `~/.gentle-shell/
 
 ## 13. Versión de esquema de la memoria
 
-Cada memoria declara en `esquema.json` el formato con que fue escrita (hoy v1). Al actualizar el servidor:
+Cada memoria declara en `schema.json` el formato con que fue escrita y el idioma de su contenido:
+`{"version": 2, "content_language": "es"}`. Hoy es v2: carpetas `decisions/`, `pending/`, `sessions/`, `tasks/`;
+vistas `DECISIONS.md` y `OPEN.md`; claves, estados y títulos de sección en inglés (`docs/v1-english-naming.md` §5–§6).
+Las memorias nuevas nacen en v2 con `content_language` `"en"`; las migradas, con `"es"` (ADR-028).
 
-- Memoria más antigua: se migra sola en la primera escritura o al llamar `obtener_contexto`, en un commit propio
-  (`memoria: migrar esquema vN → vM`), reversible con git.
-- Memoria más nueva que el servidor (p. ej. otro equipo con una versión posterior): el servidor no la modifica y pide
-  actualizar memoria-proyectos.
-- `listar_proyectos` muestra la versión de cada memoria.
+Migración automática (v1 → v2, ADR-028/029/030), en el **primer acceso** a cada memoria (cualquier herramienta con
+`proyecto`, también las de solo lectura), bajo el bloqueo:
 
-Para desarrolladores: un cambio de formato sube `VERSION_ESQUEMA` y agrega la función de migración en `MIGRACIONES`,
-con su prueba en `tests/test_esquema.py`.
+- Precondiciones: la memoria es un repo git con al menos un commit y `git status` limpio (salvo `.lock`). Si no, la
+  herramienta responde un error que explica por qué y no se toca nada.
+- Antes de cambiar nada crea el tag `pre-v2` (si existe, `pre-v2-2`, `-3`, …).
+- Un solo commit `memory: migrate schema v1 → v2`: renombra las carpetas con `git mv` (historia preservada), cambia
+  las claves y los estados del frontmatter, los títulos de sección conocidos y, dentro de los bloques "Revisión N",
+  las etiquetas `**Observaciones**`/`**Criterios adicionales**`; regenera `DECISIONS.md`/`OPEN.md` y borra
+  `acuerdos.md`/`abiertas.md`. El resto del cuerpo, las citas del usuario, `INDEX.md` y `docs/` no cambian. El cuerpo del
+  commit lista lo que quedó como estaba: claves desconocidas y títulos de texto libre.
+- Si algo falla (un paso o el commit), la memoria vuelve exactamente al tag (y se borra el tag); la herramienta da el
+  error y la próxima llamada lo reintenta.
+- Vuelta atrás manual: `git -C <memoria> checkout pre-v2` (o `reset --hard pre-v2`) devuelve el árbol anterior.
+- Se mantiene `esquema.json` con `{"version": 2}` como centinela: un servidor anterior a v2 lee "v2" y se niega
+  ("usa el esquema v2 y este servidor solo conoce hasta v1"), sin tocar nada. Se quita en 1.1 (ADR-030).
+- Despliegue: reinicie todos los clientes (Claude Desktop, Claude Code, Pi, Codex) antes de la primera llamada.
+- Rutas v1 (`.project/tareas/T-001.md`, `.project/acuerdos.md`…, que siguen apareciendo en INDEX.md, docs/ y chats
+  viejos): se traduce solo el primer tramo después de `.project/` y la respuesta empieza con
+  "(→ .project/<ruta nueva>)". Las vistas no se escriben a mano (ni con el nombre viejo ni con el nuevo). Si una memoria
+  tiene a la vez la carpeta v1 y la v2, la llamada falla. Cada uso queda en la telemetría (`alias_ruta`); el alias se
+  quita en 1.1 cuando `analizar_uso.py` muestre que no se usa.
+
+Una memoria más nueva que el servidor (p. ej. otro equipo con una versión posterior) no se modifica: el servidor pide
+actualizar memoria-proyectos. `listar_proyectos` muestra la versión de cada memoria.
+
+Para desarrolladores: un cambio de formato sube `VERSION_ESQUEMA` y agrega la función de migración en `MIGRACIONES`
+(con los mismos resguardos: repo limpio, tag `pre-vN`, un commit y vuelta atrás), con su prueba en
+`tests/test_esquema.py`; la de v2 está en `ratifact/migracion_v2.py` y `tests/test_migracion_v2.py`.
 
 ## 14. Codex (CLI, extensión de IDE y app de escritorio)
 
@@ -200,12 +231,12 @@ el servidor declara en sus instrucciones MCP que memoria-proyectos es la fuente 
 mismo tipo (un ADR no compite con una tarea ni con un pendiente, aunque el texto del título coincida) con el
 mismo título normalizado (sin distinguir mayúsculas, recortando los extremos y colapsando espacios internos),
 **creado en los últimos `VENTANA_IDEMPOTENCIA_MINUTOS` minutos** (10 por defecto) en el mismo proyecto, Y QUE
-TODAVÍA ESTÁ EN SU ESTADO INICIAL ("propuesta" para ADR, "abierta" para pendientes, "pendiente" para tareas),
+TODAVÍA ESTÁ EN SU ESTADO INICIAL ("proposed" para ADR, "open" para pendientes, "todo" para tareas),
 la llamada no crea ningún archivo nuevo, no hace commit, y devuelve el id del registro existente avisando que
 ya estaba registrado (en el caso de una tarea, con el comando `/tarea T-NNN` para repetírselo al usuario).
 
-La condición de estado inicial es deliberada: un registro que ya cambió de estado (descartada, reemplazada,
-cerrada, en_curso, en_revision, devuelta, integrada, fallida, etc.) significa que un humano ya intervino sobre
+La condición de estado inicial es deliberada: un registro que ya cambió de estado (rejected, superseded,
+closed, in_progress, in_review, changes_requested, merged, failed, etc.) significa que un humano ya intervino sobre
 él, así que nunca cuenta como duplicado aunque sea reciente. Esto cubre el flujo normal de "proponer → el
 usuario pide un cambio → descartar/cerrar y volver a registrar corregido", que no debe confundirse con un
 reintento perdido (un reintento genuino de un cliente que perdió la respuesta siempre encuentra el registro
@@ -227,8 +258,10 @@ vive en `ratifact/` (ADR-020); ningún módulo supera 300 líneas y no hay impor
 | Módulo | Responsabilidad |
 |---|---|
 | `ratifact/app.py` | Instancia FastMCP `mcp`, decoradores `herramienta`/`herramienta_async`, telemetría (`LOG_USO`, `_registrar_uso`) y `_ejecutar`. |
-| `ratifact/config.py` | Rutas y configuración: `CONFIG` (projects.json), `BASE_PROYECTOS`, `ErrorMemoria`, `_proyectos`, `_raiz`, `_mem`, ayudantes de repositorios, `_ruta_segura`, `_zonas_escritura`. |
-| `ratifact/esquema.py` | `VERSION_ESQUEMA`, `MIGRACIONES`, funciones de migración y `_bloqueo` (el bloqueo de escritura que aplica las migraciones). |
+| `ratifact/config.py` | Rutas y configuración: `CONFIG` (projects.json, claves en español o inglés: `_valor`, `_clave_escritura`), `BASE_PROYECTOS`, `ErrorMemoria`, `_proyectos`, `_raiz`, `_mem`, ayudantes de repositorios, `_ruta_segura`, `_zonas_escritura` y el alias de rutas v1 (`_traducir_alias`). |
+| `ratifact/vocabulario.py` | Vocabulario del esquema v2 y su equivalente v1: carpetas, vistas, claves, estados por tipo y `_normalizar_estado` (parámetros en español o inglés). |
+| `ratifact/esquema.py` | `VERSION_ESQUEMA`, `MIGRACIONES`, versión (`schema.json` / centinela `esquema.json`), resguardos de la migración (repo limpio, tag, commit, vuelta atrás), `_asegurar_esquema` (primer acceso) y `_bloqueo`. |
+| `ratifact/migracion_v2.py` | Migración v1 → v2: carpetas, frontmatter, títulos, etiquetas de revisión y el informe del commit. |
 | `ratifact/registros.py` | Frontmatter (lectura/escritura), `_escribir_atomico`, `_commit`, ids y slugs, idempotencia (ADR-019), `_regenerar_vistas`, `_resumen_tareas`, `_hoy`/`_ahora`. |
 | `ratifact/catalogo.py` | Catálogo de la memoria derivado en cada llamada (ADR-022): `_catalogo`, resolución de ids de `leer_documento` (`_resolver_id`), registros de `listar_documentos` y coincidencias por id/título de `buscar` (id exacto y hasta 5 títulos al inicio de palabra) y el bloque de pendientes abiertos de `obtener_contexto` (`_bloque_pendientes`, ADR-026). Sin índice, caché ni watcher. |
 | `ratifact/busqueda.py` | Respuesta de `buscar` con cuotas por sección: catálogo, luego memoria y código a partes iguales (lo que un lado no usa pasa al otro), y la línea final con lo omitido por sección. |

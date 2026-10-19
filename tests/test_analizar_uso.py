@@ -117,14 +117,18 @@ def test_lecturas_de_codigo_por_proyecto_y_sin_indicador_sin_rango(entorno, monk
 # ───────────────────────── T-008: indicador de decisiones desde la memoria ─────────────────────────
 
 def _adr(carpeta: Path, id_: str, estado: str, fecha: dt.date, titulo: str) -> None:
+    """ADR en la carpeta indicada; con claves v1 si la carpeta es la v1 (decisiones/), si no v2 (decisions/)."""
     carpeta.mkdir(parents=True, exist_ok=True)
+    titulo_, estado_, fecha_, creado_ = (("titulo", "estado", "fecha", "creado") if carpeta.name == "decisiones"
+                                        else ("title", "status", "date", "created"))
     (carpeta / f"{id_}-x.md").write_text(
-        f"---\nid: {id_}\ntitulo: {titulo}\nestado: {estado}\nfecha: {fecha.isoformat()}\n"
-        f"creado: {fecha.isoformat()}T10:00:00\n---\n# {id_} — {titulo}\n", encoding="utf-8")
+        f"---\nid: {id_}\n{titulo_}: {titulo}\n{estado_}: {estado}\n{fecha_}: {fecha.isoformat()}\n"
+        f"{creado_}: {fecha.isoformat()}T10:00:00\n---\n# {id_} — {titulo}\n", encoding="utf-8")
 
 
 def _memorias(entorno) -> dict:
-    """Dos proyectos: 'demo' con memoria explícita y 'otro' con la memoria por defecto (<base>/.memorias/otro)."""
+    """Dos proyectos: 'demo' con memoria explícita y aún en esquema v1 (T-010: analizar_uso lee las dos versiones) y
+    'otro' con la memoria por defecto (<base>/.memorias/otro), ya en v2."""
     hoy = dt.date.today()
     mem_demo = entorno["tmp"] / "mem-demo"
     _adr(mem_demo / "decisiones", "ADR-001", "acordada", hoy, "Usar git")
@@ -132,7 +136,7 @@ def _memorias(entorno) -> dict:
     _adr(mem_demo / "decisiones", "ADR-003", "propuesta", hoy - dt.timedelta(days=9), "Vieja abierta")
     _adr(mem_demo / "decisiones", "ADR-004", "reemplazada", hoy - dt.timedelta(days=1), "Cambiada")
     _adr(mem_demo / "decisiones", "ADR-005", "acordada", hoy - dt.timedelta(days=40), "Fuera de ventana")
-    _adr(entorno["base"] / ".memorias" / "otro" / "decisiones", "ADR-010", "descartada", hoy, "No va")
+    _adr(entorno["base"] / ".memorias" / "otro" / "decisions", "ADR-010", "rejected", hoy, "No va")
     config = {"demo": {"ruta": str(entorno["base"] / "demo"), "memoria": str(mem_demo)},
               "otro": {"ruta": str(entorno["base"] / "otro")}}
     Path(entorno["env"]["MEMORIA_PROYECTOS_CONFIG"]).write_text(json.dumps(config), encoding="utf-8")
@@ -147,8 +151,8 @@ def test_decisiones_por_estado_desde_la_memoria(entorno, monkeypatch, capsys):
     salida = capsys.readouterr().out
     assert "confirmadas por el usuario" not in salida
     linea = next(l for l in salida.splitlines() if l.startswith("- Decisiones creadas en el período"))
-    assert "demo: acordada 1 · propuesta 2 · reemplazada 1 · descartada 0" in linea
-    assert "otro: acordada 0 · propuesta 0 · reemplazada 0 · descartada 1" in linea
+    assert "demo: accepted 1 · proposed 2 · superseded 1 · rejected 0" in linea       # v1, normalizado
+    assert "otro: accepted 0 · proposed 0 · superseded 0 · rejected 1" in linea
     viejas = salida.split("- Propuestas abiertas hoy: 2 · con más de 7 días: 1")[1].splitlines()
     fecha = (dt.date.today() - dt.timedelta(days=9)).isoformat()
     assert viejas[1] == f"  demo ADR-003 {fecha} Vieja abierta"

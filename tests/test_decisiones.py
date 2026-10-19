@@ -7,9 +7,9 @@ def _registrar(srv, titulo="Usar Godot", **extra):
 
 
 def test_toda_decision_nace_como_propuesta(srv, proyecto):
-    assert "ADR-001 registrada como propuesta" in _registrar(srv)
-    meta, _ = srv._leer_registro(next((proyecto["mem"] / "decisiones").glob("ADR-001*.md")))
-    assert meta["estado"] == "propuesta"
+    assert "ADR-001 registrada como proposed" in _registrar(srv)
+    meta, _ = srv._leer_registro(next((proyecto["mem"] / "decisions").glob("ADR-001*.md")))
+    assert meta["status"] == "proposed"
 
 
 def test_no_existe_atajo_para_acordar_al_registrar(srv, proyecto):
@@ -20,9 +20,9 @@ def test_no_existe_atajo_para_acordar_al_registrar(srv, proyecto):
 def test_confirmar_exige_cita_y_la_guarda(srv, proyecto):
     _registrar(srv)
     assert srv.confirmar_decision(proyecto="demo", id="ADR-001", cita_usuario=" ").startswith("ERROR:")
-    assert "acordada" in srv.confirmar_decision(proyecto="demo", id="ADR-001", cita_usuario="sí, confirmo")
-    texto = next((proyecto["mem"] / "decisiones").glob("ADR-001*.md")).read_text()
-    assert "## Confirmación" in texto and "> sí, confirmo" in texto
+    assert "ADR-001 → accepted" in srv.confirmar_decision(proyecto="demo", id="ADR-001", cita_usuario="sí, confirmo")
+    texto = next((proyecto["mem"] / "decisions").glob("ADR-001*.md")).read_text()
+    assert "## Acceptance (" in texto and "> sí, confirmo" in texto
 
 
 def test_solo_se_confirman_o_descartan_propuestas(srv, proyecto):
@@ -35,10 +35,10 @@ def test_solo_se_confirman_o_descartan_propuestas(srv, proyecto):
 def test_descartar_exige_motivo_y_conserva_historial(srv, proyecto):
     _registrar(srv)
     assert srv.descartar_decision(proyecto="demo", id="ADR-001", motivo="").startswith("ERROR:")
-    assert "descartada" in srv.descartar_decision(proyecto="demo", id="ADR-001", motivo="No aplica a la v1")
-    archivo = next((proyecto["mem"] / "decisiones").glob("ADR-001*.md"))
+    assert "ADR-001 → rejected" in srv.descartar_decision(proyecto="demo", id="ADR-001", motivo="No aplica a la v1")
+    archivo = next((proyecto["mem"] / "decisions").glob("ADR-001*.md"))
     assert archivo.exists() and "No aplica a la v1" in archivo.read_text()
-    assert "## Descartadas" in (proyecto["mem"] / "acuerdos.md").read_text()
+    assert "## Rejected" in (proyecto["mem"] / "DECISIONS.md").read_text()
 
 
 def test_reemplazar_marca_la_anterior(srv, proyecto):
@@ -60,16 +60,16 @@ def test_revisar_propuestas_muestra_solo_pendientes(srv, proyecto):
 def test_vistas_se_regeneran_y_cada_cambio_se_commitea(srv, proyecto):
     _registrar(srv)
     srv.confirmar_decision(proyecto="demo", id="ADR-001", cita_usuario="ok")
-    acuerdos = (proyecto["mem"] / "acuerdos.md").read_text()
-    assert "ADR-001" in acuerdos.split("## Propuestas")[0]       # aparece entre las acordadas
+    acuerdos = (proyecto["mem"] / "DECISIONS.md").read_text()
+    assert "ADR-001" in acuerdos.split("## Proposed")[0]       # aparece entre las accepted
     historial = log_git(proyecto["mem"])
-    assert historial[0] == "memoria: ADR-001 acordada" and any("propuesta" in h for h in historial)
+    assert historial[0] == "memoria: ADR-001 accepted" and any("proposed" in h for h in historial)
 
 
 def test_titulos_con_saltos_de_linea_no_rompen_el_registro(srv, proyecto):
     srv.registrar_decision(proyecto="demo", titulo="Título\ncon salto", decision="d", justificacion="j")
-    meta, _ = srv._leer_registro(next((proyecto["mem"] / "decisiones").glob("ADR-001*.md")))
-    assert meta["titulo"] == "Título con salto"
+    meta, _ = srv._leer_registro(next((proyecto["mem"] / "decisions").glob("ADR-001*.md")))
+    assert meta["title"] == "Título con salto"
 
 
 def test_revisar_propuestas_paginado_y_resumen(srv, proyecto):
@@ -88,11 +88,11 @@ def test_confirmar_en_lote_es_todo_o_nada(srv, proyecto):
     srv.confirmar_decision(proyecto="demo", id="ADR-003", cita_usuario="ok")
     salida = srv.confirmar_decisiones_lote(proyecto="demo", ids=["ADR-001", "ADR-003"], cita_usuario="confirmo 1 y 3")
     assert "no se confirmó ninguna" in salida
-    meta, _ = srv._leer_registro(next((proyecto["mem"] / "decisiones").glob("ADR-001*.md")))
-    assert meta["estado"] == "propuesta"
+    meta, _ = srv._leer_registro(next((proyecto["mem"] / "decisions").glob("ADR-001*.md")))
+    assert meta["status"] == "proposed"
     assert srv.confirmar_decisiones_lote(proyecto="demo", ids=["ADR-001"], cita_usuario="").startswith("ERROR:")
     salida = srv.confirmar_decisiones_lote(proyecto="demo", ids=["adr-001", "ADR-002", "ADR-001"], cita_usuario="confirmo 1 y 2")
-    assert "2 acordadas (ADR-001, ADR-002)" in salida
-    texto = next((proyecto["mem"] / "decisiones").glob("ADR-002*.md")).read_text()
-    assert "en lote" in texto and "> confirmo 1 y 2" in texto
-    assert log_git(proyecto["mem"])[0].startswith("memoria: 2 decisiones acordadas en lote")
+    assert "2 → accepted (ADR-001, ADR-002)" in salida
+    texto = next((proyecto["mem"] / "decisions").glob("ADR-002*.md")).read_text()
+    assert ", batch)" in texto and "> confirmo 1 y 2" in texto
+    assert log_git(proyecto["mem"])[0].startswith("memoria: 2 decisions accepted in batch")

@@ -13,15 +13,15 @@ from ratifact import registros
 
 def test_decision_duplicada_no_crea_archivo_ni_commit(srv, proyecto):
     r1 = srv.registrar_decision(proyecto="demo", titulo="Usar Godot", decision="Godot 4", justificacion="2D nativo")
-    assert "ADR-001 registrada como propuesta" in r1
+    assert "ADR-001 registrada como proposed" in r1
     historial_antes = log_git(proyecto["mem"])
-    archivos_antes = sorted((proyecto["mem"] / "decisiones").glob("ADR-*.md"))
+    archivos_antes = sorted((proyecto["mem"] / "decisions").glob("ADR-*.md"))
 
     r2 = srv.registrar_decision(proyecto="demo", titulo="Usar Godot", decision="Godot 4", justificacion="2D nativo")
 
     assert "ADR-001" in r2 and srv.MARCA_DUPLICADO in r2
-    assert sorted((proyecto["mem"] / "decisiones").glob("ADR-*.md")) == archivos_antes   # ningún archivo nuevo
-    assert not (proyecto["mem"] / "decisiones" / "ADR-002").exists()
+    assert sorted((proyecto["mem"] / "decisions").glob("ADR-*.md")) == archivos_antes   # ningún archivo nuevo
+    assert not (proyecto["mem"] / "decisions" / "ADR-002").exists()
     assert log_git(proyecto["mem"]) == historial_antes   # ningún commit nuevo (criterio 5)
 
 
@@ -35,7 +35,7 @@ def test_pendiente_duplicado_no_crea_nada_y_devuelve_el_id_existente(srv, proyec
     r2 = srv.registrar_pendiente(proyecto="demo", tema="Parry", contexto="Otro contexto, da igual")
 
     assert "P-001" in r2 and srv.MARCA_DUPLICADO in r2
-    assert len(list((proyecto["mem"] / "pendientes").glob("P-*.md"))) == 1
+    assert len(list((proyecto["mem"] / "pending").glob("P-*.md"))) == 1
     assert log_git(proyecto["mem"]) == historial_antes
 
 
@@ -51,7 +51,7 @@ def test_tarea_duplicada_no_crea_nada_y_devuelve_el_id_existente(srv, proyecto):
                               criterios_aceptacion="- otros criterios")
 
     assert "T-001" in r2 and srv.MARCA_DUPLICADO in r2
-    assert len(list((proyecto["mem"] / "tareas").glob("T-*.md"))) == 1
+    assert len(list((proyecto["mem"] / "tasks").glob("T-*.md"))) == 1
     assert log_git(proyecto["mem"]) == historial_antes
 
 
@@ -61,14 +61,14 @@ def test_normalizacion_case_insensitive_trim_y_espacios_colapsados(srv, proyecto
     srv.registrar_pendiente(proyecto="demo", tema="  Revisar   Parry ", contexto="c")
     r2 = srv.registrar_pendiente(proyecto="demo", tema="revisar parry", contexto="c2")
     assert "P-001" in r2 and srv.MARCA_DUPLICADO in r2
-    assert len(list((proyecto["mem"] / "pendientes").glob("P-*.md"))) == 1
+    assert len(list((proyecto["mem"] / "pending").glob("P-*.md"))) == 1
 
 
 def test_titulos_realmente_distintos_no_son_duplicados(srv, proyecto):
     srv.registrar_pendiente(proyecto="demo", tema="Parry", contexto="c")
     r2 = srv.registrar_pendiente(proyecto="demo", tema="Parry extendido", contexto="c")
     assert "P-002 registrado" in r2
-    assert len(list((proyecto["mem"] / "pendientes").glob("P-*.md"))) == 2
+    assert len(list((proyecto["mem"] / "pending").glob("P-*.md"))) == 2
 
 
 def test_tipos_distintos_nunca_coinciden_entre_si(srv, proyecto):
@@ -98,7 +98,7 @@ def test_fuera_de_la_ventana_se_crea_normalmente(srv, proyecto, monkeypatch):
 
     assert "ADR-002 registrada" in r2
     assert srv.MARCA_DUPLICADO not in r2
-    assert len(list((proyecto["mem"] / "decisiones").glob("ADR-*.md"))) == 2
+    assert len(list((proyecto["mem"] / "decisions").glob("ADR-*.md"))) == 2
 
 
 def test_dentro_de_la_ventana_justo_en_el_limite_se_considera_duplicado(srv, proyecto, monkeypatch):
@@ -139,7 +139,7 @@ def test_decision_descartada_y_registrada_de_nuevo_crea_un_adr_nuevo(srv, proyec
 
     assert "ADR-002 registrada" in r3
     assert srv.MARCA_DUPLICADO not in r3
-    assert (proyecto["mem"] / "decisiones" / "ADR-002-usar-x.md").exists()
+    assert (proyecto["mem"] / "decisions" / "ADR-002-usar-x.md").exists()
     historial_despues = log_git(proyecto["mem"])
     assert len(historial_despues) == len(historial_antes) + 2   # descartar + registrar de nuevo
     assert any("ADR-002" in linea for linea in historial_despues)
@@ -156,7 +156,7 @@ def test_pendiente_cerrado_y_registrado_de_nuevo_crea_un_pendiente_nuevo(srv, pr
 
     assert "P-002 registrado" in r3
     assert srv.MARCA_DUPLICADO not in r3
-    assert (proyecto["mem"] / "pendientes" / "P-002-parry.md").exists()
+    assert (proyecto["mem"] / "pending" / "P-002-parry.md").exists()
     historial_despues = log_git(proyecto["mem"])
     assert len(historial_despues) == len(historial_antes) + 2   # cerrar + registrar de nuevo
     assert any("P-002" in linea for linea in historial_despues)
@@ -175,7 +175,7 @@ def test_tarea_cambiada_de_estado_y_registrada_de_nuevo_crea_una_tarea_nueva(srv
 
     assert "T-002 registrada" in r3
     assert srv.MARCA_DUPLICADO not in r3
-    assert (proyecto["mem"] / "tareas" / "T-002-ranuras-de-forma.md").exists()
+    assert (proyecto["mem"] / "tasks" / "T-002-ranuras-de-forma.md").exists()
     historial_despues = log_git(proyecto["mem"])
     assert len(historial_despues) == len(historial_antes) + 2   # actualizar_tarea + registrar de nuevo
     assert any("T-002" in linea for linea in historial_despues)

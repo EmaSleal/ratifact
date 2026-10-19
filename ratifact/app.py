@@ -11,7 +11,8 @@ from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
-from ratifact.config import ErrorMemoria
+from ratifact.config import ALIAS_RUTA, ErrorMemoria
+from ratifact.esquema import _asegurar_esquema
 from ratifact.registros import MARCA_DUPLICADO
 
 
@@ -36,7 +37,7 @@ mcp = FastMCP(
 LOG_USO = Path(os.environ.get("MEMORIA_PROYECTOS_LOG", Path(__file__).resolve().parents[1] / "logs" / "uso.jsonl"))
 
 
-def _registrar_uso(nombre: str, kwargs: dict, respuesta, ms: float) -> None:
+def _registrar_uso(nombre: str, kwargs: dict, respuesta, ms: float, alias: str | None = None) -> None:
     try:
         texto = respuesta if isinstance(respuesta, str) else str(respuesta)
         fila = {
@@ -61,6 +62,8 @@ def _registrar_uso(nombre: str, kwargs: dict, respuesta, ms: float) -> None:
             fila["resultados"] = 0 if texto == "(sin coincidencias)" else texto.count("\n") + 1
         if nombre in ("registrar_decision", "registrar_pendiente", "registrar_tarea"):
             fila["duplicado"] = MARCA_DUPLICADO in texto
+        if alias:      # ruta v1 traducida (config._traducir_alias); analizar_uso la cuenta para quitar el alias en 1.1
+            fila["alias_ruta"] = alias
         LOG_USO.parent.mkdir(parents=True, exist_ok=True)
         with open(LOG_USO, "a", encoding="utf-8") as f:
             f.write(json.dumps(fila, ensure_ascii=False) + "\n")
@@ -83,16 +86,36 @@ def herramienta(fn):
 
     @functools.wraps(fn)
     def envoltura(*args, **kwargs):
-        inicio = time.perf_counter()
+        inicio, argumentos, token = time.perf_counter(), _argumentos(firma, args, kwargs), ALIAS_RUTA.set(None)
         try:
-            respuesta = fn(*args, **kwargs)
-        except Exception as e:   # algo escapó de _ejecutar: se registra como falla interna y se propaga
-            _registrar_uso(fn.__name__, _argumentos(firma, args, kwargs), f"ERROR INTERNO: {type(e).__name__}: {e}",
-                           (time.perf_counter() - inicio) * 1000)
-            raise
-        _registrar_uso(fn.__name__, _argumentos(firma, args, kwargs), respuesta, (time.perf_counter() - inicio) * 1000)
-        return respuesta
+            aviso, respuesta = _primer_acceso(argumentos)
+            try:
+                if respuesta is None:
+                    respuesta = _con_aviso(aviso, fn(*args, **kwargs))
+            except Exception as e:   # algo escapó de _ejecutar: se registra como falla interna y se propaga
+                _registrar_uso(fn.__name__, argumentos, f"ERROR INTERNO: {type(e).__name__}: {e}",
+                               (time.perf_counter() - inicio) * 1000, ALIAS_RUTA.get())
+                raise
+            _registrar_uso(fn.__name__, argumentos, respuesta, (time.perf_counter() - inicio) * 1000, ALIAS_RUTA.get())
+            return respuesta
+        finally:
+            ALIAS_RUTA.reset(token)
     return mcp.tool()(envoltura)
+
+
+def _primer_acceso(argumentos: dict) -> tuple[str, str | None]:
+    """Toda herramienta con `proyecto` verifica (y si hace falta migra) el esquema de esa memoria antes de ejecutarse:
+    el código solo lee y escribe el esquema actual. Devuelve (aviso de la migración, None) o, si la memoria no se
+    puede usar (migración rechazada o fallida), ("", "ERROR: …") y la herramienta no se ejecuta."""
+    proyecto = argumentos.get("proyecto")
+    try:
+        return (_asegurar_esquema(proyecto) if isinstance(proyecto, str) and proyecto else ""), None
+    except Exception as e:
+        return "", _mensaje_error(e)
+
+
+def _con_aviso(aviso: str, respuesta):
+    return f"{aviso}\n{respuesta}" if aviso and isinstance(respuesta, str) else respuesta
 
 
 def herramienta_async(fn):
@@ -101,14 +124,16 @@ def herramienta_async(fn):
 
     @functools.wraps(fn)
     async def envoltura(*args, **kwargs):
-        inicio = time.perf_counter()
+        inicio, argumentos = time.perf_counter(), _argumentos(firma, args, kwargs)
+        aviso, respuesta = _primer_acceso(argumentos)
         try:
-            respuesta = await fn(*args, **kwargs)
+            if respuesta is None:
+                respuesta = _con_aviso(aviso, await fn(*args, **kwargs))
         except Exception as e:
-            _registrar_uso(fn.__name__, _argumentos(firma, args, kwargs), f"ERROR INTERNO: {type(e).__name__}: {e}",
+            _registrar_uso(fn.__name__, argumentos, f"ERROR INTERNO: {type(e).__name__}: {e}",
                            (time.perf_counter() - inicio) * 1000)
             raise
-        _registrar_uso(fn.__name__, _argumentos(firma, args, kwargs), respuesta, (time.perf_counter() - inicio) * 1000)
+        _registrar_uso(fn.__name__, argumentos, respuesta, (time.perf_counter() - inicio) * 1000)
         return respuesta
     return mcp.tool()(envoltura)
 

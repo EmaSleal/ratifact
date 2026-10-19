@@ -37,8 +37,8 @@ def entorno(tmp_path, monkeypatch):
 # Módulos de ratifact en orden de dependencias. app va antes que las herramientas: al recargarlo se crea un `mcp`
 # nuevo, y al recargar cada módulo de herramientas sus decoradores las registran en ese `mcp` (sin duplicados).
 MODULOS_RATIFACT = [
-    "ratifact.config", "ratifact.registros", "ratifact.catalogo", "ratifact.busqueda", "ratifact.listado",
-    "ratifact.esquema", "ratifact.plantillas", "ratifact.app",
+    "ratifact.vocabulario", "ratifact.config", "ratifact.registros", "ratifact.catalogo", "ratifact.busqueda",
+    "ratifact.listado", "ratifact.migracion_v2", "ratifact.esquema", "ratifact.plantillas", "ratifact.app",
     "ratifact.integraciones.base", "ratifact.integraciones.codegraph", "ratifact.integraciones.gentle_ai",
     "ratifact.integraciones.engram", "ratifact.integraciones.registro", "ratifact.integraciones",
     "ratifact.herramientas.contexto_documentos", "ratifact.herramientas.decisiones",
@@ -84,3 +84,13 @@ def proyecto(srv, entorno):
 def log_git(repo: Path) -> list[str]:
     r = subprocess.run(["git", "-C", str(repo), "log", "--format=%s"], capture_output=True, text=True)
     return r.stdout.splitlines()
+
+
+@pytest.fixture
+def proyecto_v1(proyecto):
+    """Igual que `proyecto`, pero su memoria es una memoria v1 (tests/memoria_v1.py) en un repo git limpio, todavía
+    sin migrar: el primer acceso de cualquier herramienta la migra. `foto`: contenido antes de migrar."""
+    import shutil
+    from memoria_v1 import crear_memoria_v1
+    shutil.rmtree(proyecto["mem"])
+    return {**proyecto, "foto": crear_memoria_v1(proyecto["mem"])}

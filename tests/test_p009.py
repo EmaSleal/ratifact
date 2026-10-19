@@ -11,12 +11,12 @@ import pytest
 from ratifact import registros
 
 
-def _escribir_adr(mem: Path, numero: int, estado: str = "propuesta") -> Path:
+def _escribir_adr(mem: Path, numero: int, estado: str = "proposed") -> Path:
     id_ = f"ADR-{numero:03d}"
-    ruta = mem / "decisiones" / f"{id_}-titulo-{numero}.md"
+    ruta = mem / "decisions" / f"{id_}-titulo-{numero}.md"
     ruta.parent.mkdir(parents=True, exist_ok=True)
-    ruta.write_text(f"---\nid: {id_}\ntitulo: Titulo {numero}\nestado: {estado}\nfecha: 2026-01-01\n"
-                    f"resumen: Resumen {numero}\n---\n# {id_} — Titulo {numero}\n", encoding="utf-8")
+    ruta.write_text(f"---\nid: {id_}\ntitle: Titulo {numero}\nstatus: {estado}\ndate: 2026-01-01\n"
+                    f"summary: Resumen {numero}\n---\n# {id_} — Titulo {numero}\n", encoding="utf-8")
     return ruta
 
 
@@ -66,27 +66,27 @@ def test_decidir_propuestas_falla_inesperada_es_error_interno(srv, proyecto, ent
 def test_buscar_registro_normaliza_y_es_exacto(srv, proyecto, pedido, esperado):
     for n in (1, 10, 11, 12):
         _escribir_adr(proyecto["mem"], n)
-    ruta = registros._buscar_registro(proyecto["mem"] / "decisiones", pedido)
+    ruta = registros._buscar_registro(proyecto["mem"] / "decisions", pedido)
     assert ruta.name.startswith(f"{esperado}-")
 
 
 def test_buscar_registro_inexistente_muestra_id_normalizado(srv, proyecto):
     _escribir_adr(proyecto["mem"], 1)
     with pytest.raises(srv.ErrorMemoria, match=r"^No existe ADR-099\.$"):
-        registros._buscar_registro(proyecto["mem"] / "decisiones", "adr-99")
+        registros._buscar_registro(proyecto["mem"] / "decisions", "adr-99")
 
 
 def test_buscar_registro_no_trunca_ids_de_cuatro_cifras(srv, proyecto):
     _escribir_adr(proyecto["mem"], 100)
     _escribir_adr(proyecto["mem"], 1000)
-    assert registros._buscar_registro(proyecto["mem"] / "decisiones", "ADR-1000").name.startswith("ADR-1000-")
-    assert registros._buscar_registro(proyecto["mem"] / "decisiones", "ADR-100").name.startswith("ADR-100-")
+    assert registros._buscar_registro(proyecto["mem"] / "decisions", "ADR-1000").name.startswith("ADR-1000-")
+    assert registros._buscar_registro(proyecto["mem"] / "decisions", "ADR-100").name.startswith("ADR-100-")
 
 
 def test_buscar_registro_acepta_archivo_sin_slug(srv, proyecto):
-    carpeta = proyecto["mem"] / "decisiones"
+    carpeta = proyecto["mem"] / "decisions"
     _escribir_adr(proyecto["mem"], 10)
-    (carpeta / "ADR-001.md").write_text("---\nid: ADR-001\nestado: propuesta\n---\n", encoding="utf-8")
+    (carpeta / "ADR-001.md").write_text("---\nid: ADR-001\nstatus: proposed\n---\n", encoding="utf-8")
     assert registros._buscar_registro(carpeta, "ADR-01").name == "ADR-001.md"
 
 
@@ -95,17 +95,17 @@ def test_confirmar_decision_adr_01_no_toca_adr_010(srv, proyecto):
     for n in (10, 11, 12):
         _escribir_adr(proyecto["mem"], n)
 
-    assert srv.confirmar_decision(proyecto="demo", id="ADR-01", cita_usuario="sí, dale").startswith("ADR-001 acordada")
-    assert "estado: propuesta" in next((proyecto["mem"] / "decisiones").glob("ADR-010-*.md")).read_text()
-    assert srv.descartar_decision(proyecto="demo", id="adr-11", motivo="no va").startswith("ADR-011 descartada")
+    assert srv.confirmar_decision(proyecto="demo", id="ADR-01", cita_usuario="sí, dale").startswith("ADR-001 → accepted")
+    assert "status: proposed" in next((proyecto["mem"] / "decisions").glob("ADR-010-*.md")).read_text()
+    assert srv.descartar_decision(proyecto="demo", id="adr-11", motivo="no va").startswith("ADR-011 → rejected")
     assert srv.confirmar_decision(proyecto="demo", id="ADR-099", cita_usuario="sí") == "ERROR: No existe ADR-099."
 
 
 def test_cerrar_pendiente_p_1_es_exacto(srv, proyecto):
     for i in range(1, 11):
         srv.registrar_pendiente(proyecto="demo", tema=f"Tema {i}", contexto="c")
-    assert srv.cerrar_pendiente(proyecto="demo", id="p-1", resolucion="listo").startswith("P-001 cerrado")
-    assert "estado: abierta" in next((proyecto["mem"] / "pendientes").glob("P-010-*.md")).read_text()
+    assert srv.cerrar_pendiente(proyecto="demo", id="p-1", resolucion="listo").startswith("P-001 → closed")
+    assert "status: open" in next((proyecto["mem"] / "pending").glob("P-010-*.md")).read_text()
     assert srv.cerrar_pendiente(proyecto="demo", id="P-11", resolucion="x") == "ERROR: No existe P-011."
 
 
@@ -114,7 +114,7 @@ def test_actualizar_tarea_t_1_es_exacta(srv, proyecto):
         srv.registrar_tarea(proyecto="demo", titulo=f"Tarea {i}", objetivo="o", criterios_aceptacion="- c")
     salida = srv.actualizar_tarea(proyecto="demo", id="t-1", estado="en_curso")
     assert "T-001" in salida and not salida.startswith("ERROR"), salida
-    assert "estado: pendiente" in next((proyecto["mem"] / "tareas").glob("T-010-*.md")).read_text()
+    assert "status: todo" in next((proyecto["mem"] / "tasks").glob("T-010-*.md")).read_text()
     assert srv.actualizar_tarea(proyecto="demo", id="T-11", estado="en_curso") == "ERROR: No existe T-011."
 
 
@@ -152,5 +152,5 @@ def test_registrar_sesion_toma_la_hora_de_ahora(srv, proyecto, monkeypatch):
     salida = srv.registrar_sesion(proyecto="demo", resumen="Sesión de prueba")
 
     assert not salida.startswith("ERROR"), salida
-    texto = (proyecto["mem"] / "sesiones" / f"{hoy.isoformat()}.md").read_text(encoding="utf-8")
+    texto = (proyecto["mem"] / "sessions" / f"{hoy.isoformat()}.md").read_text(encoding="utf-8")
     assert "\n## 07:05\nSesión de prueba\n" in texto

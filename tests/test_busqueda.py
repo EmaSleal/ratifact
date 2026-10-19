@@ -12,11 +12,11 @@ import analizar_uso
 CATALOGO = re.compile(r"^[A-Z]+-\d+ · ")
 
 
-def _registro(mem: Path, carpeta: str, id_: str, titulo: str, estado: str = "pendiente", clave: str = "titulo"):
+def _registro(mem: Path, carpeta: str, id_: str, titulo: str, estado: str = "todo", clave: str = "title"):
     d = mem / carpeta
     d.mkdir(parents=True, exist_ok=True)
     p = d / f"{id_}-registro.md"
-    p.write_text(f"---\nid: {id_}\n{clave}: {titulo}\nestado: {estado}\n---\n# {id_} — {titulo}\n", encoding="utf-8")
+    p.write_text(f"---\nid: {id_}\n{clave}: {titulo}\nstatus: {estado}\n---\n# {id_} — {titulo}\n", encoding="utf-8")
     return p
 
 
@@ -56,16 +56,16 @@ def test_pocas_coincidencias_en_codigo_ceden_su_cuota_a_la_memoria(srv, proyecto
 # ───────────────────────── 15(b): títulos al inicio de palabra, tope 5 ─────────────────────────
 
 def test_titulos_solo_coinciden_al_inicio_de_palabra(srv, proyecto):
-    _registro(proyecto["mem"], "decisiones", "ADR-001", "Tipo de cambio híbrido", "acordada")
-    _registro(proyecto["mem"], "pendientes", "P-001", "IVA incluido", "abierta", clave="tema")
+    _registro(proyecto["mem"], "decisions", "ADR-001", "Tipo de cambio híbrido", "accepted")
+    _registro(proyecto["mem"], "pending", "P-001", "IVA incluido", "open", clave="topic")
     catalogo, _, _ = _secciones(srv.buscar(proyecto="demo", texto="id"))
     assert catalogo == []
 
 
 def test_titulos_sin_distinguir_mayusculas_ni_acentos(srv, proyecto):
-    _registro(proyecto["mem"], "tareas", "T-001", "Asientos contables de cierre")
-    _registro(proyecto["mem"], "tareas", "T-002", "Navegación por id")
-    linea = "T-001 · pendiente · Asientos contables de cierre (.project/tareas/T-001-registro.md)"
+    _registro(proyecto["mem"], "tasks", "T-001", "Asientos contables de cierre")
+    _registro(proyecto["mem"], "tasks", "T-002", "Navegación por id")
+    linea = "T-001 · todo · Asientos contables de cierre (.project/tasks/T-001-registro.md)"
     assert srv.buscar(proyecto="demo", texto="asiento").splitlines()[0] == linea
     assert srv.buscar(proyecto="demo", texto="ASIENTOS CONTABLES").splitlines()[0] == linea
     assert srv.buscar(proyecto="demo", texto="navegacion").splitlines()[0].startswith("T-002 · ")
@@ -74,7 +74,7 @@ def test_titulos_sin_distinguir_mayusculas_ni_acentos(srv, proyecto):
 
 def test_titulos_con_tope_de_cinco(srv, proyecto):
     for n in range(1, 8):
-        _registro(proyecto["mem"], "tareas", f"T-{n:03d}", f"Asiento número {n}")
+        _registro(proyecto["mem"], "tasks", f"T-{n:03d}", f"Asiento número {n}")
     salida = srv.buscar(proyecto="demo", texto="asiento")
     catalogo, _, _ = _secciones(salida)
     assert [l.split(" · ")[0] for l in catalogo] == ["T-001", "T-002", "T-003", "T-004", "T-005"]
@@ -84,11 +84,11 @@ def test_titulos_con_tope_de_cinco(srv, proyecto):
 # ───────────────────────── 15(a): el id exacto va primero ─────────────────────────
 
 def test_id_exacto_antes_que_los_titulos(srv, proyecto):
-    _registro(proyecto["mem"], "tareas", "T-001", "Seguimiento de ADR-24")
-    _registro(proyecto["mem"], "decisiones", "ADR-024", "Integraciones opcionales", "propuesta")
+    _registro(proyecto["mem"], "tasks", "T-001", "Seguimiento de ADR-24")
+    _registro(proyecto["mem"], "decisions", "ADR-024", "Integraciones opcionales", "proposed")
     catalogo, _, _ = _secciones(srv.buscar(proyecto="demo", texto="adr-24"))
     assert [l.split(" · ")[0] for l in catalogo] == ["ADR-024", "T-001"]
-    assert srv.buscar(proyecto="demo", texto="adr-24").splitlines()[0].startswith("ADR-024 · propuesta · ")
+    assert srv.buscar(proyecto="demo", texto="adr-24").splitlines()[0].startswith("ADR-024 · proposed · ")
 
 
 # ───────────────────────── 15(d): omitidos por sección ─────────────────────────
@@ -110,11 +110,11 @@ def test_sin_omitidos_no_hay_linea_final(srv, proyecto):
 # ───────────────────────── 15(e): sin repetir la línea del título ─────────────────────────
 
 def test_no_repite_el_titulo_del_frontmatter_de_un_registro_mostrado(srv, proyecto):
-    _registro(proyecto["mem"], "tareas", "T-001", "Asientos contables")
-    _registro(proyecto["mem"], "pendientes", "P-001", "Asientos pendientes", "abierta", clave="tema")
+    _registro(proyecto["mem"], "tasks", "T-001", "Asientos contables")
+    _registro(proyecto["mem"], "pending", "P-001", "Asientos pendientes", "open", clave="topic")
     salida = srv.buscar(proyecto="demo", texto="asientos").splitlines()
-    assert not [l for l in salida if l.endswith((": titulo: Asientos contables", ": tema: Asientos pendientes"))], salida
-    assert ".project/tareas/T-001-registro.md:6: # T-001 — Asientos contables" in salida      # el cuerpo sí sale
+    assert not [l for l in salida if l.endswith((": title: Asientos contables", ": topic: Asientos pendientes"))], salida
+    assert ".project/tasks/T-001-registro.md:6: # T-001 — Asientos contables" in salida      # el cuerpo sí sale
 
 
 # ───────────────────────── 16: telemetría de listar_documentos ─────────────────────────
@@ -203,8 +203,8 @@ def test_coincidencia_solo_por_nombre_se_lista_una_vez(srv, proyecto):
 def test_nombre_en_memoria_solo_para_archivos_que_no_son_registros(srv, proyecto):
     (proyecto["mem"] / "a-notas.md").write_text("un asiento suelto\n")
     (proyecto["mem"] / "plan-asientos.md").write_text("nada que ver\n")
-    _registro(proyecto["mem"], "tareas", "T-001", "Otra cosa")
-    (proyecto["mem"] / "tareas" / "T-001-registro.md").rename(proyecto["mem"] / "tareas" / "T-001-asiento.md")
+    _registro(proyecto["mem"], "tasks", "T-001", "Otra cosa")
+    (proyecto["mem"] / "tasks" / "T-001-registro.md").rename(proyecto["mem"] / "tasks" / "T-001-asiento.md")
     salida = srv.buscar(proyecto="demo", texto="asiento")
     _, memoria, _ = _secciones(salida)
     assert memoria == [".project/plan-asientos.md: (coincide el nombre del archivo)",

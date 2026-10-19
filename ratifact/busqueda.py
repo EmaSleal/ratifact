@@ -23,7 +23,7 @@ from pathlib import Path
 from ratifact.catalogo import CARPETAS, _coincidencias, _linea, _plano
 from ratifact.config import EXT_TEXTO, LIMITE_ARCHIVO_BUSQUEDA
 
-LINEA_TITULO = re.compile(r"(titulo|tema):")
+LINEA_TITULO = re.compile(r"(title|topic):")
 MARCA_NOMBRE = "(coincide el nombre del archivo)"
 
 
@@ -66,7 +66,7 @@ def _archivos_con_coincidencias(base: Path, prefijo: str, archivos: list[Path], 
                                 memoria: bool = False) -> list[tuple[list[str], int]]:
     """Por cada archivo con coincidencias (primero los que coinciden por nombre): sus primeras `limite` líneas
     "ruta:n: texto" que contienen `patron` y cuántas tiene en total. En los archivos de `registros_mostrados` (rutas
-    ya listadas por el catálogo) no se repite la línea titulo/tema del frontmatter. Cada archivo se lee una sola vez."""
+    ya listadas por el catálogo) no se repite la línea title/topic del frontmatter. Cada archivo se lee una sola vez."""
     por_nombre, otros = [], []
     for p in archivos:
         if p.suffix not in EXT_TEXTO:

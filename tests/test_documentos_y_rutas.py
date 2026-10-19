@@ -52,13 +52,13 @@ def test_leer_con_rango(srv, proyecto):
 def test_buscar_en_codigo_y_memoria(srv, proyecto):
     srv.registrar_pendiente(proyecto="demo", tema="Lobo alfa", contexto="Revisar")
     salida = srv.buscar(proyecto="demo", texto="LOBO ALFA")
-    assert "docs/vision.md:2:" in salida and ".project/pendientes/" in salida
+    assert "docs/vision.md:2:" in salida and ".project/pending/" in salida
     assert srv.buscar(proyecto="demo", texto="inexistente-zzz") == "(sin coincidencias)"
 
 
 def test_listar_documentos(srv, proyecto):
     assert "docs/vision.md" in srv.listar_documentos(proyecto="demo")
-    assert ".project/acuerdos.md" in srv.listar_documentos(proyecto="demo", carpeta=".project")
+    assert ".project/DECISIONS.md" in srv.listar_documentos(proyecto="demo", carpeta=".project")
 
 
 def test_buscar_respeta_gitignore_y_salta_dependencias(srv, proyecto):

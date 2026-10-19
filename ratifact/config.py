@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import json
 import os
+from contextvars import ContextVar
 from pathlib import Path
+
+from ratifact.vocabulario import CARPETAS_V1, VISTAS_V1
 
 
 CONFIG = Path(os.environ.get(
@@ -46,6 +49,29 @@ def _proyectos() -> dict:
     return json.loads(CONFIG.read_text(encoding="utf-8"))
 
 
+# Claves de cada proyecto en projects.json: se leen en español (v1) y en inglés (ADR-029); si están las dos, gana la
+# inglesa. Al escribir se conserva la grafía que ya usa la entrada. El renombrado del archivo es un paso del
+# instalador, nunca de la migración automática.
+CLAVES_CONFIG = {"ruta": "path", "memoria": "memory", "escritura": "writable", "pruebas": "tests"}
+
+
+def _valor(p: dict, clave: str, defecto=None):
+    """Valor de `clave` (nombre en español) en la entrada `p` de projects.json, leyendo también la clave inglesa."""
+    en = CLAVES_CONFIG[clave]
+    return p[en] if en in p else p.get(clave, defecto)
+
+
+def _clave_escritura(p: dict, clave: str) -> str:
+    """Nombre con que se escribe `clave` en la entrada `p`: el que ya tiene; si no tiene ninguno, inglés solo si la
+    entrada ya usa claves inglesas."""
+    en = CLAVES_CONFIG[clave]
+    if en in p:
+        return en
+    if clave in p:
+        return clave
+    return en if any(k in p for k in CLAVES_CONFIG.values()) else clave
+
+
 def _sugerencia_nombre(nombre: str, proyectos: dict) -> str | None:
     """Si `nombre` no está registrado pero existe un proyecto equivalente salvo '_'/'-' (p. ej. 'erp-spring-manager'
     vs 'erp_spring_manager'), lo sugiere."""
@@ -64,7 +90,7 @@ def _raiz(proyecto: str, verificar_existe: bool = True) -> Path:
         sugerido = _sugerencia_nombre(proyecto, proyectos)
         pista = f" ¿Quisiste decir '{sugerido}'?" if sugerido else f" Disponibles: {', '.join(proyectos)}"
         raise ErrorMemoria(f"Proyecto '{proyecto}' no registrado.{pista}")
-    raiz = Path(p["ruta"]).expanduser().resolve()
+    raiz = Path(_valor(p, "ruta")).expanduser().resolve()
     if verificar_existe and not raiz.is_dir():
         raise ErrorMemoria(f"La ruta del proyecto no existe: {raiz}")
     return raiz
@@ -75,7 +101,8 @@ def _mem(proyecto: str) -> Path:
     rama ni checkout la afecte. Clave "memoria" de projects.json; por defecto <carpeta de proyectos>/.memorias/<nombre>.
     No exige que la ruta del código exista: solo se usa aquí para la comparación ADR-010, nunca para leerla."""
     p = _proyectos().get(proyecto) or {}
-    mem = Path(p["memoria"]).expanduser().resolve() if p.get("memoria") else BASE_PROYECTOS / ".memorias" / proyecto
+    mem = (Path(_valor(p, "memoria")).expanduser().resolve() if _valor(p, "memoria")
+           else BASE_PROYECTOS / ".memorias" / proyecto)
     raiz = _raiz(proyecto, verificar_existe=False)
     if mem == raiz or raiz in mem.parents:
         raise ErrorMemoria(f"La memoria de '{proyecto}' está dentro del repositorio del código ({mem}); ADR-010 lo "
@@ -115,7 +142,44 @@ def _repo_de(ruta: Path, tope: Path) -> Path | None:
 
 
 def _zonas_escritura(proyecto: str) -> list[str]:
-    return _proyectos()[proyecto].get("escritura", [MEM, "docs"])
+    return _valor(_proyectos()[proyecto], "escritura", [MEM, "docs"])
+
+
+# ───────────────────────── rutas v1 de la memoria (alias) ─────────────────────────
+# Tras la migración al esquema v2 siguen circulando rutas v1 (INDEX.md, docs/, cuerpos de registros, chats viejos):
+# ".project/tareas/T-024.md". Se traduce SOLO el primer tramo después de .project/, se avisa en la respuesta
+# ("(→ .project/<ruta nueva>)") y se registra en la telemetría (`alias_ruta`). Plan: se quita en 1.1, junto con el
+# esquema.json centinela (ADR-030) y el respaldo MEMORIA_PROYECTOS_* (ADR-028), cuando analizar_uso muestre que ya no
+# se usa.
+ALIAS_RUTA: ContextVar[str | None] = ContextVar("alias_ruta", default=None)
+VISTAS = {*VISTAS_V1, *VISTAS_V1.values()}
+
+
+def _traducir_alias(proyecto: str, relativa: str, escribir: bool = False) -> str:
+    """".project/tareas/x" → ".project/tasks/x" (y acuerdos.md/abiertas.md → DECISIONS.md/OPEN.md, solo lectura). Las
+    rutas fuera de .project/ nunca se traducen. Si la memoria tiene la carpeta v1 y la v2 a la vez, ErrorMemoria."""
+    partes = Path(relativa).parts if relativa else ()
+    if len(partes) < 2 or partes[0] != MEM:
+        return relativa
+    if escribir and partes[1] in VISTAS and len(partes) == 2:
+        raise ErrorMemoria(f"{MEM}/{partes[1]} es una vista: se regenera sola desde los registros (decisiones y "
+                           "pendientes) y no se escribe a mano.")
+    nuevo = CARPETAS_V1.get(partes[1]) or (VISTAS_V1.get(partes[1]) if len(partes) == 2 else None)
+    if not nuevo:
+        return relativa
+    mem = _mem(proyecto)
+    if (mem / partes[1]).exists() and (mem / nuevo).exists():
+        raise ErrorMemoria(f"La memoria de '{proyecto}' ({mem}) es inconsistente: tiene {partes[1]} (v1) y {nuevo} "
+                           "(v2) a la vez. Revísala con git antes de seguir; no se tradujo la ruta.")
+    traducida = Path(MEM, nuevo, *partes[2:]).as_posix()
+    ALIAS_RUTA.set(traducida)
+    return traducida
+
+
+def _aviso_alias() -> str:
+    """Línea "(→ .project/<ruta nueva>)" si esta llamada tradujo una ruta v1; vacía si no."""
+    alias = ALIAS_RUTA.get()
+    return f"(→ {alias})\n" if alias else ""
 
 
 def _ruta_segura(proyecto: str, relativa: str, escribir: bool = False) -> Path:
@@ -124,6 +188,7 @@ def _ruta_segura(proyecto: str, relativa: str, escribir: bool = False) -> Path:
     raiz = _raiz(proyecto)
     if not relativa or Path(relativa).is_absolute():
         raise ErrorMemoria("La ruta debe ser relativa a la raíz del proyecto.")
+    relativa = _traducir_alias(proyecto, relativa, escribir)
     partes_rel = Path(relativa).parts
     if partes_rel and partes_rel[0] == MEM:
         mem = _mem(proyecto)

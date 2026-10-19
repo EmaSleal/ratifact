@@ -1,5 +1,6 @@
 """Registros con frontmatter (ADR, pendientes, tareas): lectura/escritura atómica, commits de git, ids y slugs,
-idempotencia de creación (ADR-019) y vistas generadas (acuerdos.md, abiertas.md)."""
+idempotencia de creación (ADR-019) y vistas generadas (DECISIONS.md, OPEN.md). Formato del esquema v2: carpetas,
+claves y estados en inglés (ratifact.vocabulario)."""
 from __future__ import annotations
 
 import datetime as _dt
@@ -9,6 +10,7 @@ import subprocess
 from pathlib import Path
 
 from ratifact.config import ErrorMemoria, _es_repo, _mem, _raiz, _repo_de
+from ratifact.vocabulario import DECISIONES, PENDIENTES, TAREAS, VISTA_ABIERTOS, VISTA_DECISIONES
 
 
 def _escribir_atomico(ruta: Path, texto: str) -> None:
@@ -99,19 +101,20 @@ def _normalizar_id(id_: str) -> str:
 
 
 def _ids_resuelve(texto: str) -> list[tuple[str, bool]]:
-    """`resuelve` de una tarea (ADR-027): "P-36, p-037 (parcial)" → [("P-036", False), ("P-037", True)]. "(parcial)"
-    sin distinguir mayúsculas ni espacios; ids normalizados, sin repetidos (gana el primero). No valida existencia."""
+    """`resuelve` de una tarea (ADR-027): "P-36, p-037 (parcial)" → [("P-036", False), ("P-037", True)]. Acepta
+    "(parcial)" y "(partial)" sin distinguir mayúsculas ni espacios; ids normalizados, sin repetidos (gana el primero).
+    No valida existencia."""
     salida: dict[str, bool] = {}
     for parte in texto.split(","):
-        m = re.fullmatch(r"(.*?)\s*(\(\s*parcial\s*\))?", parte.strip(), re.I)
+        m = re.fullmatch(r"(.*?)\s*(\(\s*(?:parcial|partial)\s*\))?", parte.strip(), re.I)
         if m.group(1):
             salida.setdefault(_normalizar_id(m.group(1)), bool(m.group(2)))
     return list(salida.items())
 
 
 def _texto_resuelve(ids: list[tuple[str, bool]]) -> str:
-    """Forma guardada en el frontmatter: "P-036, P-037 (parcial)"."""
-    return ", ".join(id_ + (" (parcial)" if parcial else "") for id_, parcial in ids)
+    """Forma guardada en el frontmatter (`resolves`): "P-036, P-037 (partial)"."""
+    return ", ".join(id_ + (" (partial)" if parcial else "") for id_, parcial in ids)
 
 
 def _numero_id(id_: str) -> int | None:
@@ -159,12 +162,12 @@ def _normalizar_titulo(t: str) -> str:
 
 def _duplicado_reciente(carpeta: Path, prefijo: str, campo: str, valor: str, estado_inicial: str) -> dict | None:
     """Si ya existe un registro `{prefijo}-*.md` en `carpeta` con el mismo título normalizado en `campo`,
-    TODAVÍA en su estado inicial (`estado_inicial`: "propuesta" para ADR, "abierta" para pendientes,
-    "pendiente" para tareas) y creado dentro de VENTANA_IDEMPOTENCIA_MINUTOS, devuelve su frontmatter (el
+    TODAVÍA en su estado inicial (`estado_inicial`: "proposed" para ADR, "open" para pendientes,
+    "todo" para tareas) y creado dentro de VENTANA_IDEMPOTENCIA_MINUTOS, devuelve su frontmatter (el
     más reciente, si hay más de uno); si no hay ninguno, None. El prefijo (ADR/P/T) ya aísla los tipos entre
-    sí: un ADR y una tarea con el mismo título textual nunca son duplicados entre sí. Registros sin `creado`
-    (de antes de ADR-019) nunca cuentan como duplicado. Un registro que YA cambió de estado (descartada,
-    reemplazada, cerrada, en_curso, integrada, etc.) significa que un humano ya intervino: no es un
+    sí: un ADR y una tarea con el mismo título textual nunca son duplicados entre sí. Registros sin `created`
+    (de antes de ADR-019) nunca cuentan como duplicado. Un registro que YA cambió de estado (rejected,
+    superseded, closed, in_progress, merged, etc.) significa que un humano ya intervino: no es un
     reintento perdido, así que nunca cuenta como duplicado aunque sea reciente."""
     if not carpeta.exists():
         return None
@@ -175,9 +178,9 @@ def _duplicado_reciente(carpeta: Path, prefijo: str, campo: str, valor: str, est
         meta, _ = _leer_registro(p)
         if _normalizar_titulo(meta.get(campo, "")) != objetivo:
             continue
-        if meta.get("estado") != estado_inicial:
+        if meta.get("status") != estado_inicial:
             continue
-        creado = meta.get("creado")
+        creado = meta.get("created")
         if not creado:
             continue
         try:
@@ -196,49 +199,52 @@ def _mensaje_duplicado(id_: str, extra: str = "") -> str:
 
 
 def _regenerar_vistas(proyecto: str) -> list[Path]:
-    """acuerdos.md y abiertas.md se reconstruyen siempre desde los registros."""
-    mem = _mem(proyecto)
-    dec, pen = mem / "decisiones", mem / "pendientes"
+    """DECISIONS.md y OPEN.md se reconstruyen siempre desde los registros."""
+    return _regenerar_vistas_en(_mem(proyecto))
+
+
+def _regenerar_vistas_en(mem: Path) -> list[Path]:
+    dec, pen = mem / DECISIONES, mem / PENDIENTES
     dec.mkdir(parents=True, exist_ok=True)
     pen.mkdir(parents=True, exist_ok=True)
 
-    grupos = {"acordada": [], "propuesta": [], "reemplazada": [], "descartada": []}
+    grupos = {"accepted": [], "proposed": [], "superseded": [], "rejected": []}
     for p in sorted(dec.glob("ADR-*.md"), key=lambda a: _clave_id(a.name)):
         m, _ = _leer_registro(p)
-        linea = f"- **{m.get('id')}** {m.get('titulo')} — {m.get('resumen', '')} ({m.get('fecha')}) → `decisiones/{p.name}`"
-        if m.get("estado") == "reemplazada":
-            linea += f" · reemplazada por {_normalizar_id(m.get('reemplazada_por', '?'))}"
-        grupos.setdefault(m.get("estado", "propuesta"), []).append(linea)
-    acuerdos = ["# Acuerdos", "", "_Vista generada por memoria-proyectos. No editar a mano._", ""]
-    for titulo, clave in (("Acordadas (vigentes)", "acordada"), ("Propuestas (sin confirmar)", "propuesta"),
-                          ("Reemplazadas", "reemplazada"), ("Descartadas", "descartada")):
-        acuerdos += [f"## {titulo}", *(grupos.get(clave) or ["- (ninguna)"]), ""]
+        linea = f"- **{m.get('id')}** {m.get('title')} — {m.get('summary', '')} ({m.get('date')}) → `{DECISIONES}/{p.name}`"
+        if m.get("status") == "superseded":
+            linea += f" · superseded by {_normalizar_id(m.get('superseded_by', '?'))}"
+        grupos.setdefault(m.get("status", "proposed"), []).append(linea)
+    acuerdos = ["# Decisions", "", "_View generated by memoria-proyectos. Do not edit by hand._", ""]
+    for titulo, clave in (("Accepted (in force)", "accepted"), ("Proposed (not yet accepted)", "proposed"),
+                          ("Superseded", "superseded"), ("Rejected", "rejected")):
+        acuerdos += [f"## {titulo}", *(grupos.get(clave) or ["- (none)"]), ""]
 
     abiertas, cerradas = [], []
     for p in sorted(pen.glob("P-*.md"), key=lambda a: _clave_id(a.name)):
         m, cuerpo = _leer_registro(p)
-        if m.get("estado") == "abierta":
-            dueno = f" · dueño: {m['dueno']}" if m.get("dueno") else ""
-            abiertas.append(f"- **{m.get('id')}** {m.get('tema')}{dueno} ({m.get('fecha')})\n  {cuerpo.strip().splitlines()[0] if cuerpo.strip() else ''}")
+        if m.get("status") == "open":
+            dueno = f" · owner: {m['owner']}" if m.get("owner") else ""
+            abiertas.append(f"- **{m.get('id')}** {m.get('topic')}{dueno} ({m.get('date')})\n  {cuerpo.strip().splitlines()[0] if cuerpo.strip() else ''}")
         else:
-            cerradas.append(f"- {m.get('id')} {m.get('tema')} (cerrado {m.get('cerrado', '?')})")
-    vista_ab = ["# Decisiones abiertas", "", "_Vista generada por memoria-proyectos. No editar a mano._", "",
-                *(abiertas or ["- (ninguna)"]), "", "## Cerradas recientemente", *(cerradas[-5:] or ["- (ninguna)"]),
-                "_Detalle de la resolución en pendientes/<id>.md._", ""]
+            cerradas.append(f"- {m.get('id')} {m.get('topic')} (closed {m.get('closed', '?')})")
+    vista_ab = ["# Open items", "", "_View generated by memoria-proyectos. Do not edit by hand._", "",
+                *(abiertas or ["- (none)"]), "", "## Recently closed", *(cerradas[-5:] or ["- (none)"]),
+                f"_Resolution details in {PENDIENTES}/<id>.md._", ""]
 
-    r1, r2 = mem / "acuerdos.md", mem / "abiertas.md"
+    r1, r2 = mem / VISTA_DECISIONES, mem / VISTA_ABIERTOS
     _escribir_atomico(r1, "\n".join(acuerdos))
     _escribir_atomico(r2, "\n".join(vista_ab))
     return [r1, r2]
 
 
 def _resumen_tareas(proyecto: str, solo_activas: bool = True) -> list[str]:
-    carpeta = _mem(proyecto) / "tareas"
+    carpeta = _mem(proyecto) / TAREAS
     filas = []
     for p in sorted(carpeta.glob("T-*.md"), key=lambda a: _clave_id(a.name)) if carpeta.exists() else []:
         m, _ = _leer_registro(p)
-        if solo_activas and m.get("estado") in ("integrada", "descartada"):
+        if solo_activas and m.get("status") in ("merged", "discarded"):
             continue
-        rama = (f" · rama {m['rama']}" if m.get("rama") else "") + (f" en {m['repositorio']}/" if m.get("repositorio") else "")
-        filas.append(f"- **{m.get('id')}** [{m.get('estado')}] {m.get('titulo')}{rama}")
+        rama = (f" · rama {m['branch']}" if m.get("branch") else "") + (f" en {m['repo']}/" if m.get("repo") else "")
+        filas.append(f"- **{m.get('id')}** [{m.get('status')}] {m.get('title')}{rama}")
     return filas

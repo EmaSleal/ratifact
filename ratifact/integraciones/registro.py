@@ -12,7 +12,7 @@ from ratifact.integraciones.base import FASES, Integracion
 
 INTEGRACIONES: tuple[Integracion, ...] = (codegraph.INTEGRACION, gentle_ai.INTEGRACION, engram.INTEGRACION)
 VALORES = ("auto", "off")
-FASES_EJECUCION = FASES[1:]          # ejecutar, verificar, cerrar: lo que recibe actualizar_tarea(..., "en_curso")
+FASES_EJECUCION = FASES[1:]          # ejecutar, verificar, cerrar: lo que recibe actualizar_tarea(..., "in_progress")
 
 
 def _nombres() -> str:
@@ -66,7 +66,7 @@ def _bloque_contexto(proyecto: str) -> str:
 
 
 def _guia_en_curso(proyecto: str) -> str:
-    """actualizar_tarea(..., "en_curso"): guía completa de ejecutar, verificar y cerrar, calculada en ese momento."""
+    """actualizar_tarea(..., "in_progress"): guía completa de ejecutar, verificar y cerrar, calculada en ese momento."""
     lineas = []
     for i, detectada in _activas(proyecto):
         fases = [f for f in FASES_EJECUCION if f in i.guia]

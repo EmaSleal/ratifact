@@ -33,8 +33,8 @@ def test_alta_detecta_y_lo_muestra_en_instrucciones_y_tareas(srv, entorno):
     salida = srv.registrar_proyecto(nombre="erp", ruta=str(repo))
     assert "Comando de pruebas (desde la raíz del repositorio): `mvn test`" in salida
     srv.registrar_tarea(proyecto="erp", titulo="Endpoint pedidos", objetivo="o", criterios_aceptacion="c")
-    tarea = next((entorno["base"] / ".memorias" / "erp" / "tareas").glob("T-001*.md")).read_text()
-    assert "## Cómo verificar" in tarea and "`mvn test`" in tarea
+    tarea = next((entorno["base"] / ".memorias" / "erp" / "tasks").glob("T-001*.md")).read_text()
+    assert "## How to verify" in tarea and "`mvn test`" in tarea
 
 
 def test_comando_explicito_y_actualizar_proyecto(srv, entorno):
@@ -55,7 +55,7 @@ def test_comando_explicito_y_actualizar_proyecto(srv, entorno):
 
 def test_tarea_sin_comando_pide_configurarlo(srv, proyecto):
     srv.registrar_tarea(proyecto="demo", titulo="T", objetivo="o", criterios_aceptacion="c")
-    tarea = next((proyecto["mem"] / "tareas").glob("T-001*.md")).read_text()
+    tarea = next((proyecto["mem"] / "tasks").glob("T-001*.md")).read_text()
     assert "sin comando de pruebas configurado" in tarea
 
 
@@ -64,4 +64,4 @@ def test_plantilla_tarea_no_asume_proyecto_ni_stack():
     texto = (RAIZ_REPO / "tarea.md").read_text()
     for especifico in ("game", "godot", "src/sim", "data/*.json"):
         assert especifico not in texto.lower(), especifico
-    assert "Cómo verificar" in texto
+    assert "How to verify" in texto

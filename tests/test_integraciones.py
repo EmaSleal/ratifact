@@ -199,7 +199,7 @@ def test_registrar_tarea_agrega_solo_la_linea_y_no_escribe_guia(srv, proyecto):
     salida = srv.registrar_tarea(proyecto="demo", titulo="Algo", objetivo="o", criterios_aceptacion="c")
     assert salida.splitlines()[-1] == "Integraciones: codegraph (detectada) · engram (si está disponible)"
     assert "planificar" not in salida and "si tienes" not in salida
-    tarea = next((proyecto["mem"] / "tareas").glob("T-001*.md")).read_text()
+    tarea = next((proyecto["mem"] / "tasks").glob("T-001*.md")).read_text()
     assert "ntegraci" not in tarea and "codegraph" not in tarea and "engram" not in tarea
 
 
@@ -209,12 +209,12 @@ def test_en_curso_calcula_la_guia_en_ese_momento(srv, proyecto, reg):
     srv.registrar_tarea(proyecto="demo", titulo="Algo", objetivo="o", criterios_aceptacion="c")
     (proyecto["repo"] / ".codegraph").mkdir()                        # se instala entre el alta y la ejecución
     salida = srv.actualizar_tarea(proyecto="demo", id="T-001", estado="en_curso")
-    assert salida.startswith("T-001 → en_curso · commit")
+    assert salida.startswith("T-001 → in_progress · commit")
     cg, en = _por_nombre(reg, "codegraph"), _por_nombre(reg, "engram")
     for texto in (cg.guia["ejecutar"], cg.guia["verificar"], en.guia["cerrar"], cg.limite, en.limite):
         assert texto in salida
     assert cg.guia["planificar"] not in salida and "gentle-ai" not in salida
-    tarea = next((proyecto["mem"] / "tareas").glob("T-001*.md")).read_text()
+    tarea = next((proyecto["mem"] / "tasks").glob("T-001*.md")).read_text()
     assert "codegraph" not in tarea and "engram" not in tarea
 
 
@@ -225,12 +225,13 @@ def test_en_curso_incluye_gentle_ai_detectada(srv, proyecto, reg):
     assert _por_nombre(reg, "gentle-ai").guia["ejecutar"] in salida
 
 
-@pytest.mark.parametrize("estado", ["en_revision", "fallida", "pendiente"])
-def test_otros_estados_no_cambian(srv, proyecto, estado):
+@pytest.mark.parametrize("estado,guardado", [("en_revision", "in_review"), ("fallida", "failed"), ("pendiente", "todo"),
+                                            ("in_review", "in_review")])
+def test_otros_estados_no_cambian(srv, proyecto, estado, guardado):
     (proyecto["repo"] / ".codegraph").mkdir()
     srv.registrar_tarea(proyecto="demo", titulo="Algo", objetivo="o", criterios_aceptacion="c")
     salida = srv.actualizar_tarea(proyecto="demo", id="T-001", estado=estado)
-    assert re.fullmatch(rf"T-001 → {estado} · commit \S+", salida), salida
+    assert re.fullmatch(rf"T-001 → {guardado} · commit \S+", salida), salida
 
 
 # ───────────────────────── criterio 8: migración del texto ad hoc ─────────────────────────

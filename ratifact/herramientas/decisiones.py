@@ -14,56 +14,57 @@ from ratifact.esquema import _bloqueo
 from ratifact.registros import (_buscar_registro, _clave_id, _commit, _duplicado_reciente, _escribir_registro, _hoy,
                                 _leer_registro, _mensaje_duplicado, _normalizar_id, _numero_id, _regenerar_vistas,
                                 _siguiente_id, _slug)
+from ratifact.vocabulario import DECISIONES
 
 
 @herramienta
 def registrar_decision(proyecto: str, titulo: str, decision: str, justificacion: str,
                        alternativas: str = "", resumen: str = "") -> str:
-    """Crea un ADR. SIEMPRE queda como 'propuesta'. Para acordarla, llama después confirmar_decision:
+    """Crea un ADR. SIEMPRE queda como 'proposed'. Para acordarla, llama después confirmar_decision:
     esa herramienta pide la aprobación del usuario. `resumen`: una línea para la vista de acuerdos.
     Idempotente (ADR-019): si ya hay un ADR con este título (sin distinguir mayúsculas ni espacios) creado en
-    los últimos minutos Y TODAVÍA en estado 'propuesta', no crea nada nuevo y devuelve el id existente. Si ese
-    ADR ya cambió de estado (p. ej. descartada: el usuario pidió otra versión), un humano ya intervino, así
+    los últimos minutos Y TODAVÍA en estado 'proposed', no crea nada nuevo y devuelve el id existente. Si ese
+    ADR ya cambió de estado (p. ej. rejected: el usuario pidió otra versión), un humano ya intervino, así
     que se registra una ADR nueva."""
     def f():
         with _bloqueo(proyecto):
-            carpeta = _mem(proyecto) / "decisiones"
+            carpeta = _mem(proyecto) / DECISIONES
             carpeta.mkdir(parents=True, exist_ok=True)
-            dup = _duplicado_reciente(carpeta, "ADR", "titulo", titulo, "propuesta")
+            dup = _duplicado_reciente(carpeta, "ADR", "title", titulo, "proposed")
             if dup:
                 return _mensaje_duplicado(dup["id"])
             id_ = _siguiente_id(carpeta, "ADR")
             ruta = carpeta / f"{id_}-{_slug(titulo)}.md"
-            meta = {"id": id_, "titulo": titulo, "estado": "propuesta", "fecha": _hoy(),
-                    "creado": _registros._ahora().isoformat(timespec="seconds"),
-                    "resumen": (resumen or decision.splitlines()[0])[:160]}
-            cuerpo = f"# {id_} — {titulo}\n\n## Decisión\n{decision}\n\n## Justificación\n{justificacion}\n"
+            meta = {"id": id_, "title": titulo, "status": "proposed", "date": _hoy(),
+                    "created": _registros._ahora().isoformat(timespec="seconds"),
+                    "summary": (resumen or decision.splitlines()[0])[:160]}
+            cuerpo = f"# {id_} — {titulo}\n\n## Decision\n{decision}\n\n## Rationale\n{justificacion}\n"
             if alternativas:
-                cuerpo += f"\n## Alternativas consideradas\n{alternativas}\n"
+                cuerpo += f"\n## Alternatives considered\n{alternativas}\n"
             _escribir_registro(ruta, meta, cuerpo)
-            sha = _commit(proyecto, [ruta, *_regenerar_vistas(proyecto)], f"{id_} {titulo} ({meta['estado']})")
-            return f"{id_} registrada como {meta['estado']} · commit {sha}"
+            sha = _commit(proyecto, [ruta, *_regenerar_vistas(proyecto)], f"{id_} {titulo} ({meta['status']})")
+            return f"{id_} registrada como {meta['status']} · commit {sha}"
     return _ejecutar(f)
 
 
 @herramienta
 def confirmar_decision(proyecto: str, id: str, cita_usuario: str) -> str:
-    """Pasa una decisión de 'propuesta' a 'acordada'. Es la ÚNICA vía para acordar una decisión y el cliente
+    """Pasa una decisión de 'proposed' a 'accepted'. Es la ÚNICA vía para acordar una decisión y el cliente
     pide la aprobación del usuario en cada llamada. `cita_usuario`: el texto literal con que el usuario
     confirmó en el chat (queda guardado en el ADR como evidencia). Nunca la llames sin esa confirmación."""
     def f():
         if len(cita_usuario.strip()) < 2:
             raise ErrorMemoria("Falta cita_usuario: el texto literal con que el usuario confirmó.")
         with _bloqueo(proyecto):
-            ruta = _buscar_registro(_mem(proyecto) / "decisiones", id)
+            ruta = _buscar_registro(_mem(proyecto) / DECISIONES, id)
             meta, cuerpo = _leer_registro(ruta)
-            if meta.get("estado") != "propuesta":
-                raise ErrorMemoria(f"{meta.get('id')} está '{meta.get('estado')}'; solo se confirman propuestas.")
-            meta["estado"], meta["confirmada"] = "acordada", _hoy()
-            cuerpo = cuerpo.rstrip() + f"\n\n## Confirmación ({_hoy()})\n> {cita_usuario.strip()}\n"
+            if meta.get("status") != "proposed":
+                raise ErrorMemoria(f"{meta.get('id')} está '{meta.get('status')}'; solo se confirman propuestas.")
+            meta["status"], meta["accepted"] = "accepted", _hoy()
+            cuerpo = cuerpo.rstrip() + f"\n\n## Acceptance ({_hoy()})\n> {cita_usuario.strip()}\n"
             _escribir_registro(ruta, meta, cuerpo)
-            sha = _commit(proyecto, [ruta, *_regenerar_vistas(proyecto)], f"{meta['id']} acordada")
-            return f"{meta['id']} acordada · commit {sha}"
+            sha = _commit(proyecto, [ruta, *_regenerar_vistas(proyecto)], f"{meta['id']} accepted")
+            return f"{meta['id']} → accepted · commit {sha}"
     return _ejecutar(f)
 
 
@@ -81,49 +82,49 @@ def confirmar_decisiones_lote(proyecto: str, ids: list[str], cita_usuario: str) 
         if len(unicos) > 30:
             raise ErrorMemoria("Máximo 30 decisiones por lote.")
         with _bloqueo(proyecto):
-            carpeta = _mem(proyecto) / "decisiones"
+            carpeta = _mem(proyecto) / DECISIONES
             registros = []
             for id_ in unicos:
                 ruta = _buscar_registro(carpeta, id_)
                 meta, cuerpo = _leer_registro(ruta)
-                if meta.get("estado") != "propuesta":
-                    raise ErrorMemoria(f"{meta.get('id')} está '{meta.get('estado')}'; no se confirmó ninguna.")
+                if meta.get("status") != "proposed":
+                    raise ErrorMemoria(f"{meta.get('id')} está '{meta.get('status')}'; no se confirmó ninguna.")
                 registros.append((ruta, meta, cuerpo))
             for ruta, meta, cuerpo in registros:
-                meta["estado"], meta["confirmada"] = "acordada", _hoy()
-                cuerpo = cuerpo.rstrip() + f"\n\n## Confirmación ({_hoy()}, en lote)\n> {cita_usuario.strip()}\n"
+                meta["status"], meta["accepted"] = "accepted", _hoy()
+                cuerpo = cuerpo.rstrip() + f"\n\n## Acceptance ({_hoy()}, batch)\n> {cita_usuario.strip()}\n"
                 _escribir_registro(ruta, meta, cuerpo)
             sha = _commit(proyecto, [r for r, _, _ in registros] + _regenerar_vistas(proyecto),
-                          f"{len(registros)} decisiones acordadas en lote: {', '.join(unicos)}")
-            return f"{len(registros)} acordadas ({', '.join(unicos)}) · commit {sha}"
+                          f"{len(registros)} decisions accepted in batch: {', '.join(unicos)}")
+            return f"{len(registros)} → accepted ({', '.join(unicos)}) · commit {sha}"
     return _ejecutar(f)
 
 
 @herramienta
 def revisar_propuestas(proyecto: str, desde_id: str = "", cantidad: int = 10, resumen: bool = False) -> str:
-    """Devuelve las decisiones en estado 'propuesta' para que el usuario decida confirmar, ajustar o descartar.
+    """Devuelve las decisiones en estado 'proposed' para que el usuario decida confirmar, ajustar o descartar.
     Paginado: `cantidad` por página (máx. 25) a partir de `desde_id` (p. ej. "ADR-020"). Con `resumen=True`
     devuelve una línea por propuesta (útil para ver el panorama antes de entrar al detalle)."""
     def f():
         desde = _numero_id(desde_id) if desde_id else 0
         if desde is None:
             raise ErrorMemoria(f"desde_id inválido: '{desde_id}' (usa la forma \"ADR-020\").")
-        carpeta = _mem(proyecto) / "decisiones"
+        carpeta = _mem(proyecto) / DECISIONES
         archivos = sorted(carpeta.glob("ADR-*.md"), key=lambda a: _clave_id(a.name)) \
             if carpeta.exists() else []
         propuestas = []
         for p in archivos:   # orden y filtro numéricos: ADR-1000 va después de ADR-999
             m, cuerpo = _leer_registro(p)
-            if m.get("estado") == "propuesta" and (_numero_id(m.get("id", "")) or 0) >= desde:
+            if m.get("status") == "proposed" and (_numero_id(m.get("id", "")) or 0) >= desde:
                 propuestas.append((m, cuerpo))
         if not propuestas:
             return "(no hay propuestas pendientes)"
         n = max(1, min(cantidad, 25))
         pagina, resto = propuestas[:n], propuestas[n:]
         if resumen:
-            cuerpo_txt = "\n".join(f"- **{m.get('id')}** {m.get('titulo')} — {m.get('resumen', '')}" for m, _ in pagina)
+            cuerpo_txt = "\n".join(f"- **{m.get('id')}** {m.get('title')} — {m.get('summary', '')}" for m, _ in pagina)
         else:
-            cuerpo_txt = "\n\n---\n\n".join(f"{c.strip()}\n\n_(propuesta del {m.get('fecha')})_" for m, c in pagina)
+            cuerpo_txt = "\n\n---\n\n".join(f"{c.strip()}\n\n_(propuesta del {m.get('date')})_" for m, c in pagina)
         pie = (f"\n\n(Quedan {len(resto)} propuesta(s): continúa con desde_id=\"{resto[0][0].get('id')}\".)"
                if resto else "")
         return (f"{len(propuestas)} propuesta(s) por revisar; se muestran {len(pagina)}. Preséntaselas al usuario como "
@@ -137,7 +138,7 @@ def revisar_propuestas(proyecto: str, desde_id: str = "", cantidad: int = 10, re
 class DecisionUsuario(BaseModel):
     accion: str = Field(
         json_schema_extra={"enum": ["confirmar", "descartar", "ajustar", "posponer"]},
-        description="confirmar = pasa a acordada · descartar = se cierra · ajustar = pedir una nueva versión · "
+        description="confirmar = pasa a accepted · descartar = se cierra (rejected) · ajustar = pedir una nueva versión · "
                     "posponer = sigue como propuesta")
     comentario: str = Field(default="", description="Opcional. Motivo del descarte o qué cambiar al ajustar.")
 
@@ -160,11 +161,11 @@ async def decidir_propuestas(proyecto: str, ctx: Context) -> str:
     if not (params and params.capabilities and params.capabilities.elicitation):
         return ("Esta aplicación no soporta formularios MCP. Usa revisar_propuestas y presenta las opciones con tus "
                 "propias tarjetas o preguntas de opción múltiple; luego confirmar_decision / descartar_decision.")
-    carpeta = _mem(proyecto) / "decisiones"
+    carpeta = _mem(proyecto) / DECISIONES
     pendientes = []
     for p in sorted(carpeta.glob("ADR-*.md"), key=lambda a: _clave_id(a.name)) if carpeta.exists() else []:
         m, cuerpo = _leer_registro(p)
-        if m.get("estado") == "propuesta":
+        if m.get("status") == "proposed":
             pendientes.append((m.get("id"), cuerpo))
     if not pendientes:
         return "(no hay propuestas pendientes)"
@@ -208,37 +209,37 @@ async def decidir_propuestas(proyecto: str, ctx: Context) -> str:
 
 @herramienta
 def descartar_decision(proyecto: str, id: str, motivo: str) -> str:
-    """Cierra una propuesta que el usuario NO aprueba. Queda como 'descartada' con su motivo (no se borra: el
+    """Cierra una propuesta que el usuario NO aprueba. Queda como 'rejected' con su motivo (no se borra: el
     historial conserva qué se consideró y por qué no se adoptó). Solo por indicación explícita del usuario."""
     def f():
         if len(motivo.strip()) < 3:
             raise ErrorMemoria("Falta el motivo del descarte.")
         with _bloqueo(proyecto):
-            ruta = _buscar_registro(_mem(proyecto) / "decisiones", id)
+            ruta = _buscar_registro(_mem(proyecto) / DECISIONES, id)
             meta, cuerpo = _leer_registro(ruta)
-            if meta.get("estado") != "propuesta":
-                raise ErrorMemoria(f"{meta.get('id')} está '{meta.get('estado')}'; solo se descartan propuestas. "
+            if meta.get("status") != "proposed":
+                raise ErrorMemoria(f"{meta.get('id')} está '{meta.get('status')}'; solo se descartan propuestas. "
                                    "Para dejar sin efecto una acordada, usa reemplazar_decision.")
-            meta["estado"], meta["descartada"] = "descartada", _hoy()
-            cuerpo = cuerpo.rstrip() + f"\n\n## Descartada ({_hoy()})\n{motivo.strip()}\n"
+            meta["status"], meta["rejected"] = "rejected", _hoy()
+            cuerpo = cuerpo.rstrip() + f"\n\n## Rejected ({_hoy()})\n{motivo.strip()}\n"
             _escribir_registro(ruta, meta, cuerpo)
-            sha = _commit(proyecto, [ruta, *_regenerar_vistas(proyecto)], f"{meta['id']} descartada")
-            return f"{meta['id']} descartada · commit {sha}"
+            sha = _commit(proyecto, [ruta, *_regenerar_vistas(proyecto)], f"{meta['id']} rejected")
+            return f"{meta['id']} → rejected · commit {sha}"
     return _ejecutar(f)
 
 
 @herramienta
 def reemplazar_decision(proyecto: str, id_anterior: str, id_nuevo: str) -> str:
-    """Marca una decisión como reemplazada por otra ya registrada (las decisiones no se borran)."""
+    """Marca una decisión como reemplazada por otra ya registrada (estado 'superseded'; las decisiones no se borran)."""
     def f():
         with _bloqueo(proyecto):
-            carpeta = _mem(proyecto) / "decisiones"
+            carpeta = _mem(proyecto) / DECISIONES
             _buscar_registro(carpeta, id_nuevo)
             nuevo = _normalizar_id(id_nuevo)
             ruta = _buscar_registro(carpeta, id_anterior)
             meta, cuerpo = _leer_registro(ruta)
-            meta["estado"], meta["reemplazada_por"] = "reemplazada", nuevo
+            meta["status"], meta["superseded_by"] = "superseded", nuevo
             _escribir_registro(ruta, meta, cuerpo)
-            sha = _commit(proyecto, [ruta, *_regenerar_vistas(proyecto)], f"{meta['id']} reemplazada por {nuevo}")
-            return f"{meta['id']} reemplazada por {nuevo} · commit {sha}"
+            sha = _commit(proyecto, [ruta, *_regenerar_vistas(proyecto)], f"{meta['id']} superseded by {nuevo}")
+            return f"{meta['id']} → superseded (reemplazada por {nuevo}) · commit {sha}"
     return _ejecutar(f)

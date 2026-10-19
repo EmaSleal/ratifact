@@ -8,6 +8,7 @@ El indicador de decisiones no sale del log sino de la memoria de cada proyecto (
 se resuelve igual que el servidor (MEMORIA_PROYECTOS_CONFIG o ~/.config/memoria-proyectos/projects.json) y la
 memoria con la clave "memoria" o <MEMORIA_PROYECTOS_BASE o ~/Projects>/.memorias/<nombre>. Se replica esa lógica
 (ratifact.config la fija al importarse) y se reutiliza el lector de frontmatter de ratifact.registros (sin mcp).
+Lee memorias v1 (carpetas, claves y estados en español) y v2 (en inglés): todo se normaliza a v2 antes de contar.
 """
 import argparse
 import datetime as dt
@@ -20,12 +21,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ratifact.registros import _ids_resuelve, _leer_registro, _normalizar_id, _numero_id as _numero  # noqa: E402
+from ratifact.vocabulario import CARPETAS_V1, CLAVES_V1, ESTADOS_V1  # noqa: E402
 
 LOG_POR_DEFECTO = Path(__file__).resolve().parent / "logs" / "uso.jsonl"   # igual que LOG_USO del servidor
-ESTADOS_DECISION = ("acordada", "propuesta", "reemplazada", "descartada")
+ESTADOS_DECISION = ("accepted", "proposed", "superseded", "rejected")
 DIAS_PROPUESTA_VIEJA = 7
 TOKENS_ARRANQUE = 2000   # ADR-026: referencia de obtener_contexto (~8.000 caracteres)
-SECCIONES_EXCLUIDAS = {"Fuera de alcance", "Notas", "Cómo verificar", "Resuelve"}   # no cuentan como mención
+# no cuentan como mención (v1 y v2)
+SECCIONES_EXCLUIDAS = {"Fuera de alcance", "Notas", "Cómo verificar", "Resuelve",
+                       "Out of scope", "Notes", "How to verify", "Resolves"}
+SECCIONES_RESULTADO = {"Resultado", "Result"}
 EXT_CODIGO = {".java", ".py", ".ts", ".js", ".vue", ".sql", ".xml", ".yml", ".yaml", ".kt"}
 
 
@@ -47,16 +52,31 @@ def ruta_config() -> Path:
 
 def _memoria(nombre: str, p: dict) -> Path:
     """Igual que ratifact.config._mem (sin la validación ADR-010: aquí solo se lee)."""
-    if p.get("memoria"):
-        return Path(p["memoria"]).expanduser()
+    memoria = p.get("memory") or p.get("memoria")     # projects.json en inglés o en español (gana el inglés)
+    if memoria:
+        return Path(memoria).expanduser()
     base = Path(os.environ.get("MEMORIA_PROYECTOS_BASE", Path.home() / "Projects")).expanduser()
     return base / ".memorias" / nombre
 
 
+def _carpeta(mem: Path, nueva: str) -> Path:
+    """Carpeta de registros v2 (decisions, pending, tasks) o, en una memoria v1 aún sin migrar, su nombre v1."""
+    vieja = next(v1 for v1, v2 in CARPETAS_V1.items() if v2 == nueva)
+    return mem / nueva if (mem / nueva).is_dir() or not (mem / vieja).is_dir() else mem / vieja
+
+
+def _registro(archivo: Path, tipo: str) -> tuple[dict, str]:
+    """Frontmatter con claves y estado v2 (traduce los de una memoria v1) y cuerpo."""
+    meta, cuerpo = _leer_registro(archivo)
+    meta = {CLAVES_V1.get(k, k): v for k, v in meta.items()}
+    meta["status"] = ESTADOS_V1[tipo].get(meta.get("status", ""), meta.get("status", ""))
+    return meta, cuerpo
+
+
 def _fecha(meta: dict) -> dt.date | None:
-    for clave in ("creado", "fecha"):
+    for clave in ("created", "date"):
         try:
-            return dt.datetime.fromisoformat(meta[clave]).date() if clave == "creado" else dt.date.fromisoformat(meta[clave])
+            return dt.datetime.fromisoformat(meta[clave]).date() if clave == "created" else dt.date.fromisoformat(meta[clave])
         except (KeyError, ValueError):
             continue
     return None
@@ -75,14 +95,14 @@ def indicador_decisiones(desde: dt.datetime, proyecto: str | None) -> list[str]:
         if proyecto and nombre != proyecto:
             continue
         conteo = Counter()
-        for archivo in sorted((_memoria(nombre, p) / "decisiones").glob("ADR-*.md")):
-            meta, _ = _leer_registro(archivo)
-            fecha, estado = _fecha(meta), meta.get("estado", "")
+        for archivo in sorted(_carpeta(_memoria(nombre, p), "decisions").glob("ADR-*.md")):
+            meta, _ = _registro(archivo, "decision")
+            fecha, estado = _fecha(meta), meta.get("status", "")
             if fecha and fecha >= desde.date():
                 conteo[estado] += 1
-            abiertas += estado == "propuesta"
-            if estado == "propuesta" and fecha and fecha < limite_vieja:
-                viejas.append(f"  {nombre} {meta.get('id', archivo.stem)} {fecha.isoformat()} {meta.get('titulo', '')}")
+            abiertas += estado == "proposed"
+            if estado == "proposed" and fecha and fecha < limite_vieja:
+                viejas.append(f"  {nombre} {meta.get('id', archivo.stem)} {fecha.isoformat()} {meta.get('title', '')}")
         por_proyecto[nombre] = conteo
     lineas = ["- Decisiones creadas en el período (según la memoria): "
               + ("; ".join(f"{n}: " + " · ".join(f"{e} {c[e]}" for e in ESTADOS_DECISION)
@@ -108,25 +128,26 @@ def tamano_contexto(filas: list[dict]) -> list[str]:
 
 
 def _fecha_integracion(meta: dict, cuerpo: str) -> str:
-    """Fecha de "### AAAA-MM-DD · integrada" en el Resultado (la última); si no está, `actualizada` o `fecha`."""
-    fechas = re.findall(r"^### (\d{4}-\d{2}-\d{2}) · integrada\b", cuerpo, re.M)
-    return fechas[-1] if fechas else meta.get("actualizada") or meta.get("fecha", "?")
+    """Fecha de "### AAAA-MM-DD · merged" (v1: "· integrada") en el Result (la última); si no está, `updated` o
+    `date`."""
+    fechas = re.findall(r"^### (\d{4}-\d{2}-\d{2}) · (?:merged|integrada)\b", cuerpo, re.M)
+    return fechas[-1] if fechas else meta.get("updated") or meta.get("date", "?")
 
 
 def _menciones(cuerpo: str) -> tuple[set, set]:
-    """Ids P-NNN del texto de una tarea, separados en (spec, resultado). Spec: todo fuera de "## Resultado" (título,
-    Objetivo, Criterios, Decisiones, Archivos) más los bloques "### Revisión N" del Resultado. Se excluyen Fuera de
-    alcance, Notas, Cómo verificar y Resuelve (lo declarado va aparte)."""
+    """Ids P-NNN del texto de una tarea, separados en (spec, resultado). Spec: todo fuera de "## Result" (título,
+    Goal, Criteria, Decisions, Files) más los bloques "### Review N" del Result. Se excluyen Out of scope, Notes,
+    How to verify y Resolves (lo declarado va aparte). Acepta también los títulos v1 en español."""
     spec, resultado = set(), set()
     seccion, revision = "", False
     for linea in cuerpo.splitlines():
         if linea.startswith("## "):
             seccion, revision = linea[3:].strip(), False
-        elif linea.startswith("### ") and seccion == "Resultado":
-            revision = linea[4:].startswith("Revisión")
+        elif linea.startswith("### ") and seccion in SECCIONES_RESULTADO:
+            revision = linea[4:].startswith(("Revisión", "Review"))
         if seccion in SECCIONES_EXCLUIDAS:
             continue
-        destino = resultado if seccion == "Resultado" and not revision else spec
+        destino = resultado if seccion in SECCIONES_RESULTADO and not revision else spec
         destino.update(_normalizar_id(m) for m in re.findall(r"(?<![\w-])[Pp]-\d+\b", linea))
     return spec, resultado
 
@@ -145,20 +166,20 @@ def higiene_pendientes(proyecto: str | None) -> list[str]:
             continue
         mem = _memoria(nombre, p)
         abiertos = set()
-        for archivo in (mem / "pendientes").glob("P-*.md"):
-            meta, _ = _leer_registro(archivo)
-            if meta.get("estado") == "abierta":
+        for archivo in _carpeta(mem, "pending").glob("P-*.md"):
+            meta, _ = _registro(archivo, "pendiente")
+            if meta.get("status") == "open":
                 abiertos.add(_normalizar_id(meta.get("id") or archivo.stem))
         grupos = {"declarados en resuelve": defaultdict(list), "mencionados en la spec": defaultdict(list),
                   "mencionados en el Resultado": defaultdict(list)}
-        for archivo in (mem / "tareas").glob("T-*.md"):
-            meta, cuerpo = _leer_registro(archivo)
-            if meta.get("estado") != "integrada":
+        for archivo in _carpeta(mem, "tasks").glob("T-*.md"):
+            meta, cuerpo = _registro(archivo, "tarea")
+            if meta.get("status") != "merged":
                 continue
             id_tarea = _normalizar_id(meta.get("id") or re.match(r"T-\d+", archivo.name).group(0))
             ref = (id_tarea, _fecha_integracion(meta, cuerpo))
             spec, resultado = _menciones(cuerpo)
-            for clave, ids in (("declarados en resuelve", {i for i, _ in _ids_resuelve(meta.get("resuelve", ""))}),
+            for clave, ids in (("declarados en resuelve", {i for i, _ in _ids_resuelve(meta.get("resolves", ""))}),
                                ("mencionados en la spec", spec), ("mencionados en el Resultado", resultado)):
                 for i in ids & abiertos:
                     grupos[clave][i].append(ref)
@@ -170,6 +191,17 @@ def higiene_pendientes(proyecto: str | None) -> list[str]:
                                  for t, fecha in sorted(por_id[i], key=lambda r: _numero(r[0])))
                 lineas.append(f"      {i}: {refs}")
     return lineas
+
+
+def usos_alias(filas: list[dict]) -> list[str]:
+    """Rutas v1 traducidas por el alias (`alias_ruta` en la telemetría), por proyecto: cuando quede en cero se quita
+    el alias en 1.1 (junto con el esquema.json centinela, ADR-030)."""
+    por = defaultdict(Counter)
+    for f in filas:
+        if f.get("alias_ruta"):
+            por[f.get("proyecto")][f["alias_ruta"]] += 1
+    return [f"  {nombre}: {sum(c.values())} usos · " + ", ".join(f"{r} ×{n}" for r, n in c.most_common(3))
+            for nombre, c in sorted(por.items(), key=lambda kv: str(kv[0]))]
 
 
 def main():
@@ -265,6 +297,10 @@ def main():
     print(f"- ADR-009 criterio 2 (≥300 llamadas, <1 % de fallas internas, 14 días corridos de telemetría): "
           f"{len(filas)} llamadas · {corridos} días corridos desde el primer registro · {len(dias)} días con uso "
           f"→ {'CUMPLE' if cumple else 'aún no'}")
+    alias = usos_alias(filas)
+    print("- Rutas v1 traducidas (alias, se quita en 1.1): " + ("ninguna" if not alias else ""))
+    for linea in alias:
+        print(linea)
     print("\nPendientes abiertos referenciados por tareas integradas")
     for linea in higiene_pendientes(a.proyecto):
         print(linea)

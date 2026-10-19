@@ -7,8 +7,8 @@ memoria-proyectos — servidor MCP local que convierte cada repositorio en la
 memoria persistente de su proyecto (acuerdos, pendientes, sesiones y documentos).
 
 Fuente de verdad: la carpeta .project/ dentro del repositorio del proyecto.
-- decisiones/ADR-NNN.md y pendientes/P-NNN.md son los registros (un archivo cada uno).
-- acuerdos.md y abiertas.md son VISTAS generadas a partir de esos registros; no se editan a mano.
+- decisions/ADR-NNN.md, pending/P-NNN.md y tasks/T-NNN.md son los registros (un archivo cada uno; esquema v2).
+- DECISIONS.md y OPEN.md son VISTAS generadas a partir de esos registros; no se editan a mano.
 - Cada escritura hace un commit de git con solo los archivos tocados.
 
 Configuración: ~/.config/memoria-proyectos/projects.json (o la variable MEMORIA_PROYECTOS_CONFIG)

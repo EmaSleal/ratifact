@@ -9,12 +9,14 @@ from pathlib import Path
 from ratifact.app import _ejecutar, herramienta
 from ratifact.busqueda import _resultados
 from ratifact.catalogo import _bloque_pendientes, _es_carpeta_de_registros, _linea, _registros_en, _resolver_id
-from ratifact.config import (CARPETAS_IGNORADAS, EXT_TEXTO, LIMITE_INDICE, LIMITE_LECTURA, MEM, ErrorMemoria, _es_repo,
-                             _mem, _proyectos, _raiz, _repos, _ruta_segura)
-from ratifact.esquema import _bloqueo, _version_esquema
+from ratifact.config import (CARPETAS_IGNORADAS, EXT_TEXTO, LIMITE_INDICE, LIMITE_LECTURA, MEM, ErrorMemoria,
+                             _aviso_alias, _es_repo, _mem, _proyectos, _raiz, _repos, _ruta_segura, _traducir_alias,
+                             _valor)
+from ratifact.esquema import _bloqueo, _idioma_contenido, _version_esquema
 from ratifact.integraciones import registro as _integraciones
 from ratifact.listado import _listado
 from ratifact.registros import _clave_id, _commit, _escribir_atomico, _leer_registro, _resumen_tareas
+from ratifact.vocabulario import DECISIONES
 
 
 # ───────────────────────── herramientas ─────────────────────────
@@ -25,7 +27,7 @@ def listar_proyectos() -> str:
     def f():
         filas = []
         for nombre, p in _proyectos().items():
-            ruta = Path(p["ruta"]).expanduser()
+            ruta = Path(_valor(p, "ruta")).expanduser()
             try:
                 mem = _mem(nombre)
                 estado = (f"[memoria lista · esquema v{_version_esquema(mem)}]" if (mem / "INDEX.md").exists()
@@ -80,8 +82,8 @@ def obtener_contexto(proyecto: str) -> str:
         indice = mem / "INDEX.md"
         partes.append(indice.read_text(encoding="utf-8") if indice.exists() else "(INDEX.md no existe)")
         partes.append(_bloque_pendientes(proyecto))     # ADR-026: del catálogo, no abiertas.md
-        propuestas = ["-".join(p.stem.split("-", 2)[:2]) for p in (mem / "decisiones").glob("ADR-*.md")
-                      if _leer_registro(p)[0].get("estado") == "propuesta"]
+        propuestas = ["-".join(p.stem.split("-", 2)[:2]) for p in (mem / DECISIONES).glob("ADR-*.md")
+                      if _leer_registro(p)[0].get("status") == "proposed"]
         if propuestas:
             partes.append("Decisiones propuestas pendientes de confirmar por el usuario: "
                           + ", ".join(sorted(propuestas, key=_clave_id)))
@@ -91,6 +93,10 @@ def obtener_contexto(proyecto: str) -> str:
         aviso = _aviso_indice(proyecto)
         if aviso:
             partes.append(aviso)
+        idioma = _idioma_contenido(mem)
+        partes.append(f"Idioma del contenido: {idioma} — escribe en este idioma el contenido de los registros que "
+                      "guardes (decisiones, pendientes, tareas, sesiones, INDEX); la conversación sigue en el idioma "
+                      "del usuario.")
         integraciones = _integraciones._bloque_contexto(proyecto)
         if integraciones:
             partes.append(integraciones)
@@ -142,34 +148,41 @@ def buscar(proyecto: str, texto: str, max_resultados: int = 20) -> str:
 @herramienta
 def listar_documentos(proyecto: str, carpeta: str = "docs") -> str:
     """Lista archivos (con tamaño) bajo una carpeta del proyecto.
-    En .project/decisiones, pendientes y tareas lista un registro por línea: "ID · estado · título  (ruta)".
+    En .project/decisions, pending y tasks lista un registro por línea: "ID · estado · título  (ruta)".
+    Una ruta con la carpeta v1 (.project/tareas, decisiones, pendientes, sesiones) se traduce y se avisa.
     Si el listado completo es demasiado grande, lo resume por niveles: carpetas sin expandir con su cantidad de
     archivos ("modulo/ (38 archivos)"); pide una `carpeta` más específica para ver el detalle."""
     def f():
-        base = _ruta_segura(proyecto, carpeta)
-        prefijo = _es_carpeta_de_registros(carpeta)
-        en_memoria = carpeta.split("/")[0] == MEM
-        repo = _mem(proyecto) if en_memoria else _raiz(proyecto)
-        archivos = [p for p in _archivos_proyecto(repo, usar_git=not en_memoria) if p == base or base in p.parents]
-        if prefijo:
-            registros = _registros_en(proyecto, prefijo)
-            vistos = {r.ruta.rsplit("/", 1)[1] for r in registros}
-            otros = [f"{carpeta.rstrip('/')}/{p.relative_to(base)}  ({p.stat().st_size} B)" for p in archivos
-                     if p.relative_to(base).as_posix() not in vistos]
-            return "\n".join([_linea(r, "  ") for r in registros] + otros) or "(vacío)"
-        entradas = [(p.relative_to(base).as_posix(), p.stat().st_size) for p in archivos]
-        return _listado(carpeta, entradas) or "(vacío)"
+        carpeta_real = _traducir_alias(proyecto, carpeta)
+        return _aviso_alias() + _listar(proyecto, carpeta_real)
     return _ejecutar(f)
+
+
+def _listar(proyecto: str, carpeta: str) -> str:
+    base = _ruta_segura(proyecto, carpeta)
+    prefijo = _es_carpeta_de_registros(carpeta)
+    en_memoria = carpeta.split("/")[0] == MEM
+    repo = _mem(proyecto) if en_memoria else _raiz(proyecto)
+    archivos = [p for p in _archivos_proyecto(repo, usar_git=not en_memoria) if p == base or base in p.parents]
+    if prefijo:
+        registros = _registros_en(proyecto, prefijo)
+        vistos = {r.ruta.rsplit("/", 1)[1] for r in registros}
+        otros = [f"{carpeta.rstrip('/')}/{p.relative_to(base)}  ({p.stat().st_size} B)" for p in archivos
+                 if p.relative_to(base).as_posix() not in vistos]
+        return "\n".join([_linea(r, "  ") for r in registros] + otros) or "(vacío)"
+    entradas = [(p.relative_to(base).as_posix(), p.stat().st_size) for p in archivos]
+    return _listado(carpeta, entradas) or "(vacío)"
 
 
 @herramienta
 def leer_documento(proyecto: str, ruta: str, desde_linea: int = 1, hasta_linea: int = 0) -> str:
     """Lee un archivo de texto del proyecto, opcionalmente un rango de líneas (1-indexado).
-    Acepta también el id de un registro de la memoria ("T-24", "tareas/T-024.md", "ADR-020-slug.md"): si la ruta no
-    existe, lee el registro real y antepone la línea "(→ .project/<carpeta>/<archivo>)"."""
+    Acepta también el id de un registro de la memoria ("T-24", "tasks/T-024.md", "ADR-020-slug.md"): si la ruta no
+    existe, lee el registro real y antepone la línea "(→ .project/<carpeta>/<archivo>)". Una ruta con la carpeta v1
+    (.project/tareas/…, .project/acuerdos.md…) se traduce y se avisa igual."""
     def f():
         p = _ruta_segura(proyecto, ruta)
-        aviso = ""
+        aviso = _aviso_alias()
         if p.is_dir():
             raise ErrorMemoria(f"{ruta} es una carpeta; para ver su contenido usa listar_documentos(\"{proyecto}\", "
                                f"\"{ruta.rstrip('/')}\").")
@@ -192,6 +205,7 @@ def leer_documento(proyecto: str, ruta: str, desde_linea: int = 1, hasta_linea: 
 
 
 def _escribir_documento(proyecto: str, ruta: str, contenido: str, nuevo: bool, anexar: bool, motivo: str) -> str:
+    ruta = _traducir_alias(proyecto, ruta, escribir=True)
     p = _ruta_segura(proyecto, ruta, escribir=True)
     if p.suffix not in EXT_TEXTO:
         raise ErrorMemoria("Solo archivos de texto; los binarios se generan con el agente de código.")
@@ -204,7 +218,7 @@ def _escribir_documento(proyecto: str, ruta: str, contenido: str, nuevo: bool, a
         _escribir_atomico(p, final if final.endswith("\n") else final + "\n")
         accion = "crear" if nuevo else ("anexar" if anexar else "reemplazar")
         sha = _commit(proyecto, [p], f"{accion} {ruta}" + (f" — {motivo}" if motivo else ""))
-        return f"{ruta} guardado ({accion}) · commit {sha}"
+        return f"{_aviso_alias()}{ruta} guardado ({accion}) · commit {sha}"
 
 
 @herramienta

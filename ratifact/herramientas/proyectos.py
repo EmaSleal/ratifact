@@ -8,21 +8,23 @@ import subprocess
 from pathlib import Path
 
 from ratifact.app import _ejecutar, herramienta
-from ratifact.config import (BASE_PROYECTOS, CONFIG, MEM, _DIR, ErrorMemoria, _es_repo, _mem, _proyectos, _raiz,
-                             _repos, _repos_de, _sugerencia_nombre)
-from ratifact.esquema import ARCHIVO_ESQUEMA, _bloqueo, _escribir_esquema
+from ratifact.config import (BASE_PROYECTOS, CONFIG, MEM, _DIR, ErrorMemoria, _clave_escritura, _es_repo, _mem,
+                             _proyectos, _raiz, _repos, _repos_de, _sugerencia_nombre, _valor)
+from ratifact.esquema import ARCHIVO_ESQUEMA, IDIOMA_NUEVAS, _bloqueo, _escribir_esquema
 from ratifact.integraciones.registro import _parsear_integraciones
 from ratifact.plantillas import PLANTILLA_AGENTES, PLANTILLA_INSTRUCCIONES
 from ratifact.registros import _commit, _escribir_atomico, _regenerar_vistas
+from ratifact.vocabulario import CARPETAS_V1
 
 
 @herramienta
 def inicializar_memoria(proyecto: str) -> str:
-    """Crea la estructura .project/ vacía de un proyecto registrado (idempotente)."""
+    """Crea la estructura .project/ vacía de un proyecto registrado (idempotente), en el esquema actual (v2:
+    decisions/, pending/, sessions/, tasks/, content_language "en")."""
     def f():
         with _bloqueo(proyecto):
             mem = _mem(proyecto)
-            for sub in ("decisiones", "pendientes", "sesiones", "tareas"):
+            for sub in CARPETAS_V1.values():
                 (mem / sub).mkdir(parents=True, exist_ok=True)
             idx = mem / "INDEX.md"
             tocados = _regenerar_vistas(proyecto)
@@ -33,7 +35,7 @@ def inicializar_memoria(proyecto: str) -> str:
             _escribir_atomico(gi, ".lock\n*.tmp\n")
             tocados.append(gi)
             if not (mem / ARCHIVO_ESQUEMA).exists():
-                tocados.append(_escribir_esquema(mem))
+                tocados += _escribir_esquema(mem, IDIOMA_NUEVAS)
             if not _es_repo(mem):   # repo propio, independiente de la rama del código (ADR-010)
                 subprocess.run(["git", "init", "-q", "-b", "main", str(mem)], capture_output=True)
                 tocados = [p for p in mem.rglob("*") if p.is_file() and ".git" not in p.parts and p.name != ".lock"]
@@ -80,7 +82,7 @@ def _detectar_pruebas_proyecto(raiz: Path) -> str | dict:
 
 
 def _linea_pruebas(proyecto: str) -> str:
-    cfg = _proyectos().get(proyecto, {}).get("pruebas", "")
+    cfg = _valor(_proyectos().get(proyecto, {}), "pruebas", "")
     if isinstance(cfg, dict) and cfg:
         return "\nComandos de pruebas por repositorio:\n" + "\n".join(f"- `{r}/`: `{c}`" for r, c in cfg.items())
     return (f"\nComando de pruebas (desde la raíz del repositorio): `{cfg}`" if cfg
@@ -153,8 +155,11 @@ def registrar_proyecto(nombre: str, ruta: str, memoria: str = "", pruebas: str =
             raise ErrorMemoria(f"La memoria debe estar dentro de {BASE_PROYECTOS}.")
         r = _validar_ruta_proyecto(ruta, m, alta=True)
         anterior = CONFIG.read_text(encoding="utf-8") if CONFIG.exists() else None
-        proyectos[nombre] = {"ruta": str(r), "memoria": str(m), "escritura": [MEM, "docs"],
-                             "pruebas": pruebas.strip() or _detectar_pruebas_proyecto(r)}
+        # grafía de las claves: la de la primera entrada existente (español si el archivo está vacío)
+        modelo = next(iter(proyectos.values()), {})
+        valores = {"ruta": str(r), "memoria": str(m), "escritura": [MEM, "docs"],
+                   "pruebas": pruebas.strip() or _detectar_pruebas_proyecto(r)}
+        proyectos[nombre] = {_clave_escritura(modelo, k): v for k, v in valores.items()}
         CONFIG.parent.mkdir(parents=True, exist_ok=True)
         _escribir_atomico(CONFIG, json.dumps(proyectos, indent=2, ensure_ascii=False) + "\n")
         resultado = inicializar_memoria(proyecto=nombre)
@@ -211,16 +216,16 @@ def actualizar_proyecto(nombre: str, ruta: str = "", pruebas: str = "", reposito
         raiz = None
         if ruta.strip():
             mem = _mem(nombre)
-            anterior = proyectos[nombre]["ruta"]
+            anterior = _valor(proyectos[nombre], "ruta")
             raiz = _validar_ruta_proyecto(ruta.strip(), mem)
-            proyectos[nombre]["ruta"] = str(raiz)
+            proyectos[nombre][_clave_escritura(proyectos[nombre], "ruta")] = str(raiz)
             cambios.append(f"ruta: {anterior} → {raiz}")
 
         if pruebas.strip() or repositorio.strip() or redetectar:
             if raiz is None:
                 raiz = _raiz(nombre)
             repos = _repos_de(raiz)
-            actual = proyectos[nombre].get("pruebas", "")
+            actual = _valor(proyectos[nombre], "pruebas", "")
             repo = repositorio.strip()
             if repo:
                 if repo not in repos:
@@ -240,11 +245,11 @@ def actualizar_proyecto(nombre: str, ruta: str = "", pruebas: str = "", reposito
                     raise ErrorMemoria("No se reconoce el tipo de proyecto; indica el comando explícitamente.")
                 descripcion = (", ".join(f"`{r}/`: `{c}`" for r, c in nuevo.items()) if isinstance(nuevo, dict)
                                else f"`{nuevo}`")
-            proyectos[nombre]["pruebas"] = nuevo
+            proyectos[nombre][_clave_escritura(proyectos[nombre], "pruebas")] = nuevo
             cambios.append(f"pruebas {descripcion}" + ("" if pruebas.strip() else " (detectado)"))
 
         if ruta.strip():
-            pruebas_final = proyectos[nombre].get("pruebas", "")
+            pruebas_final = _valor(proyectos[nombre], "pruebas", "")
             if isinstance(pruebas_final, dict):
                 vigentes = _repos_de(raiz)
                 huerfanas = sorted(k for k in pruebas_final if k not in vigentes)

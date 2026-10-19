@@ -65,7 +65,7 @@
       "nombre": "actualizar_proyecto"
     },
     {
-      "descripcion": "Cambia el estado de una tarea (pendiente, en_curso, en_revision, fallida, integrada, descartada).\n    `resultado`: qué se hizo, pruebas ejecutadas y su salida resumida, desvíos respecto de la spec.\n    'integrada' y 'descartada' solo con confirmación explícita del usuario.\n    Para pedir correcciones tras revisar una tarea usa `devolver_tarea`, no este cambio de estado.\n    Con 'en_curso', la respuesta trae la guía de integraciones activas (ejecutar, verificar, cerrar), calculada en\n    ese momento; es condicional: síguela solo si tienes esas herramientas. No se escribe en la tarea.\n    Con 'integrada', si la tarea declara `resuelve`, la respuesta recuerda los pendientes que siguen abiertos (no\n    cierra ni modifica ninguno).",
+      "descripcion": "Cambia el estado de una tarea (todo, in_progress, in_review, failed, merged, discarded; también acepta los\n    nombres en español: pendiente, en_curso, en_revision, fallida, integrada, descartada). Se guarda en inglés.\n    `resultado`: qué se hizo, pruebas ejecutadas y su salida resumida, desvíos respecto de la spec.\n    'merged' y 'discarded' solo con confirmación explícita del usuario.\n    Para pedir correcciones tras revisar una tarea usa `devolver_tarea`, no este cambio de estado.\n    Con 'in_progress', la respuesta trae la guía de integraciones activas (ejecutar, verificar, cerrar), calculada en\n    ese momento; es condicional: síguela solo si tienes esas herramientas. No se escribe en la tarea.\n    Con 'merged', si la tarea declara `resuelve`, la respuesta recuerda los pendientes que siguen abiertos (no\n    cierra ni modifica ninguno).",
       "esquema_entrada": {
         "properties": {
           "commit": {
@@ -129,7 +129,7 @@
       "nombre": "buscar"
     },
     {
-      "descripcion": "Cierra un pendiente. Si la resolución generó una decisión, indica su id_decision.",
+      "descripcion": "Cierra un pendiente (estado 'closed'). Si la resolución generó una decisión, indica su id_decision.",
       "esquema_entrada": {
         "properties": {
           "id": {
@@ -161,7 +161,7 @@
       "nombre": "cerrar_pendiente"
     },
     {
-      "descripcion": "Pasa una decisión de 'propuesta' a 'acordada'. Es la ÚNICA vía para acordar una decisión y el cliente\n    pide la aprobación del usuario en cada llamada. `cita_usuario`: el texto literal con que el usuario\n    confirmó en el chat (queda guardado en el ADR como evidencia). Nunca la llames sin esa confirmación.",
+      "descripcion": "Pasa una decisión de 'proposed' a 'accepted'. Es la ÚNICA vía para acordar una decisión y el cliente\n    pide la aprobación del usuario en cada llamada. `cita_usuario`: el texto literal con que el usuario\n    confirmó en el chat (queda guardado en el ADR como evidencia). Nunca la llames sin esa confirmación.",
       "esquema_entrada": {
         "properties": {
           "cita_usuario": {
@@ -267,7 +267,7 @@
       "nombre": "decidir_propuestas"
     },
     {
-      "descripcion": "Cierra una propuesta que el usuario NO aprueba. Queda como 'descartada' con su motivo (no se borra: el\n    historial conserva qué se consideró y por qué no se adoptó). Solo por indicación explícita del usuario.",
+      "descripcion": "Cierra una propuesta que el usuario NO aprueba. Queda como 'rejected' con su motivo (no se borra: el\n    historial conserva qué se consideró y por qué no se adoptó). Solo por indicación explícita del usuario.",
       "esquema_entrada": {
         "properties": {
           "id": {
@@ -294,7 +294,7 @@
       "nombre": "descartar_decision"
     },
     {
-      "descripcion": "Devuelve una tarea en revisión para que el agente de código la corrija en la MISMA rama.\n    Úsala solo cuando el usuario, tras revisar el resultado, decida pedir cambios.\n    `observaciones`: qué se aprueba y qué falla, con el porqué. `criterios_adicionales`: lista verificable de lo que\n    debe cumplir la corrección (se suma a los criterios originales). La tarea queda 'devuelta' y se reejecuta\n    con /tarea T-NNN, que continúa sobre la rama existente sin reescribir los commits anteriores.",
+      "descripcion": "Devuelve una tarea en revisión para que el agente de código la corrija en la MISMA rama.\n    Úsala solo cuando el usuario, tras revisar el resultado, decida pedir cambios.\n    `observaciones`: qué se aprueba y qué falla, con el porqué. `criterios_adicionales`: lista verificable de lo que\n    debe cumplir la corrección (se suma a los criterios originales). La tarea queda 'changes_requested' y se reejecuta\n    con /tarea T-NNN, que continúa sobre la rama existente sin reescribir los commits anteriores.",
       "esquema_entrada": {
         "properties": {
           "criterios_adicionales": {
@@ -363,7 +363,7 @@
       "nombre": "guardar_documento"
     },
     {
-      "descripcion": "Crea la estructura .project/ vacía de un proyecto registrado (idempotente).",
+      "descripcion": "Crea la estructura .project/ vacía de un proyecto registrado (idempotente), en el esquema actual (v2:\n    decisions/, pending/, sessions/, tasks/, content_language \"en\").",
       "esquema_entrada": {
         "properties": {
           "proyecto": {
@@ -397,7 +397,7 @@
       "nombre": "instrucciones_proyecto"
     },
     {
-      "descripcion": "Lee un archivo de texto del proyecto, opcionalmente un rango de líneas (1-indexado).\n    Acepta también el id de un registro de la memoria (\"T-24\", \"tareas/T-024.md\", \"ADR-020-slug.md\"): si la ruta no\n    existe, lee el registro real y antepone la línea \"(→ .project/<carpeta>/<archivo>)\".",
+      "descripcion": "Lee un archivo de texto del proyecto, opcionalmente un rango de líneas (1-indexado).\n    Acepta también el id de un registro de la memoria (\"T-24\", \"tasks/T-024.md\", \"ADR-020-slug.md\"): si la ruta no\n    existe, lee el registro real y antepone la línea \"(→ .project/<carpeta>/<archivo>)\". Una ruta con la carpeta v1\n    (.project/tareas/…, .project/acuerdos.md…) se traduce y se avisa igual.",
       "esquema_entrada": {
         "properties": {
           "desde_linea": {
@@ -429,7 +429,7 @@
       "nombre": "leer_documento"
     },
     {
-      "descripcion": "Lista archivos (con tamaño) bajo una carpeta del proyecto.\n    En .project/decisiones, pendientes y tareas lista un registro por línea: \"ID · estado · título  (ruta)\".\n    Si el listado completo es demasiado grande, lo resume por niveles: carpetas sin expandir con su cantidad de\n    archivos (\"modulo/ (38 archivos)\"); pide una `carpeta` más específica para ver el detalle.",
+      "descripcion": "Lista archivos (con tamaño) bajo una carpeta del proyecto.\n    En .project/decisions, pending y tasks lista un registro por línea: \"ID · estado · título  (ruta)\".\n    Una ruta con la carpeta v1 (.project/tareas, decisiones, pendientes, sesiones) se traduce y se avisa.\n    Si el listado completo es demasiado grande, lo resume por niveles: carpetas sin expandir con su cantidad de\n    archivos (\"modulo/ (38 archivos)\"); pide una `carpeta` más específica para ver el detalle.",
       "esquema_entrada": {
         "properties": {
           "carpeta": {
@@ -499,7 +499,7 @@
       "nombre": "obtener_contexto"
     },
     {
-      "descripcion": "Marca una decisión como reemplazada por otra ya registrada (las decisiones no se borran).",
+      "descripcion": "Marca una decisión como reemplazada por otra ya registrada (estado 'superseded'; las decisiones no se borran).",
       "esquema_entrada": {
         "properties": {
           "id_anterior": {
@@ -526,7 +526,7 @@
       "nombre": "reemplazar_decision"
     },
     {
-      "descripcion": "Crea un ADR. SIEMPRE queda como 'propuesta'. Para acordarla, llama después confirmar_decision:\n    esa herramienta pide la aprobación del usuario. `resumen`: una línea para la vista de acuerdos.\n    Idempotente (ADR-019): si ya hay un ADR con este título (sin distinguir mayúsculas ni espacios) creado en\n    los últimos minutos Y TODAVÍA en estado 'propuesta', no crea nada nuevo y devuelve el id existente. Si ese\n    ADR ya cambió de estado (p. ej. descartada: el usuario pidió otra versión), un humano ya intervino, así\n    que se registra una ADR nueva.",
+      "descripcion": "Crea un ADR. SIEMPRE queda como 'proposed'. Para acordarla, llama después confirmar_decision:\n    esa herramienta pide la aprobación del usuario. `resumen`: una línea para la vista de acuerdos.\n    Idempotente (ADR-019): si ya hay un ADR con este título (sin distinguir mayúsculas ni espacios) creado en\n    los últimos minutos Y TODAVÍA en estado 'proposed', no crea nada nuevo y devuelve el id existente. Si ese\n    ADR ya cambió de estado (p. ej. rejected: el usuario pidió otra versión), un humano ya intervino, así\n    que se registra una ADR nueva.",
       "esquema_entrada": {
         "properties": {
           "alternativas": {
@@ -568,7 +568,7 @@
       "nombre": "registrar_decision"
     },
     {
-      "descripcion": "Registra una decisión abierta o tema sin resolver. Idempotente (ADR-019): si ya hay un pendiente con\n    este tema (sin distinguir mayúsculas ni espacios) creado en los últimos minutos Y TODAVÍA en estado\n    'abierta', no crea nada nuevo y devuelve el id existente. Si ese pendiente ya se cerró, un humano ya\n    intervino, así que se registra un pendiente nuevo.",
+      "descripcion": "Registra una decisión abierta o tema sin resolver. Idempotente (ADR-019): si ya hay un pendiente con\n    este tema (sin distinguir mayúsculas ni espacios) creado en los últimos minutos Y TODAVÍA en estado\n    'open', no crea nada nuevo y devuelve el id existente. Si ese pendiente ya se cerró, un humano ya\n    intervino, así que se registra un pendiente nuevo.",
       "esquema_entrada": {
         "properties": {
           "contexto": {
@@ -632,7 +632,7 @@
       "nombre": "registrar_proyecto"
     },
     {
-      "descripcion": "Cierre de chat (/cierre): anexa el resumen de la sesión a sesiones/AAAA-MM-DD.md.",
+      "descripcion": "Cierre de chat (/cierre): anexa el resumen de la sesión a sessions/AAAA-MM-DD.md.",
       "esquema_entrada": {
         "properties": {
           "proyecto": {
@@ -654,7 +654,7 @@
       "nombre": "registrar_sesion"
     },
     {
-      "descripcion": "Crea una especificación de trabajo para Claude Code en .project/tareas/T-NNN.md (estado 'pendiente').\n    En proyectos de varios repos, `repositorio` (obligatorio) indica la carpeta donde se trabaja; en proyectos de\n    un solo repositorio se ignora (la respuesta lo avisa).\n    Debe ser autosuficiente: Claude Code la ejecuta sin este chat. `criterios_aceptacion`: lista verificable\n    (pruebas que deben pasar, comportamiento observable). `decisiones`: ids de ADR aplicables.\n    `archivos`: rutas que probablemente se tocan. El usuario la ejecuta con /tarea T-NNN en Claude Code.\n    `resuelve`: pendientes que la tarea resuelve, separados por coma, cada uno opcionalmente con \"(parcial)\"\n    (p. ej. \"P-036, P-037 (parcial)\"); deben existir y estar abiertos. Se guarda en la tarea (sección \"Resuelve\") y,\n    al integrarla, actualizar_tarea recuerda los que sigan abiertos. Nunca cierra pendientes.\n    La respuesta agrega la línea de integraciones detectadas (no se escribe en la tarea).\n    Idempotente (ADR-019): si ya hay una tarea con este título (sin distinguir mayúsculas ni espacios) creada\n    en los últimos minutos Y TODAVÍA en estado 'pendiente', no crea nada nuevo y devuelve el id existente\n    (con el comando /tarea para repetírselo al usuario). Si esa tarea ya cambió de estado (p. ej. en_curso:\n    ya se está ejecutando), un humano o el agente de código ya intervino, así que se registra una tarea\n    nueva.",
+      "descripcion": "Crea una especificación de trabajo para Claude Code en .project/tasks/T-NNN.md (estado 'todo').\n    En proyectos de varios repos, `repositorio` (obligatorio) indica la carpeta donde se trabaja; en proyectos de\n    un solo repositorio se ignora (la respuesta lo avisa).\n    Debe ser autosuficiente: Claude Code la ejecuta sin este chat. `criterios_aceptacion`: lista verificable\n    (pruebas que deben pasar, comportamiento observable). `decisiones`: ids de ADR aplicables.\n    `archivos`: rutas que probablemente se tocan. El usuario la ejecuta con /tarea T-NNN en Claude Code.\n    `resuelve`: pendientes que la tarea resuelve, separados por coma, cada uno opcionalmente con \"(parcial)\" o\n    \"(partial)\" (p. ej. \"P-036, P-037 (parcial)\"); deben existir y estar abiertos. Se guarda en la tarea (sección\n    \"Resolves\") y,\n    al integrarla, actualizar_tarea recuerda los que sigan abiertos. Nunca cierra pendientes.\n    La respuesta agrega la línea de integraciones detectadas (no se escribe en la tarea).\n    Idempotente (ADR-019): si ya hay una tarea con este título (sin distinguir mayúsculas ni espacios) creada\n    en los últimos minutos Y TODAVÍA en estado 'todo', no crea nada nuevo y devuelve el id existente\n    (con el comando /tarea para repetírselo al usuario). Si esa tarea ya cambió de estado (p. ej. in_progress:\n    ya se está ejecutando), un humano o el agente de código ya intervino, así que se registra una tarea\n    nueva.",
       "esquema_entrada": {
         "properties": {
           "archivos": {
@@ -716,7 +716,7 @@
       "nombre": "registrar_tarea"
     },
     {
-      "descripcion": "Devuelve las decisiones en estado 'propuesta' para que el usuario decida confirmar, ajustar o descartar.\n    Paginado: `cantidad` por página (máx. 25) a partir de `desde_id` (p. ej. \"ADR-020\"). Con `resumen=True`\n    devuelve una línea por propuesta (útil para ver el panorama antes de entrar al detalle).",
+      "descripcion": "Devuelve las decisiones en estado 'proposed' para que el usuario decida confirmar, ajustar o descartar.\n    Paginado: `cantidad` por página (máx. 25) a partir de `desde_id` (p. ej. \"ADR-020\"). Con `resumen=True`\n    devuelve una línea por propuesta (útil para ver el panorama antes de entrar al detalle).",
       "esquema_entrada": {
         "properties": {
           "cantidad": {

@@ -1,5 +1,5 @@
-"""Catálogo de la memoria (ADR-022): id, tipo, título, estado y ruta de cada registro de .project/decisiones,
-pendientes y tareas, leído del frontmatter en cada llamada. No se guarda nada en disco: sin índice, sin caché, sin
+"""Catálogo de la memoria (ADR-022): id, tipo, título, estado y ruta de cada registro de .project/decisions,
+pending y tasks, leído del frontmatter en cada llamada. No se guarda nada en disco: sin índice, sin caché, sin
 watcher. Alimenta la resolución de ids de leer_documento, el listado de registros, los resultados de buscar y
 los pendientes abiertos de obtener_contexto."""
 from __future__ import annotations
@@ -11,10 +11,13 @@ from typing import NamedTuple
 
 from ratifact.config import MEM, ErrorMemoria, _mem
 from ratifact.registros import _buscar_registro, _clave_id, _leer_registro, _normalizar_id
+from ratifact.vocabulario import CARPETAS_V1, DECISIONES, PENDIENTES, TAREAS
 
 # prefijo del id → (carpeta de la memoria, tipo)
-TIPOS = {"ADR": ("decisiones", "decision"), "P": ("pendientes", "pendiente"), "T": ("tareas", "tarea")}
+TIPOS = {"ADR": (DECISIONES, "decision"), "P": (PENDIENTES, "pendiente"), "T": (TAREAS, "tarea")}
 CARPETAS = {carpeta: prefijo for prefijo, (carpeta, _) in TIPOS.items()}
+# un id pedido con la carpeta v1 ("tareas/T-024.md") se resuelve igual (solo lectura, ADR-022)
+CARPETAS_ID = {**CARPETAS, **{v1: CARPETAS[v2] for v1, v2 in CARPETAS_V1.items() if v2 in CARPETAS}}
 
 
 class Registro(NamedTuple):
@@ -35,8 +38,8 @@ def _registros_de(mem: Path, prefijo: str) -> list[Registro]:
             continue
         meta, _ = _leer_registro(p)
         id_ = _normalizar_id(meta.get("id") or re.match(rf"{prefijo}-\d+", p.name).group(0))
-        filas.append(Registro(id_, tipo, meta.get("titulo") or meta.get("tema", ""), meta.get("estado", ""),
-                              f"{MEM}/{carpeta}/{p.name}", meta.get("fecha", "")))
+        filas.append(Registro(id_, tipo, meta.get("title") or meta.get("topic", ""), meta.get("status", ""),
+                              f"{MEM}/{carpeta}/{p.name}", meta.get("date", "")))
     return filas
 
 
@@ -55,8 +58,8 @@ TOPE_TEMA = 100   # caracteres del tema de un pendiente en el arranque; más lar
 
 def _bloque_pendientes(proyecto: str) -> str:
     """Pendientes abiertos para obtener_contexto (ADR-026): una línea por pendiente, en orden numérico de id, desde el
-    catálogo (sin extracto ni dueño). abiertas.md sigue en disco con su formato; el arranque ya no lo incluye."""
-    abiertos = [r for r in _registros_en(proyecto, "P") if r.estado == "abierta"]
+    catálogo (sin extracto ni dueño). OPEN.md sigue en disco con su formato; el arranque ya no lo incluye."""
+    abiertos = [r for r in _registros_en(proyecto, "P") if r.estado == "open"]
     lineas = [f"# Pendientes abiertos ({len(abiertos)})"]
     for r in abiertos:
         tema = r.titulo if len(r.titulo) <= TOPE_TEMA else r.titulo[:TOPE_TEMA - 1] + "…"
@@ -67,17 +70,17 @@ def _bloque_pendientes(proyecto: str) -> str:
 
 
 def _id_de_ruta(ruta: str) -> str | None:
-    """Id que se pidió con una ruta que no existe: "T-24", "T-024.md", "tareas/T-024.md", ".project/tareas/T-024.md",
-    ".project/decisiones/ADR-020-<slug equivocado>.md". Solo si el resto de la ruta apunta a la memoria (nada, una
-    carpeta de registros, .project o .project/<carpeta de registros>) y el prefijo es de un tipo conocido; así una ruta
-    de código como "docs/T-001.md" o "src/T-1.java" nunca se resuelve a un registro."""
+    """Id que se pidió con una ruta que no existe: "T-24", "T-024.md", "tasks/T-024.md", ".project/tasks/T-024.md",
+    ".project/decisions/ADR-020-<slug equivocado>.md" (también con la carpeta v1: "tareas/T-024.md"). Solo si el resto
+    de la ruta apunta a la memoria (nada, una carpeta de registros, .project o .project/<carpeta de registros>) y el
+    prefijo es de un tipo conocido; así una ruta de código como "docs/T-001.md" o "src/T-1.java" nunca se resuelve a un registro."""
     partes = Path(ruta.strip()).parts
     if not partes:
         return None
     padre = partes[:-1]
     if padre and padre[0] == MEM:
         padre = padre[1:]
-    if len(padre) > 1 or (padre and padre[0] not in CARPETAS):
+    if len(padre) > 1 or (padre and padre[0] not in CARPETAS_ID):
         return None
     m = re.fullmatch(r"([A-Za-z]+-\d+)(-[^/]*)?(\.md)?", partes[-1])
     id_ = _normalizar_id(m.group(1)) if m else ""
@@ -103,7 +106,7 @@ def _resolver_id(proyecto: str, ruta: str) -> Path | None:
 
 
 def _es_carpeta_de_registros(carpeta: str) -> str | None:
-    """Prefijo si `carpeta` es .project/decisiones|pendientes|tareas (con o sin "/" final)."""
+    """Prefijo si `carpeta` es .project/decisions|pending|tasks (con o sin "/" final)."""
     partes = Path(carpeta.strip()).parts
     return CARPETAS.get(partes[1]) if len(partes) == 2 and partes[0] == MEM else None
 
