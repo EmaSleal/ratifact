@@ -133,3 +133,9 @@ Status of this document: approved spec; implementation after ADR-009 criterion 2
 ### Proposed (ADR-029, pending the user's confirmation)
 - The `.memorias/` → `.ratifact/` root move and the projects.json key rename (§7) leave the automatic migration and become an explicit installer/upgrade step run with all clients closed (projects.json backup; custom memory paths never move). From step 1 on, the code reads both Spanish and English projects.json keys.
 - `content_language` lives in each memory's schema.json instead of projects.json (§7).
+
+## Addendum (2026-10-20, ADR-031) — read_task in v1
+
+- `read_task(project, id)`: working brief of a task — frontmatter, full spec (Goal, Acceptance criteria, Resolves, Applicable decisions, Files involved, Out of scope, Notes, How to verify), every Amendment block, the status-relevant block in full (changes_requested → latest Review; in_review or failed → latest Result block) and a one-line index (heading · line range · size) of every other Result/Review block, readable with `read_document` and a range.
+- `/run-task` step 1 calls `read_task`; planner-side reviews use it too.
+- Born in English with the contract rename (no Spanish predecessor). Tool count in v1: 28 (26 renamed + amend_task + read_task).
