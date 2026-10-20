@@ -62,21 +62,21 @@ def test_decidir_propuestas_ordena_ids_numericamente(srv, proyecto):
 
     async def elicit(mensaje, _esquema):
         vistos.append("ADR-1000" if "# ADR-1000" in mensaje else "ADR-101")
-        return SimpleNamespace(action="accept", data=SimpleNamespace(accion="posponer", comentario=""))
+        return SimpleNamespace(action="accept", data=SimpleNamespace(action="postpone", comment=""))
     capacidades = SimpleNamespace(elicitation=SimpleNamespace())
     ctx = SimpleNamespace(session=SimpleNamespace(client_params=SimpleNamespace(capabilities=capacidades)), elicit=elicit)
 
-    salida = asyncio.run(srv.decidir_propuestas(proyecto="demo", ctx=ctx))
+    salida = asyncio.run(srv.decide_proposals(project="demo", ctx=ctx))
 
     assert vistos == ["ADR-101", "ADR-1000"]
-    assert "Siguen como propuesta: ADR-101, ADR-1000" in salida, salida
+    assert "Still proposed: ADR-101, ADR-1000" in salida, salida
 
 
 def test_obtener_contexto_lista_propuestas_en_orden_numerico(srv, proyecto):
     _adr(proyecto["mem"], "ADR-1000")
     _adr(proyecto["mem"], "ADR-101")
-    salida = srv.obtener_contexto(proyecto="demo")
-    linea = next(l for l in salida.splitlines() if l.startswith("Decisiones propuestas pendientes"))
+    salida = srv.get_context(project="demo")
+    linea = next(l for l in salida.splitlines() if l.startswith("Proposed decisions awaiting"))
     assert linea.endswith(": ADR-101, ADR-1000"), linea
 
 
@@ -86,7 +86,7 @@ def test_confirmar_lote_con_ids_equivalentes_confirma_una_sola_vez(srv, proyecto
     ruta = _adr(proyecto["mem"], "ADR-001")
     commits_antes = len(log_git(proyecto["mem"]))
 
-    salida = srv.confirmar_decisiones_lote(proyecto="demo", ids=["ADR-1", "adr-001", "ADR-001"], cita_usuario="sí, las dos")
+    salida = srv.accept_decisions(project="demo", ids=["ADR-1", "adr-001", "ADR-001"], user_quote="sí, las dos")
 
     assert salida.startswith("1 → accepted (ADR-001) · commit"), salida
     texto = ruta.read_text()
@@ -99,9 +99,9 @@ def test_reemplazar_decision_guarda_y_muestra_id_normalizado(srv, proyecto):
     ruta = _adr(proyecto["mem"], "ADR-001", estado="accepted")
     _adr(proyecto["mem"], "ADR-002")
 
-    salida = srv.reemplazar_decision(proyecto="demo", id_anterior="adr-1", id_nuevo="ADR-2")
+    salida = srv.supersede_decision(project="demo", old_id="adr-1", new_id="ADR-2")
 
-    assert salida.startswith("ADR-001 → superseded (reemplazada por ADR-002) · commit"), salida
+    assert salida.startswith("ADR-001 → superseded (by ADR-002) · commit"), salida
     assert "superseded_by: ADR-002" in ruta.read_text()
     assert "superseded by ADR-002" in (proyecto["mem"] / "DECISIONS.md").read_text()
     assert log_git(proyecto["mem"])[0] == "memoria: ADR-001 superseded by ADR-002"
@@ -114,9 +114,9 @@ def test_vista_normaliza_reemplazada_por_guardado_sin_normalizar(srv, proyecto):
 
 
 def test_cerrar_pendiente_guarda_id_decision_normalizado(srv, proyecto):
-    srv.registrar_pendiente(proyecto="demo", tema="Motor", contexto="c")
+    srv.add_pending(project="demo", topic="Motor", context="c")
 
-    salida = srv.cerrar_pendiente(proyecto="demo", id="P-1", resolucion="Godot", id_decision="adr-3")
+    salida = srv.close_pending(project="demo", id="P-1", resolution="Godot", decision_id="adr-3")
 
     assert salida.startswith("P-001 → closed"), salida
     meta, _ = registros._leer_registro(next((proyecto["mem"] / "pending").glob("P-001-*.md")))
@@ -146,19 +146,19 @@ def _sin_tiempos(fila: dict) -> dict:
 
 
 def test_telemetria_posicional_igual_que_por_nombre(srv, proyecto, entorno):
-    srv.registrar_pendiente(proyecto="demo", tema="Tema A", contexto="contexto")
-    srv.registrar_pendiente("demo", "Tema B", "contexto")
-    por_nombre, posicional = [f for f in _filas_log(entorno) if f["herramienta"] == "registrar_pendiente"][-2:]
+    srv.add_pending(project="demo", topic="Tema A", context="contexto")
+    srv.add_pending("demo", "Tema B", "contexto")
+    por_nombre, posicional = [f for f in _filas_log(entorno) if f["herramienta"] == "add_pending"][-2:]
     assert posicional["proyecto"] == "demo"
-    assert posicional["args_chars"] == {"tema": 6, "contexto": 8}
+    assert posicional["args_chars"] == {"topic": 6, "context": 8}
     assert _sin_tiempos(posicional) == _sin_tiempos(por_nombre)
 
 
 def test_telemetria_posicional_async_igual_que_por_nombre(srv, proyecto, entorno):
     ctx = SimpleNamespace(session=SimpleNamespace(client_params=SimpleNamespace(
         capabilities=SimpleNamespace(elicitation=SimpleNamespace()))))
-    asyncio.run(srv.decidir_propuestas(proyecto="demo", ctx=ctx))
-    asyncio.run(srv.decidir_propuestas("demo", ctx))
-    por_nombre, posicional = [f for f in _filas_log(entorno) if f["herramienta"] == "decidir_propuestas"][-2:]
+    asyncio.run(srv.decide_proposals(project="demo", ctx=ctx))
+    asyncio.run(srv.decide_proposals("demo", ctx))
+    por_nombre, posicional = [f for f in _filas_log(entorno) if f["herramienta"] == "decide_proposals"][-2:]
     assert posicional["proyecto"] == "demo"
     assert _sin_tiempos(posicional) == _sin_tiempos(por_nombre)

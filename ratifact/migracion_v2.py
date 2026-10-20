@@ -73,7 +73,7 @@ class Informe:
 def _git(mem: Path, *args: str) -> None:
     r = subprocess.run(["git", "-C", str(mem), *args], capture_output=True, text=True)
     if r.returncode != 0:
-        raise RuntimeError(f"git {args[0]} falló: {(r.stdout + r.stderr).strip()[:200]}")
+        raise RuntimeError(f"git {args[0]} failed: {(r.stdout + r.stderr).strip()[:200]}")
 
 
 def _versionado(mem: Path, relativa: str) -> bool:
@@ -175,7 +175,7 @@ def _mover_carpetas(mem: Path, informe: Informe) -> None:
         if not (mem / viejo).exists():
             continue
         if (mem / nuevo).exists():
-            raise RuntimeError(f"{viejo}/ y {nuevo}/ existen a la vez")
+            raise RuntimeError(f"{viejo}/ y {nuevo}/ both exist")
         n = sum(1 for p in (mem / viejo).rglob("*") if p.is_file())
         if _versionado(mem, viejo):
             _git(mem, "mv", viejo, nuevo)

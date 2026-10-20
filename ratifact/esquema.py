@@ -47,7 +47,7 @@ def _leer_json(archivo: Path) -> dict:
         int(datos["version"])
         return datos
     except (ValueError, KeyError, TypeError) as e:
-        raise ErrorMemoria(f"{archivo} está dañado ({e}); revísalo con git log en la memoria.") from e
+        raise ErrorMemoria(f"{archivo} is corrupted ({e}); check it with git log in the memory.") from e
 
 
 def _version_esquema(mem: Path) -> int:
@@ -58,8 +58,8 @@ def _version_esquema(mem: Path) -> int:
         return 0
     version = int(_leer_json(mem / ARCHIVO_ESQUEMA_V1)["version"])
     if 1 < version <= VERSION_ESQUEMA:
-        raise ErrorMemoria(f"{mem / ARCHIVO_ESQUEMA_V1} dice v{version} pero falta {ARCHIVO_ESQUEMA}; la memoria está "
-                           "dañada. Revísala con git log antes de seguir; no se modificó nada.")
+        raise ErrorMemoria(f"{mem / ARCHIVO_ESQUEMA_V1} says v{version} but {ARCHIVO_ESQUEMA} is missing; the memory is "
+                           "damaged. Check it with git log before continuing; nothing was changed.")
     return version
 
 
@@ -90,19 +90,19 @@ def _git(mem: Path, *args: str) -> subprocess.CompletedProcess:
 def _verificar_precondiciones(proyecto: str, mem: Path) -> None:
     """Repo git con al menos un commit y `git status` limpio (salvo .lock); si no, no se toca nada."""
     if not _es_repo(mem):
-        raise ErrorMemoria(f"La memoria de '{proyecto}' ({mem}) no es un repositorio git: no se puede migrar al "
-                           f"esquema v{VERSION_ESQUEMA} con respaldo. Ejecuta `git init` y un commit en ella; no se "
-                           "modificó nada.")
+        raise ErrorMemoria(f"The memory of '{proyecto}' ({mem}) is not a git repository: it cannot be migrated to "
+                           f"schema v{VERSION_ESQUEMA} with a backup. Run `git init` and make a commit in it; nothing "
+                           "was changed.")
     if _git(mem, "rev-parse", "-q", "--verify", "HEAD").returncode != 0:
-        raise ErrorMemoria(f"La memoria de '{proyecto}' ({mem}) no tiene commits: haz uno antes de migrar al esquema "
-                           f"v{VERSION_ESQUEMA}; no se modificó nada.")
+        raise ErrorMemoria(f"The memory of '{proyecto}' ({mem}) has no commits: make one before migrating to schema "
+                           f"v{VERSION_ESQUEMA}; nothing was changed.")
     estado = _git(mem, "status", "--porcelain", "--untracked-files=all")
     sucios = [l for l in estado.stdout.splitlines() if l[3:].strip('"') != ".lock"]
     if estado.returncode != 0 or sucios:
         detalle = ", ".join(l[3:] for l in sucios[:5]) or estado.stderr.strip()[:200]
-        raise ErrorMemoria(f"La memoria de '{proyecto}' ({mem}) tiene cambios sin commit ({detalle}): la migración al "
-                           f"esquema v{VERSION_ESQUEMA} exige `git status` limpio. Haz commit o descártalos; no se "
-                           "modificó nada.")
+        raise ErrorMemoria(f"The memory of '{proyecto}' ({mem}) has uncommitted changes ({detalle}): migrating to "
+                           f"schema v{VERSION_ESQUEMA} requires a clean `git status`. Commit or discard them; nothing "
+                           "was changed.")
 
 
 def _crear_tag(mem: Path) -> str:
@@ -114,8 +114,8 @@ def _crear_tag(mem: Path) -> str:
         nombre = f"{base}-{n}"
     r = _git(mem, "tag", nombre)
     if r.returncode != 0:
-        raise ErrorMemoria(f"No se pudo crear el tag {nombre} en {mem} ({r.stderr.strip()[:200]}); no se modificó "
-                           "nada.")
+        raise ErrorMemoria(f"Could not create tag {nombre} in {mem} ({r.stderr.strip()[:200]}); nothing was "
+                           "changed.")
     return nombre
 
 
@@ -154,14 +154,14 @@ def _migrar(proyecto: str, mem: Path, actual: int) -> str:
                      ["commit", "-q", "-m", mensaje, "-m", "\n".join(informe)]):
             r = _git(mem, *paso)
             if r.returncode != 0:
-                raise RuntimeError(f"git {paso[0]} falló: {(r.stdout + r.stderr).strip()[:200]}")
+                raise RuntimeError(f"git {paso[0]} failed: {(r.stdout + r.stderr).strip()[:200]}")
         sha = _git(mem, "rev-parse", "--short", "HEAD").stdout.strip()
     except Exception as e:
         _restaurar(mem, tag, vacias)
-        raise ErrorMemoria(f"No se pudo migrar la memoria de '{proyecto}' al esquema v{VERSION_ESQUEMA} ({e}); quedó "
-                           "exactamente como estaba y se reintentará en la próxima llamada.") from e
-    return (f"(memoria de '{proyecto}' migrada al esquema v{VERSION_ESQUEMA} · commit {sha} · respaldo en el tag "
-            f"{tag} · detalle: git show en la memoria)")
+        raise ErrorMemoria(f"Could not migrate the memory of '{proyecto}' to schema v{VERSION_ESQUEMA} ({e}); it was "
+                           "left exactly as it was and the migration is retried on the next call.") from e
+    return (f"(memory of '{proyecto}' migrated to schema v{VERSION_ESQUEMA} · commit {sha} · backup in tag "
+            f"{tag} · details: git show in the memory)")
 
 
 def _esquema_al_dia(proyecto: str, mem: Path) -> str:
@@ -171,8 +171,8 @@ def _esquema_al_dia(proyecto: str, mem: Path) -> str:
         return ""
     actual = _version_esquema(mem)
     if actual > VERSION_ESQUEMA:
-        raise ErrorMemoria(f"La memoria de '{proyecto}' usa el esquema v{actual} y este servidor solo conoce hasta "
-                           f"v{VERSION_ESQUEMA}. Actualiza memoria-proyectos (git pull) antes de usarla; no se modificó nada.")
+        raise ErrorMemoria(f"The memory of '{proyecto}' uses schema v{actual} and this server only knows up to "
+                           f"v{VERSION_ESQUEMA}. Update ratifact (git pull) before using it; nothing was changed.")
     if actual == VERSION_ESQUEMA:
         return ""
     return _migrar(proyecto, mem, actual)

@@ -24,7 +24,8 @@ from ratifact.catalogo import CARPETAS, _coincidencias, _linea, _plano
 from ratifact.config import EXT_TEXTO, LIMITE_ARCHIVO_BUSQUEDA
 
 LINEA_TITULO = re.compile(r"(title|topic):")
-MARCA_NOMBRE = "(coincide el nombre del archivo)"
+MARCA_NOMBRE = "(file name matches)"
+SIN_COINCIDENCIAS = "(no matches)"
 
 
 def _nombre_coincide(nombre: str, texto: str) -> bool:
@@ -127,7 +128,7 @@ def _resultados(proyecto: str, texto: str, max_resultados: int, memoria: tuple[P
     fuera_catalogo = len(registros) + titulos_fuera - len(catalogo)
     if fuera_catalogo or any(l for l, _ in fuera):
         con_archivos = any(a for _, a in fuera)
-        memoria_txt, codigo_txt = (f"{l} líneas/{a} archivos" if con_archivos else f"{l}" for l, a in fuera)
-        res.append(f"(… más resultados — omitidos: catálogo {fuera_catalogo}, memoria {memoria_txt}, "
-                   f"código {codigo_txt}; refina la búsqueda)")
-    return "\n".join(res) or "(sin coincidencias)"
+        memoria_txt, codigo_txt = (f"{l} lines/{a} files" if con_archivos else f"{l}" for l, a in fuera)
+        res.append(f"(… more results — omitted: catalog {fuera_catalogo}, memory {memoria_txt}, "
+                   f"code {codigo_txt}; refine the query)")
+    return "\n".join(res) or SIN_COINCIDENCIAS

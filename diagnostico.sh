@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Reproduce el arranque de Claude Desktop y muestra el error real.
 cd "$(dirname "$0")"
-export MEMORIA_PROYECTOS_CONFIG="$PWD/projects.json"
+export RATIFACT_CONFIG="$PWD/projects.json"
 echo "== uv: $(/usr/bin/uv --version 2>&1)"
 echo "== últimas líneas del log de Claude Desktop:"
 tail -n 25 ~/.config/Claude/logs/mcp-server-memoria-proyectos.log 2>/dev/null || echo "(no se encontró el log)"

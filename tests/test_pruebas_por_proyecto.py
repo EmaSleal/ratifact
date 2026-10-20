@@ -30,38 +30,38 @@ def test_deteccion_por_tipo_de_proyecto(srv, tmp_path, archivos, esperado):
 def test_alta_detecta_y_lo_muestra_en_instrucciones_y_tareas(srv, entorno):
     repo = crear_repo(entorno["base"] / "erp")
     (repo / "pom.xml").write_text("<project/>")
-    salida = srv.registrar_proyecto(nombre="erp", ruta=str(repo))
-    assert "Comando de pruebas (desde la raíz del repositorio): `mvn test`" in salida
-    srv.registrar_tarea(proyecto="erp", titulo="Endpoint pedidos", objetivo="o", criterios_aceptacion="c")
+    salida = srv.register_project(name="erp", path=str(repo))
+    assert "Test command (from the repository root): `mvn test`" in salida
+    srv.create_task(project="erp", title="Endpoint pedidos", goal="o", acceptance_criteria="c")
     tarea = next((entorno["base"] / ".memorias" / "erp" / "tasks").glob("T-001*.md")).read_text()
     assert "## How to verify" in tarea and "`mvn test`" in tarea
 
 
 def test_comando_explicito_y_actualizar_proyecto(srv, entorno):
-    """configurar_pruebas se eliminó; actualizar_proyecto(pruebas=..., repositorio=...) la reemplaza con el
+    """configurar_pruebas se eliminó; update_project(pruebas=..., repositorio=...) la reemplaza con el
     mismo comportamiento (comando explícito, auto-detección, error si no se reconoce el tipo de proyecto)."""
     repo = crear_repo(entorno["base"] / "web")
-    srv.registrar_proyecto(nombre="web", ruta=str(repo), pruebas="make check")
+    srv.register_project(name="web", path=str(repo), tests="make check")
     config = json.loads(Path(entorno["env"]["MEMORIA_PROYECTOS_CONFIG"]).read_text())
     assert config["web"]["pruebas"] == "make check"
     (repo / "go.mod").write_text("module web")
-    assert "`go test ./...`" in srv.actualizar_proyecto(nombre="web", pruebas="go test ./...")
-    assert "`npm run e2e`" in srv.actualizar_proyecto(nombre="web", pruebas="npm run e2e")
+    assert "`go test ./...`" in srv.update_project(name="web", tests="go test ./...")
+    assert "`npm run e2e`" in srv.update_project(name="web", tests="npm run e2e")
     config = json.loads(Path(entorno["env"]["MEMORIA_PROYECTOS_CONFIG"]).read_text())
     assert config["web"]["pruebas"] == "npm run e2e"
-    assert "no registrado" in srv.actualizar_proyecto(nombre="nada", pruebas="x") or \
-        srv.actualizar_proyecto(nombre="nada", pruebas="x").startswith("ERROR")
+    assert "is not registered" in srv.update_project(name="nada", tests="x") or \
+        srv.update_project(name="nada", tests="x").startswith("ERROR")
 
 
 def test_tarea_sin_comando_pide_configurarlo(srv, proyecto):
-    srv.registrar_tarea(proyecto="demo", titulo="T", objetivo="o", criterios_aceptacion="c")
+    srv.create_task(project="demo", title="T", goal="o", acceptance_criteria="c")
     tarea = next((proyecto["mem"] / "tasks").glob("T-001*.md")).read_text()
-    assert "sin comando de pruebas configurado" in tarea
+    assert "no test command configured" in tarea
 
 
 def test_plantilla_tarea_no_asume_proyecto_ni_stack():
     from conftest import RAIZ_REPO
-    texto = (RAIZ_REPO / "tarea.md").read_text()
+    texto = (RAIZ_REPO / "run-task.md").read_text()
     for especifico in ("game", "godot", "src/sim", "data/*.json"):
         assert especifico not in texto.lower(), especifico
     assert "How to verify" in texto

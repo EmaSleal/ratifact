@@ -42,7 +42,8 @@ MODULOS_RATIFACT = [
     "ratifact.integraciones.base", "ratifact.integraciones.codegraph", "ratifact.integraciones.gentle_ai",
     "ratifact.integraciones.engram", "ratifact.integraciones.registro", "ratifact.integraciones",
     "ratifact.herramientas.contexto_documentos", "ratifact.herramientas.decisiones",
-    "ratifact.herramientas.pendientes_sesiones", "ratifact.herramientas.tareas", "ratifact.herramientas.proyectos",
+    "ratifact.herramientas.pendientes_sesiones", "ratifact.herramientas.tareas", "ratifact.herramientas.tareas_brief",
+    "ratifact.herramientas.proyectos",
     "ratifact.herramientas", "ratifact.prompts",
 ]
 
@@ -76,7 +77,7 @@ def crear_repo(ruta: Path) -> Path:
 def proyecto(srv, entorno):
     """Proyecto 'demo' registrado con registrar_proyecto (memoria en <base>/.memorias/demo)."""
     repo = crear_repo(entorno["base"] / "demo" / "codigo")
-    salida = srv.registrar_proyecto(nombre="demo", ruta=str(repo))
+    salida = srv.register_project(name="demo", path=str(repo))
     assert not salida.startswith("ERROR"), salida
     return {"nombre": "demo", "repo": repo, "mem": entorno["base"] / ".memorias" / "demo"}
 

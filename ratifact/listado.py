@@ -44,7 +44,7 @@ def _filas(nodo: _Nodo, ruta: tuple, expandidas: set, carpeta: str):
             yield from _filas(hijo, destino, expandidas, carpeta)
         else:
             n = hijo.total
-            yield destino, f"{carpeta}/{'/'.join(destino)}/ ({n} {'archivo' if n == 1 else 'archivos'})", True
+            yield destino, f"{carpeta}/{'/'.join(destino)}/ ({n} {'file' if n == 1 else 'files'})", True
 
 
 def _vista(raiz: _Nodo, expandidas: set, carpeta: str) -> list[tuple]:
@@ -58,8 +58,8 @@ def _listado(carpeta: str, entradas: list[tuple[str, int]]) -> str:
     if _entra(completo):
         return "\n".join(completo)
     raiz = _arbol(entradas)
-    nota = (f"(listado resumido: {raiz.total} archivos en total; pide una `carpeta` más específica para ver "
-            "el detalle)")
+    nota = (f"(summarized listing: {raiz.total} files in total; ask for a more specific `folder` to see "
+            "the detail)")
     expandidas: set = set()
     vista = _vista(raiz, expandidas, carpeta)
     while True:                       # cada vuelta expande TODAS las carpetas visibles del nivel siguiente
@@ -77,9 +77,9 @@ def _listado(carpeta: str, entradas: list[tuple[str, int]]) -> str:
     mostradas, contados = [], 0
     for _, linea, plegada in vista:
         n = int(linea.rsplit("(", 1)[1].split()[0]) if plegada else 1
-        resto = f"(… {raiz.total - contados - n} archivos más sin listar en {carpeta}/)"
+        resto = f"(… {raiz.total - contados - n} more files not listed in {carpeta}/)"
         if not _entra(mostradas + [linea, resto, nota]):
             break
         mostradas.append(linea)
         contados += n
-    return "\n".join(mostradas + [f"(… {raiz.total - contados} archivos más sin listar en {carpeta}/)", nota])
+    return "\n".join(mostradas + [f"(… {raiz.total - contados} more files not listed in {carpeta}/)", nota])

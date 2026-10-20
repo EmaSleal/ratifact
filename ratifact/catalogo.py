@@ -14,7 +14,7 @@ from ratifact.registros import _buscar_registro, _clave_id, _leer_registro, _nor
 from ratifact.vocabulario import CARPETAS_V1, DECISIONES, PENDIENTES, TAREAS
 
 # prefijo del id → (carpeta de la memoria, tipo)
-TIPOS = {"ADR": (DECISIONES, "decision"), "P": (PENDIENTES, "pendiente"), "T": (TAREAS, "tarea")}
+TIPOS = {"ADR": (DECISIONES, "decision"), "P": (PENDIENTES, "pending"), "T": (TAREAS, "task")}
 CARPETAS = {carpeta: prefijo for prefijo, (carpeta, _) in TIPOS.items()}
 # un id pedido con la carpeta v1 ("tareas/T-024.md") se resuelve igual (solo lectura, ADR-022)
 CARPETAS_ID = {**CARPETAS, **{v1: CARPETAS[v2] for v1, v2 in CARPETAS_V1.items() if v2 in CARPETAS}}
@@ -60,12 +60,12 @@ def _bloque_pendientes(proyecto: str) -> str:
     """Pendientes abiertos para obtener_contexto (ADR-026): una línea por pendiente, en orden numérico de id, desde el
     catálogo (sin extracto ni dueño). OPEN.md sigue en disco con su formato; el arranque ya no lo incluye."""
     abiertos = [r for r in _registros_en(proyecto, "P") if r.estado == "open"]
-    lineas = [f"# Pendientes abiertos ({len(abiertos)})"]
+    lineas = [f"# Open items ({len(abiertos)})"]
     for r in abiertos:
         tema = r.titulo if len(r.titulo) <= TOPE_TEMA else r.titulo[:TOPE_TEMA - 1] + "…"
         lineas.append(f"- {r.id} · {tema} ({r.fecha})")
     if abiertos:
-        lineas.append(f'Detalle: leer_documento("{proyecto}", "P-NNN")')
+        lineas.append(f'Detail: read_document("{proyecto}", "P-NNN")')
     return "\n".join(lineas)
 
 
@@ -101,8 +101,8 @@ def _resolver_id(proyecto: str, ruta: str) -> Path | None:
     except ErrorMemoria:
         existentes = _registros_de(mem, prefijo)
         if not existentes:
-            raise ErrorMemoria(f"No existe {id_}; todavía no hay registros en {MEM}/{TIPOS[prefijo][0]}.")
-        raise ErrorMemoria(f"No existe {id_}; el último es {existentes[-1].id}.")
+            raise ErrorMemoria(f"{id_} does not exist; there are no records in {MEM}/{TIPOS[prefijo][0]} yet.")
+        raise ErrorMemoria(f"{id_} does not exist; the latest is {existentes[-1].id}.")
 
 
 def _es_carpeta_de_registros(carpeta: str) -> str | None:

@@ -9,15 +9,15 @@ from conftest import log_git
 from ratifact import registros
 
 
-# ───────────────────────── registrar_decision ─────────────────────────
+# ───────────────────────── propose_decision ─────────────────────────
 
 def test_decision_duplicada_no_crea_archivo_ni_commit(srv, proyecto):
-    r1 = srv.registrar_decision(proyecto="demo", titulo="Usar Godot", decision="Godot 4", justificacion="2D nativo")
-    assert "ADR-001 registrada como proposed" in r1
+    r1 = srv.propose_decision(project="demo", title="Usar Godot", decision="Godot 4", rationale="2D nativo")
+    assert "ADR-001 recorded as proposed" in r1
     historial_antes = log_git(proyecto["mem"])
     archivos_antes = sorted((proyecto["mem"] / "decisions").glob("ADR-*.md"))
 
-    r2 = srv.registrar_decision(proyecto="demo", titulo="Usar Godot", decision="Godot 4", justificacion="2D nativo")
+    r2 = srv.propose_decision(project="demo", title="Usar Godot", decision="Godot 4", rationale="2D nativo")
 
     assert "ADR-001" in r2 and srv.MARCA_DUPLICADO in r2
     assert sorted((proyecto["mem"] / "decisions").glob("ADR-*.md")) == archivos_antes   # ningún archivo nuevo
@@ -25,30 +25,30 @@ def test_decision_duplicada_no_crea_archivo_ni_commit(srv, proyecto):
     assert log_git(proyecto["mem"]) == historial_antes   # ningún commit nuevo (criterio 5)
 
 
-# ───────────────────────── registrar_pendiente ─────────────────────────
+# ───────────────────────── add_pending ─────────────────────────
 
 def test_pendiente_duplicado_no_crea_nada_y_devuelve_el_id_existente(srv, proyecto):
-    r1 = srv.registrar_pendiente(proyecto="demo", tema="Parry", contexto="Sin decidir")
-    assert "P-001 registrado" in r1
+    r1 = srv.add_pending(project="demo", topic="Parry", context="Sin decidir")
+    assert "P-001 recorded" in r1
     historial_antes = log_git(proyecto["mem"])
 
-    r2 = srv.registrar_pendiente(proyecto="demo", tema="Parry", contexto="Otro contexto, da igual")
+    r2 = srv.add_pending(project="demo", topic="Parry", context="Otro contexto, da igual")
 
     assert "P-001" in r2 and srv.MARCA_DUPLICADO in r2
     assert len(list((proyecto["mem"] / "pending").glob("P-*.md"))) == 1
     assert log_git(proyecto["mem"]) == historial_antes
 
 
-# ───────────────────────── registrar_tarea ─────────────────────────
+# ───────────────────────── create_task ─────────────────────────
 
 def test_tarea_duplicada_no_crea_nada_y_devuelve_el_id_existente(srv, proyecto):
-    r1 = srv.registrar_tarea(proyecto="demo", titulo="Ranuras de forma", objetivo="Dos ranuras",
-                              criterios_aceptacion="- pruebas verdes")
-    assert "T-001 registrada" in r1
+    r1 = srv.create_task(project="demo", title="Ranuras de forma", goal="Dos ranuras",
+                              acceptance_criteria="- pruebas verdes")
+    assert "T-001 created" in r1
     historial_antes = log_git(proyecto["mem"])
 
-    r2 = srv.registrar_tarea(proyecto="demo", titulo="Ranuras de forma", objetivo="otro objetivo",
-                              criterios_aceptacion="- otros criterios")
+    r2 = srv.create_task(project="demo", title="Ranuras de forma", goal="otro objetivo",
+                              acceptance_criteria="- otros criterios")
 
     assert "T-001" in r2 and srv.MARCA_DUPLICADO in r2
     assert len(list((proyecto["mem"] / "tasks").glob("T-*.md"))) == 1
@@ -58,28 +58,28 @@ def test_tarea_duplicada_no_crea_nada_y_devuelve_el_id_existente(srv, proyecto):
 # ───────────────────────── normalización del título (criterio 3) ─────────────────────────
 
 def test_normalizacion_case_insensitive_trim_y_espacios_colapsados(srv, proyecto):
-    srv.registrar_pendiente(proyecto="demo", tema="  Revisar   Parry ", contexto="c")
-    r2 = srv.registrar_pendiente(proyecto="demo", tema="revisar parry", contexto="c2")
+    srv.add_pending(project="demo", topic="  Revisar   Parry ", context="c")
+    r2 = srv.add_pending(project="demo", topic="revisar parry", context="c2")
     assert "P-001" in r2 and srv.MARCA_DUPLICADO in r2
     assert len(list((proyecto["mem"] / "pending").glob("P-*.md"))) == 1
 
 
 def test_titulos_realmente_distintos_no_son_duplicados(srv, proyecto):
-    srv.registrar_pendiente(proyecto="demo", tema="Parry", contexto="c")
-    r2 = srv.registrar_pendiente(proyecto="demo", tema="Parry extendido", contexto="c")
-    assert "P-002 registrado" in r2
+    srv.add_pending(project="demo", topic="Parry", context="c")
+    r2 = srv.add_pending(project="demo", topic="Parry extendido", context="c")
+    assert "P-002 recorded" in r2
     assert len(list((proyecto["mem"] / "pending").glob("P-*.md"))) == 2
 
 
 def test_tipos_distintos_nunca_coinciden_entre_si(srv, proyecto):
     """Un ADR y una tarea con el mismo título textual no son duplicados entre sí (carpetas/prefijos distintos)."""
-    r_adr = srv.registrar_decision(proyecto="demo", titulo="Mismo título", decision="d", justificacion="j")
-    r_pend = srv.registrar_pendiente(proyecto="demo", tema="Mismo título", contexto="c")
-    r_tarea = srv.registrar_tarea(proyecto="demo", titulo="Mismo título", objetivo="o", criterios_aceptacion="c")
+    r_adr = srv.propose_decision(project="demo", title="Mismo título", decision="d", rationale="j")
+    r_pend = srv.add_pending(project="demo", topic="Mismo título", context="c")
+    r_tarea = srv.create_task(project="demo", title="Mismo título", goal="o", acceptance_criteria="c")
 
-    assert "ADR-001 registrada" in r_adr
-    assert "P-001 registrado" in r_pend
-    assert "T-001 registrada" in r_tarea
+    assert "ADR-001 recorded" in r_adr
+    assert "P-001 recorded" in r_pend
+    assert "T-001 created" in r_tarea
     for r in (r_adr, r_pend, r_tarea):
         assert srv.MARCA_DUPLICADO not in r
 
@@ -89,14 +89,14 @@ def test_tipos_distintos_nunca_coinciden_entre_si(srv, proyecto):
 def test_fuera_de_la_ventana_se_crea_normalmente(srv, proyecto, monkeypatch):
     t0 = dt.datetime(2026, 1, 1, 12, 0, 0)
     monkeypatch.setattr(registros, "_ahora", lambda: t0)
-    r1 = srv.registrar_decision(proyecto="demo", titulo="Usar Godot", decision="d", justificacion="j")
-    assert "ADR-001 registrada" in r1
+    r1 = srv.propose_decision(project="demo", title="Usar Godot", decision="d", rationale="j")
+    assert "ADR-001 recorded" in r1
 
     despues = t0 + dt.timedelta(minutes=srv.VENTANA_IDEMPOTENCIA_MINUTOS + 1)
     monkeypatch.setattr(registros, "_ahora", lambda: despues)
-    r2 = srv.registrar_decision(proyecto="demo", titulo="Usar Godot", decision="d", justificacion="j")
+    r2 = srv.propose_decision(project="demo", title="Usar Godot", decision="d", rationale="j")
 
-    assert "ADR-002 registrada" in r2
+    assert "ADR-002 recorded" in r2
     assert srv.MARCA_DUPLICADO not in r2
     assert len(list((proyecto["mem"] / "decisions").glob("ADR-*.md"))) == 2
 
@@ -104,40 +104,40 @@ def test_fuera_de_la_ventana_se_crea_normalmente(srv, proyecto, monkeypatch):
 def test_dentro_de_la_ventana_justo_en_el_limite_se_considera_duplicado(srv, proyecto, monkeypatch):
     t0 = dt.datetime(2026, 1, 1, 12, 0, 0)
     monkeypatch.setattr(registros, "_ahora", lambda: t0)
-    srv.registrar_pendiente(proyecto="demo", tema="Parry", contexto="c")
+    srv.add_pending(project="demo", topic="Parry", context="c")
 
     casi = t0 + dt.timedelta(minutes=srv.VENTANA_IDEMPOTENCIA_MINUTOS - 1)
     monkeypatch.setattr(registros, "_ahora", lambda: casi)
-    r2 = srv.registrar_pendiente(proyecto="demo", tema="Parry", contexto="c")
+    r2 = srv.add_pending(project="demo", topic="Parry", context="c")
     assert srv.MARCA_DUPLICADO in r2
 
 
 # ───────────────────────── telemetría (criterio 6) ─────────────────────────
 
 def test_tarea_duplicada_incluye_comando_tarea(srv, proyecto):
-    r1 = srv.registrar_tarea(proyecto="demo", titulo="Ranuras de forma", objetivo="Dos ranuras",
-                              criterios_aceptacion="- pruebas verdes")
-    assert "T-001 registrada" in r1
+    r1 = srv.create_task(project="demo", title="Ranuras de forma", goal="Dos ranuras",
+                              acceptance_criteria="- pruebas verdes")
+    assert "T-001 created" in r1
 
-    r2 = srv.registrar_tarea(proyecto="demo", titulo="Ranuras de forma", objetivo="otro objetivo",
-                              criterios_aceptacion="- otros criterios")
+    r2 = srv.create_task(project="demo", title="Ranuras de forma", goal="otro objetivo",
+                              acceptance_criteria="- otros criterios")
 
     assert srv.MARCA_DUPLICADO in r2
-    assert "Ejecutar en Claude Code: /tarea T-001" in r2
+    assert "Run it with: /run-task T-001" in r2
 
 
 # ───────── un registro que ya cambió de estado (humano intervino) nunca es duplicado ─────────
 
 def test_decision_descartada_y_registrada_de_nuevo_crea_un_adr_nuevo(srv, proyecto):
-    r1 = srv.registrar_decision(proyecto="demo", titulo="Usar X", decision="v1", justificacion="j")
-    assert "ADR-001 registrada" in r1
+    r1 = srv.propose_decision(project="demo", title="Usar X", decision="v1", rationale="j")
+    assert "ADR-001 recorded" in r1
     historial_antes = log_git(proyecto["mem"])
 
-    srv.descartar_decision(proyecto="demo", id="ADR-001", motivo="el usuario pidió otra versión")
+    srv.reject_decision(project="demo", id="ADR-001", reason="el usuario pidió otra versión")
 
-    r3 = srv.registrar_decision(proyecto="demo", titulo="Usar X", decision="v2 corregida", justificacion="j2")
+    r3 = srv.propose_decision(project="demo", title="Usar X", decision="v2 corregida", rationale="j2")
 
-    assert "ADR-002 registrada" in r3
+    assert "ADR-002 recorded" in r3
     assert srv.MARCA_DUPLICADO not in r3
     assert (proyecto["mem"] / "decisions" / "ADR-002-usar-x.md").exists()
     historial_despues = log_git(proyecto["mem"])
@@ -146,15 +146,15 @@ def test_decision_descartada_y_registrada_de_nuevo_crea_un_adr_nuevo(srv, proyec
 
 
 def test_pendiente_cerrado_y_registrado_de_nuevo_crea_un_pendiente_nuevo(srv, proyecto):
-    r1 = srv.registrar_pendiente(proyecto="demo", tema="Parry", contexto="Sin decidir")
-    assert "P-001 registrado" in r1
+    r1 = srv.add_pending(project="demo", topic="Parry", context="Sin decidir")
+    assert "P-001 recorded" in r1
     historial_antes = log_git(proyecto["mem"])
 
-    srv.cerrar_pendiente(proyecto="demo", id="P-001", resolucion="se decidió en ADR-001")
+    srv.close_pending(project="demo", id="P-001", resolution="se decidió en ADR-001")
 
-    r3 = srv.registrar_pendiente(proyecto="demo", tema="Parry", contexto="Sin decidir, de nuevo")
+    r3 = srv.add_pending(project="demo", topic="Parry", context="Sin decidir, de nuevo")
 
-    assert "P-002 registrado" in r3
+    assert "P-002 recorded" in r3
     assert srv.MARCA_DUPLICADO not in r3
     assert (proyecto["mem"] / "pending" / "P-002-parry.md").exists()
     historial_despues = log_git(proyecto["mem"])
@@ -163,39 +163,39 @@ def test_pendiente_cerrado_y_registrado_de_nuevo_crea_un_pendiente_nuevo(srv, pr
 
 
 def test_tarea_cambiada_de_estado_y_registrada_de_nuevo_crea_una_tarea_nueva(srv, proyecto):
-    r1 = srv.registrar_tarea(proyecto="demo", titulo="Ranuras de forma", objetivo="Dos ranuras",
-                              criterios_aceptacion="- pruebas verdes")
-    assert "T-001 registrada" in r1
+    r1 = srv.create_task(project="demo", title="Ranuras de forma", goal="Dos ranuras",
+                              acceptance_criteria="- pruebas verdes")
+    assert "T-001 created" in r1
     historial_antes = log_git(proyecto["mem"])
 
-    srv.actualizar_tarea(proyecto="demo", id="T-001", estado="en_curso")
+    srv.update_task(project="demo", id="T-001", status="en_curso")
 
-    r3 = srv.registrar_tarea(proyecto="demo", titulo="Ranuras de forma", objetivo="Dos ranuras, de nuevo",
-                              criterios_aceptacion="- pruebas verdes")
+    r3 = srv.create_task(project="demo", title="Ranuras de forma", goal="Dos ranuras, de nuevo",
+                              acceptance_criteria="- pruebas verdes")
 
-    assert "T-002 registrada" in r3
+    assert "T-002 created" in r3
     assert srv.MARCA_DUPLICADO not in r3
     assert (proyecto["mem"] / "tasks" / "T-002-ranuras-de-forma.md").exists()
     historial_despues = log_git(proyecto["mem"])
-    assert len(historial_despues) == len(historial_antes) + 2   # actualizar_tarea + registrar de nuevo
+    assert len(historial_despues) == len(historial_antes) + 2   # update_task + registrar de nuevo
     assert any("T-002" in linea for linea in historial_despues)
 
 
 def test_telemetria_marca_duplicado_sin_error(srv, proyecto, entorno):
-    srv.registrar_decision(proyecto="demo", titulo="Usar Godot", decision="d", justificacion="j")
-    srv.registrar_decision(proyecto="demo", titulo="usar   godot", decision="d", justificacion="j")
+    srv.propose_decision(project="demo", title="Usar Godot", decision="d", rationale="j")
+    srv.propose_decision(project="demo", title="usar   godot", decision="d", rationale="j")
 
     filas = [json.loads(l) for l in Path(entorno["env"]["MEMORIA_PROYECTOS_LOG"]).read_text().splitlines()]
-    propias = [f for f in filas if f["herramienta"] == "registrar_decision"]
+    propias = [f for f in filas if f["herramienta"] == "propose_decision"]
     assert len(propias) == 2
     assert propias[0]["duplicado"] is False and propias[0]["error"] is False
     assert propias[1]["duplicado"] is True and propias[1]["error"] is False
 
 
 def test_analizar_uso_reporta_duplicados(srv, proyecto, entorno, monkeypatch, capsys):
-    srv.registrar_pendiente(proyecto="demo", tema="Parry", contexto="c")
-    srv.registrar_pendiente(proyecto="demo", tema="parry", contexto="c")
-    srv.registrar_tarea(proyecto="demo", titulo="T", objetivo="o", criterios_aceptacion="c")
+    srv.add_pending(project="demo", topic="Parry", context="c")
+    srv.add_pending(project="demo", topic="parry", context="c")
+    srv.create_task(project="demo", title="T", goal="o", acceptance_criteria="c")
 
     import sys
     import analizar_uso

@@ -58,7 +58,7 @@ def test_cada_prueba_registra_bajo_su_propia_base(srv, entorno, nombre):
     assert config.BASE_PROYECTOS == base
     assert config.CONFIG == Path(entorno["env"]["MEMORIA_PROYECTOS_CONFIG"])
     repo = crear_repo(entorno["base"] / nombre / "codigo")
-    salida = srv.registrar_proyecto(nombre=nombre, ruta=str(repo))
+    salida = srv.register_project(name=nombre, path=str(repo))
     assert not salida.startswith("ERROR"), salida
     proyectos = json.loads(config.CONFIG.read_text(encoding="utf-8"))
     assert list(proyectos) == [nombre]

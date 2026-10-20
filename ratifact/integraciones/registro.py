@@ -12,7 +12,7 @@ from ratifact.integraciones.base import FASES, Integracion
 
 INTEGRACIONES: tuple[Integracion, ...] = (codegraph.INTEGRACION, gentle_ai.INTEGRACION, engram.INTEGRACION)
 VALORES = ("auto", "off")
-FASES_EJECUCION = FASES[1:]          # ejecutar, verificar, cerrar: lo que recibe actualizar_tarea(..., "in_progress")
+FASES_EJECUCION = FASES[1:]          # execute, verify, close: lo que recibe update_task(..., "in_progress")
 
 
 def _nombres() -> str:
@@ -37,7 +37,7 @@ def _activas(proyecto: str) -> list[tuple[Integracion, bool]]:
     for i in INTEGRACIONES:
         if config.get(i.nombre) == "off":
             continue
-        if i.alcance == "usuario":
+        if i.alcance == "user":
             salida.append((i, False))
         elif _detectada(i, raiz):
             salida.append((i, True))
@@ -45,10 +45,10 @@ def _activas(proyecto: str) -> list[tuple[Integracion, bool]]:
 
 
 def _linea(activas: list[tuple[Integracion, bool]]) -> str:
-    detectadas = ", ".join(f"{i.nombre} (detectada)" for i, d in activas if d)
-    usuario = ", ".join(f"{i.nombre} (si está disponible)" for i, d in activas if i.alcance == "usuario")
+    detectadas = ", ".join(f"{i.nombre} (detected)" for i, d in activas if d)
+    usuario = ", ".join(f"{i.nombre} (if available)" for i, d in activas if i.alcance == "user")
     partes = [p for p in (detectadas, usuario) if p]
-    return "Integraciones: " + " · ".join(partes) if partes else ""
+    return "Integrations: " + " · ".join(partes) if partes else ""
 
 
 def _linea_integraciones(proyecto: str) -> str:
@@ -60,8 +60,8 @@ def _bloque_contexto(proyecto: str) -> str:
     """obtener_contexto: la línea de integraciones y una línea `planificar` por integración activa que la tenga."""
     activas = _activas(proyecto)
     lineas = [_linea(activas)] if activas else []
-    lineas += [f"- {i.nombre} · planificar: {i.guia['planificar']} Límite: {i.limite}."
-               for i, _ in activas if "planificar" in i.guia]
+    lineas += [f"- {i.nombre} · plan: {i.guia['plan']} Boundary: {i.limite}."
+               for i, _ in activas if "plan" in i.guia]
     return "\n".join(lineas)
 
 
@@ -72,17 +72,17 @@ def _guia_en_curso(proyecto: str) -> str:
         fases = [f for f in FASES_EJECUCION if f in i.guia]
         if not fases:
             continue
-        lineas.append(f"- {i.nombre} ({'detectada' if detectada else 'si está disponible'}) — {i.rol}; "
-                      f"límite: {i.limite}.")
+        lineas.append(f"- {i.nombre} ({'detected' if detectada else 'if available'}) — {i.rol}; "
+                      f"boundary: {i.limite}.")
         lineas += [f"  · {f}: {i.guia[f]}" for f in fases]
     if not lineas:
         return ""
-    return "Guía de integraciones (calculada ahora; síguela solo si tienes esas herramientas):\n" + "\n".join(lineas)
+    return "Integration guidance (computed now; follow it only if you have those tools):\n" + "\n".join(lineas)
 
 
 def _parsear_integraciones(texto: str, actual: dict | None) -> tuple[dict, str]:
     """"codegraph=off,gentle-ai=auto" → configuración nueva (las 'auto' se omiten) y la descripción del cambio."""
-    validas = f"Válidas: {_nombres()}."
+    validas = f"Valid: {_nombres()}."
     conocidas = {i.nombre for i in INTEGRACIONES}
     nuevo = dict(actual) if isinstance(actual, dict) else {}
     pares = []
@@ -92,17 +92,17 @@ def _parsear_integraciones(texto: str, actual: dict | None) -> tuple[dict, str]:
         nombre, separador, valor = item.partition("=")
         nombre, valor = nombre.strip().lower(), valor.strip().lower()
         if not separador or not nombre:
-            raise ErrorMemoria("Formato de `integraciones`: nombre=auto|off separados por coma "
-                               f"(p. ej. \"codegraph=off,gentle-ai=auto\"). {validas}")
+            raise ErrorMemoria("Format of `integrations`: name=auto|off separated by commas "
+                               f"(e.g. \"codegraph=off,gentle-ai=auto\"). {validas}")
         if nombre not in conocidas:
-            raise ErrorMemoria(f"Integración desconocida '{nombre}'. {validas}")
+            raise ErrorMemoria(f"Unknown integration '{nombre}'. {validas}")
         if valor not in VALORES:
-            raise ErrorMemoria(f"Valor '{valor}' inválido para '{nombre}': usa {', '.join(VALORES)}. {validas}")
+            raise ErrorMemoria(f"Invalid value '{valor}' for '{nombre}': use {', '.join(VALORES)}. {validas}")
         if valor == "auto":
             nuevo.pop(nombre, None)
         else:
             nuevo[nombre] = valor
         pares.append(f"{nombre}={valor}")
     if not pares:
-        raise ErrorMemoria(f"`integraciones` vacío: usa nombre=auto|off separados por coma. {validas}")
+        raise ErrorMemoria(f"Empty `integrations`: use name=auto|off separated by commas. {validas}")
     return nuevo, ", ".join(pares)

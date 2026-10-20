@@ -1,4 +1,4 @@
-"""Prompts MCP reutilizables: inicio y cierre de sesión."""
+"""Prompts MCP reutilizables: start y close de sesión."""
 from __future__ import annotations
 
 from ratifact.app import mcp
@@ -10,19 +10,20 @@ from ratifact.plantillas import TEXTO_CIERRE
 def _proyecto_objetivo(proyecto: str) -> str:
     """Texto que fija el proyecto. Sin argumento, el modelo lo toma del contexto del chat: nunca se asume uno."""
     if proyecto.strip():
-        return f"el proyecto `{proyecto.strip()}`"
-    return ("el proyecto de este chat: tómalo de la línea `proyecto:` de las instrucciones del proyecto de Claude "
-            "(o del CLAUDE.md / AGENTS.md del repositorio). Si no hay ninguna o hay duda, llama `listar_proyectos` "
-            "y pregúntame cuál antes de seguir. No asumas ningún proyecto por defecto")
+        return f"project `{proyecto.strip()}`"
+    return ("this chat's project: take it from the `project:` line of the Claude project instructions (or from the "
+            "repository's CLAUDE.md / AGENTS.md). If there is none or you are unsure, call `list_projects` and ask me "
+            "which one before going on. Never assume a default project")
 
 
-@mcp.prompt(name="cierre", description="Cierra la sesión: registra decisiones, pendientes y bitácora, y regenera INDEX.md")
-def prompt_cierre(proyecto: str = "") -> str:
-    return TEXTO_CIERRE.format(objetivo=_proyecto_objetivo(proyecto))
+@mcp.prompt(name="close", description="Closes the session: records decisions, pending items and the session log, and "
+                                      "regenerates INDEX.md")
+def prompt_cierre(project: str = "") -> str:
+    return TEXTO_CIERRE.format(objetivo=_proyecto_objetivo(project))
 
 
-@mcp.prompt(name="inicio", description="Carga el contexto del proyecto antes de empezar a trabajar")
-def prompt_inicio(proyecto: str = "") -> str:
-    return (f"Trabaja con {_proyecto_objetivo(proyecto)}. Llama `obtener_contexto` para ese proyecto y resúmeme en "
-            "5 líneas: estado actual, tareas activas, pendientes que bloquean y propuestas esperando mi confirmación. "
-            "Empieza diciendo qué proyecto cargaste. Si avisa que INDEX.md está desactualizado, dímelo primero.")
+@mcp.prompt(name="start", description="Loads the project context before starting to work")
+def prompt_inicio(project: str = "") -> str:
+    return (f"Work on {_proyecto_objetivo(project)}. Call `get_context` for that project and summarize it for me in "
+            "5 lines: current status, active tasks, blocking pending items and proposals awaiting my acceptance. "
+            "Start by saying which project you loaded. If it warns that INDEX.md is out of date, tell me first.")

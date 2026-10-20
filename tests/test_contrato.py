@@ -47,3 +47,42 @@ if __name__ == "__main__":
     import servidor
     INSTANTANEA.write_text(serializar(contrato(servidor.mcp)), encoding="utf-8")
     print(f"Instantánea escrita en {INSTANTANEA}")
+
+
+# ───────────────────────── T-011: renombrado del contrato (v1 paso 2) ─────────────────────────
+# contrato_herramientas_v0.json es la instantánea de main antes del renombrado (git show main:tests/…), guardada
+# para comprobar que el mapeo español → inglés es completo.
+
+INSTANTANEA_V0 = INSTANTANEA.with_name("contrato_herramientas_v0.json")
+
+
+def _cargar(ruta: Path) -> dict:
+    return json.loads(ruta.read_text(encoding="utf-8"))
+
+
+def test_mapeo_de_nombres_completo_y_solo_dos_herramientas_nuevas():
+    from ratifact.vocabulario import HERRAMIENTAS_NUEVAS, HERRAMIENTAS_V0, PROMPTS_V0
+    viejo, nuevo = _cargar(INSTANTANEA_V0), _cargar(INSTANTANEA)
+    viejas = [h["nombre"] for h in viejo["herramientas"]]
+    nuevas = {h["nombre"] for h in nuevo["herramientas"]}
+    assert len(viejas) == 26 and len(nuevas) == 28
+    destinos = [HERRAMIENTAS_V0[v] for v in viejas]                  # KeyError = herramienta vieja sin mapeo
+    assert len(set(destinos)) == len(destinos) == 26                 # cada una a exactamente una nueva, sin choques
+    assert set(destinos) <= nuevas
+    assert nuevas - set(destinos) == set(HERRAMIENTAS_NUEVAS) == {"amend_task", "read_task"}
+    assert {PROMPTS_V0[p["nombre"]] for p in viejo["prompts"]} == {p["nombre"] for p in nuevo["prompts"]}
+
+
+def test_ningun_nombre_ni_parametro_en_espanol_queda_expuesto():
+    from ratifact.vocabulario import HERRAMIENTAS_V0, PARAMETROS_V0
+    viejo, nuevo = _cargar(INSTANTANEA_V0), _cargar(INSTANTANEA)
+    assert not {h["nombre"] for h in nuevo["herramientas"]} & set(HERRAMIENTAS_V0)    # sin alias duplicados
+    por_nombre = {h["nombre"]: h for h in nuevo["herramientas"]}
+    for h in viejo["herramientas"]:
+        nueva = por_nombre[HERRAMIENTAS_V0[h["nombre"]]]
+        params = set(nueva["esquema_entrada"]["properties"])
+        esperados = {PARAMETROS_V0.get(p, p) for p in h["esquema_entrada"]["properties"]}
+        assert params == esperados, (h["nombre"], params, esperados)
+        assert not params & (set(PARAMETROS_V0) - set(PARAMETROS_V0.values())), h["nombre"]
+    for p in nuevo["prompts"]:
+        assert [a["nombre"] for a in p["argumentos"]] == ["project"]

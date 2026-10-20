@@ -24,12 +24,12 @@ def test_memoria_nueva_declara_la_version(srv, proyecto):
     salida = subprocess.run(["git", "-C", str(mem), "ls-files", "schema.json", "esquema.json"],
                             capture_output=True, text=True).stdout
     assert salida.split() == ["esquema.json", "schema.json"]
-    assert f"esquema v{srv.VERSION_ESQUEMA}]" in srv.listar_proyectos()
+    assert f"schema v{srv.VERSION_ESQUEMA}]" in srv.list_projects()
 
 
 def test_memoria_antigua_se_migra_en_la_primera_escritura(srv, proyecto_v1):
-    salida = srv.registrar_decision(proyecto="demo", titulo="A", decision="d", justificacion="j")
-    assert "migrada al esquema v2" in salida and "registrada como proposed" in salida
+    salida = srv.propose_decision(project="demo", title="A", decision="d", rationale="j")
+    assert "migrated to schema v2" in salida and "recorded as proposed" in salida
     assert _version(proyecto_v1["mem"]) == srv.VERSION_ESQUEMA
     historial = log_git(proyecto_v1["mem"])
     assert historial[1] == f"memory: migrate schema v1 → v{srv.VERSION_ESQUEMA}"   # migración en commit propio, antes
@@ -38,13 +38,13 @@ def test_memoria_antigua_se_migra_en_la_primera_escritura(srv, proyecto_v1):
 
 def test_memoria_v0_se_migra_igual(srv, proyecto_v1):
     _quitar_esquema(proyecto_v1["mem"])
-    assert not srv.obtener_contexto(proyecto="demo").startswith("ERROR")
+    assert not srv.get_context(project="demo").startswith("ERROR")
     assert _version(proyecto_v1["mem"]) == srv.VERSION_ESQUEMA
     assert log_git(proyecto_v1["mem"])[0] == f"memory: migrate schema v0 → v{srv.VERSION_ESQUEMA}"
 
 
 def test_obtener_contexto_tambien_migra(srv, proyecto_v1):
-    assert not srv.obtener_contexto(proyecto="demo").startswith("ERROR")
+    assert not srv.get_context(project="demo").startswith("ERROR")
     assert _version(proyecto_v1["mem"]) == srv.VERSION_ESQUEMA
 
 
@@ -64,7 +64,7 @@ def test_cadena_de_migraciones_en_orden(srv, proyecto_v1, monkeypatch):
         return ["nuevo.md agregado"]
     monkeypatch.setattr(esquema, "VERSION_ESQUEMA", 3)
     monkeypatch.setattr(esquema, "MIGRACIONES", {**srv.MIGRACIONES, 2: a_v2, 3: a_v3})
-    srv.registrar_pendiente(proyecto="demo", tema="T", contexto="c")
+    srv.add_pending(project="demo", topic="T", context="c")
     mem = proyecto_v1["mem"]
     assert llamadas == [2, 3] and _version(mem) == 3
     assert json.loads((mem / "esquema.json").read_text()) == {"version": 3}           # el centinela acompaña
@@ -74,14 +74,14 @@ def test_cadena_de_migraciones_en_orden(srv, proyecto_v1, monkeypatch):
                                                  capture_output=True, text=True).stdout
     assert "pre-v3" in subprocess.run(["git", "-C", str(mem), "tag"], capture_output=True, text=True).stdout
     assert "nuevo.md" in subprocess.run(["git", "-C", str(mem), "ls-files"], capture_output=True, text=True).stdout
-    srv.registrar_pendiente(proyecto="demo", tema="T2", contexto="c")      # ya al día: no migra de nuevo
+    srv.add_pending(project="demo", topic="T2", context="c")      # ya al día: no migra de nuevo
     assert llamadas == [2, 3]
 
 
 def test_un_cambio_futuro_desde_v2_conserva_el_idioma(srv, proyecto, monkeypatch):
     monkeypatch.setattr(esquema, "VERSION_ESQUEMA", 3)
     monkeypatch.setattr(esquema, "MIGRACIONES", {**srv.MIGRACIONES, 3: lambda mem: []})
-    srv.listar_tareas(proyecto="demo")
+    srv.list_tasks(project="demo")
     assert json.loads((proyecto["mem"] / "schema.json").read_text()) == {"version": 3, "content_language": "en"}
     assert log_git(proyecto["mem"])[0] == "memory: migrate schema v2 → v3"
 
@@ -90,9 +90,9 @@ def test_memoria_mas_nueva_que_el_servidor_no_se_toca(srv, proyecto):
     mem = proyecto["mem"]
     (mem / "schema.json").write_text(json.dumps({"version": srv.VERSION_ESQUEMA + 1, "content_language": "en"}))
     antes = log_git(mem)
-    for salida in (srv.registrar_decision(proyecto="demo", titulo="A", decision="d", justificacion="j"),
-                   srv.obtener_contexto(proyecto="demo"), srv.listar_tareas(proyecto="demo")):
-        assert salida.startswith("ERROR:") and "Actualiza memoria-proyectos" in salida
+    for salida in (srv.propose_decision(project="demo", title="A", decision="d", rationale="j"),
+                   srv.get_context(project="demo"), srv.list_tasks(project="demo")):
+        assert salida.startswith("ERROR:") and "Update ratifact" in salida
     assert log_git(mem) == antes and not list((mem / "decisions").glob("ADR-*.md"))
 
 
@@ -104,8 +104,8 @@ def test_schema_json_manda_sobre_esquema_json(srv, proyecto):
 
 def test_esquema_danado_es_rechazo_legible(srv, proyecto):
     (proyecto["mem"] / "schema.json").write_text("{no es json")
-    salida = srv.registrar_pendiente(proyecto="demo", tema="T", contexto="c")
-    assert salida.startswith("ERROR:") and "dañado" in salida
+    salida = srv.add_pending(project="demo", topic="T", context="c")
+    assert salida.startswith("ERROR:") and "corrupted" in salida
 
 
 def test_migracion_sin_commit_se_deshace(srv, proyecto_v1, monkeypatch):
@@ -119,7 +119,7 @@ def test_migracion_sin_commit_se_deshace(srv, proyecto_v1, monkeypatch):
         return git_real(m, *args)
     monkeypatch.setattr(esquema, "_git", git_sin_commit)
     antes = log_git(mem)
-    salida = srv.registrar_pendiente(proyecto="demo", tema="T", contexto="c")
+    salida = srv.add_pending(project="demo", topic="T", context="c")
     assert salida.startswith("ERROR:") and "Author identity unknown" in salida
     assert log_git(mem) == antes and not (mem / "schema.json").exists() and not (mem / "pending").exists()
     assert (mem / "esquema.json").read_text() == '{"version": 1}\n'

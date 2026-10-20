@@ -30,69 +30,69 @@ def test_expone_todas_las_herramientas_y_prompts(srv, proyecto, entorno):
     async def cuerpo(s):
         return ({t.name for t in (await s.list_tools()).tools}, (await s.list_prompts()).prompts)
     herramientas, prompts = _correr(entorno, cuerpo)
-    assert {"obtener_contexto", "registrar_decision", "confirmar_decision", "decidir_propuestas",
-            "crear_documento", "registrar_proyecto"} <= herramientas
-    assert {p.name for p in prompts} == {"cierre", "inicio"}
+    assert {"get_context", "propose_decision", "accept_decision", "decide_proposals",
+            "create_document", "register_project"} <= herramientas
+    assert {p.name for p in prompts} == {"close", "start"}
     assert all(not a.required for p in prompts for a in p.arguments)
 
 
 def test_prompts_sin_proyecto_no_asumen_ninguno(srv, proyecto, entorno):
     async def cuerpo(s):
-        return [(await s.get_prompt(n, {})).messages[0].content.text for n in ("inicio", "cierre")] + \
-               [(await s.get_prompt("inicio", {"proyecto": "demo"})).messages[0].content.text]
+        return [(await s.get_prompt(n, {})).messages[0].content.text for n in ("start", "close")] + \
+               [(await s.get_prompt("start", {"project": "demo"})).messages[0].content.text]
     inicio, cierre, inicio_demo = _correr(entorno, cuerpo)
     for texto in (inicio, cierre):
-        assert "proyecto:" in texto and "No asumas ningún proyecto" in texto
+        assert "project:" in texto and "Never assume a default project" in texto
     assert "`demo`" in inicio_demo
 
 
 def test_escrituras_en_paralelo_no_se_pisan(srv, proyecto, entorno):
     async def cuerpo(s):
-        return await asyncio.gather(*[s.call_tool("registrar_decision", {
-            "proyecto": "demo", "titulo": f"D{i}", "decision": "d", "justificacion": "j"}) for i in range(5)])
+        return await asyncio.gather(*[s.call_tool("propose_decision", {
+            "project": "demo", "title": f"D{i}", "decision": "d", "rationale": "j"}) for i in range(5)])
     salidas = [_texto(r) for r in _correr(entorno, cuerpo)]
-    assert all("registrada como proposed" in s for s in salidas)
+    assert all("recorded as proposed" in s for s in salidas)
     ids = sorted(p.name[:7] for p in (proyecto["mem"] / "decisions").glob("ADR-*.md"))
     assert ids == [f"ADR-00{i}" for i in range(1, 6)]
 
 
 def test_formulario_sin_soporte_orienta_al_chat(srv, proyecto, entorno):
-    srv.registrar_decision(proyecto="demo", titulo="X", decision="d", justificacion="j")
+    srv.propose_decision(project="demo", title="X", decision="d", rationale="j")
 
     async def cuerpo(s):
-        return _texto(await s.call_tool("decidir_propuestas", {"proyecto": "demo"}))
-    assert "no soporta formularios" in _correr(entorno, cuerpo)
+        return _texto(await s.call_tool("decide_proposals", {"project": "demo"}))
+    assert "does not support MCP forms" in _correr(entorno, cuerpo)
 
 
 def test_formulario_aplica_lo_que_elige_el_usuario(srv, proyecto, entorno):
     for t in "ABCD":
-        srv.registrar_decision(proyecto="demo", titulo=t, decision=f"d{t}", justificacion="j")
-    respuestas = iter([("accept", {"accion": "confirmar", "comentario": "me gusta"}),
-                       ("accept", {"accion": "descartar", "comentario": "no aplica"}),
-                       ("accept", {"accion": "ajustar", "comentario": "bajar a 2 semanas"}),
+        srv.propose_decision(project="demo", title=t, decision=f"d{t}", rationale="j")
+    respuestas = iter([("accept", {"action": "accept", "comment": "me gusta"}),
+                       ("accept", {"action": "reject", "comment": "no aplica"}),
+                       ("accept", {"action": "adjust", "comment": "bajar a 2 semanas"}),
                        ("cancel", None)])
 
     async def elicitar(contexto, params):
-        assert params.requestedSchema["properties"]["accion"]["enum"] == ["confirmar", "descartar", "ajustar", "posponer"]
+        assert params.requestedSchema["properties"]["action"]["enum"] == ["accept", "reject", "adjust", "postpone"]
         accion, datos = next(respuestas)
         return types.ElicitResult(action=accion, content=datos)
 
     async def cuerpo(s):
-        return _texto(await s.call_tool("decidir_propuestas", {"proyecto": "demo"}))
+        return _texto(await s.call_tool("decide_proposals", {"project": "demo"}))
     salida = _correr(entorno, cuerpo, elicitar)
     assert "ADR-001 → accepted" in salida and "ADR-002 → rejected" in salida
-    assert "ADR-003: bajar a 2 semanas" in salida and "Siguen como propuesta: ADR-004" in salida
-    assert "[formulario] confirmar — me gusta" in next((proyecto["mem"] / "decisions").glob("ADR-001*.md")).read_text()
+    assert "ADR-003: bajar a 2 semanas" in salida and "Still proposed: ADR-004" in salida
+    assert "[form] accept — me gusta" in next((proyecto["mem"] / "decisions").glob("ADR-001*.md")).read_text()
 
 
 def test_confirmar_lote_acepta_lista_por_mcp(srv, proyecto, entorno):
     for t in "AB":
-        srv.registrar_decision(proyecto="demo", titulo=t, decision="d", justificacion="j")
+        srv.propose_decision(project="demo", title=t, decision="d", rationale="j")
 
     async def cuerpo(s):
-        esquema = next(t for t in (await s.list_tools()).tools if t.name == "confirmar_decisiones_lote").inputSchema
-        res = await s.call_tool("confirmar_decisiones_lote",
-                                {"proyecto": "demo", "ids": ["ADR-001", "ADR-002"], "cita_usuario": "confirmo ambas"})
+        esquema = next(t for t in (await s.list_tools()).tools if t.name == "accept_decisions").inputSchema
+        res = await s.call_tool("accept_decisions",
+                                {"project": "demo", "ids": ["ADR-001", "ADR-002"], "user_quote": "confirmo ambas"})
         return esquema, _texto(res)
     esquema, salida = _correr(entorno, cuerpo)
     assert esquema["properties"]["ids"]["type"] == "array"
@@ -116,4 +116,4 @@ def test_arranca_desde_cualquier_carpeta(entorno, tmp_path, comando):
                 await s.initialize()
                 return {t.name for t in (await s.list_tools()).tools}
     herramientas = asyncio.run(principal())
-    assert len(herramientas) == 26 and {"obtener_contexto", "registrar_proyecto"} <= herramientas
+    assert len(herramientas) == 28 and {"get_context", "register_project"} <= herramientas

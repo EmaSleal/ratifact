@@ -1,4 +1,4 @@
-"""Herramientas de pendientes (registrar_pendiente, cerrar_pendiente) y bitácora de sesiones (registrar_sesion)."""
+"""Herramientas de pendientes (add_pending, close_pending) y bitácora de sesiones (log_session)."""
 from __future__ import annotations
 
 from ratifact import registros as _registros  # _ahora se busca en su módulo: las pruebas la reemplazan ahí
@@ -12,11 +12,12 @@ from ratifact.vocabulario import PENDIENTES, SESIONES
 
 
 @herramienta
-def registrar_pendiente(proyecto: str, tema: str, contexto: str, dueno: str = "") -> str:
-    """Registra una decisión abierta o tema sin resolver. Idempotente (ADR-019): si ya hay un pendiente con
-    este tema (sin distinguir mayúsculas ni espacios) creado en los últimos minutos Y TODAVÍA en estado
-    'open', no crea nada nuevo y devuelve el id existente. Si ese pendiente ya se cerró, un humano ya
-    intervino, así que se registra un pendiente nuevo."""
+def add_pending(project: str, topic: str, context: str, owner: str = "") -> str:
+    """Records an open question or unresolved topic. Idempotent (ADR-019): if a pending item with this topic
+    (ignoring case and spaces) was created in the last minutes AND is STILL 'open', nothing new is created and the
+    existing id is returned. If that item was already closed, a human already intervened, so a new one is recorded."""
+    proyecto, tema, contexto, dueno = project, topic, context, owner
+
     def f():
         with _bloqueo(proyecto):
             carpeta = _mem(proyecto) / PENDIENTES
@@ -32,13 +33,15 @@ def registrar_pendiente(proyecto: str, tema: str, contexto: str, dueno: str = ""
                 meta["owner"] = dueno
             _escribir_registro(ruta, meta, contexto)
             sha = _commit(proyecto, [ruta, *_regenerar_vistas(proyecto)], f"{id_} {tema}")
-            return f"{id_} registrado · commit {sha}"
+            return f"{id_} recorded · commit {sha}"
     return _ejecutar(f)
 
 
 @herramienta
-def cerrar_pendiente(proyecto: str, id: str, resolucion: str, id_decision: str = "") -> str:
-    """Cierra un pendiente (estado 'closed'). Si la resolución generó una decisión, indica su id_decision."""
+def close_pending(project: str, id: str, resolution: str, decision_id: str = "") -> str:
+    """Closes a pending item (status 'closed'). If the resolution produced a decision, give its decision_id."""
+    proyecto, resolucion, id_decision = project, resolution, decision_id
+
     def f():
         with _bloqueo(proyecto):
             ruta = _buscar_registro(_mem(proyecto) / PENDIENTES, id)
@@ -52,13 +55,15 @@ def cerrar_pendiente(proyecto: str, id: str, resolucion: str, id_decision: str =
 
 
 @herramienta
-def registrar_sesion(proyecto: str, resumen: str) -> str:
-    """Cierre de chat (/cierre): anexa el resumen de la sesión a sessions/AAAA-MM-DD.md."""
+def log_session(project: str, summary: str) -> str:
+    """End of a chat (close prompt): appends the session summary to sessions/YYYY-MM-DD.md."""
+    proyecto, resumen = project, summary
+
     def f():
         with _bloqueo(proyecto):
             p = _mem(proyecto) / SESIONES / f"{_hoy()}.md"
             previo = p.read_text(encoding="utf-8") if p.exists() else f"# Sessions {_hoy()}\n"
             hora = _registros._ahora().strftime("%H:%M")
             _escribir_atomico(p, previo.rstrip("\n") + f"\n\n## {hora}\n{resumen.strip()}\n")
-            return f"Sesión registrada · commit {_commit(proyecto, [p], f'sesión {_hoy()} {hora}')}"
+            return f"Session logged · commit {_commit(proyecto, [p], f'sesión {_hoy()} {hora}')}"
     return _ejecutar(f)

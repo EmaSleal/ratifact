@@ -1,5 +1,5 @@
-"""Herramientas de contexto y documentos: listar_proyectos, obtener_contexto, buscar, listar/leer/crear/guardar
-documentos y actualizar_indice."""
+"""Herramientas de contexto y documentos: list_projects, get_context, search, list/read/create/update_document y
+update_index."""
 from __future__ import annotations
 
 import os
@@ -16,27 +16,27 @@ from ratifact.esquema import _bloqueo, _idioma_contenido, _version_esquema
 from ratifact.integraciones import registro as _integraciones
 from ratifact.listado import _listado
 from ratifact.registros import _clave_id, _commit, _escribir_atomico, _leer_registro, _resumen_tareas
-from ratifact.vocabulario import DECISIONES
+from ratifact.vocabulario import DECISIONES, MODOS_V0
 
 
 # ───────────────────────── herramientas ─────────────────────────
 
 @herramienta
-def listar_proyectos() -> str:
-    """Lista los proyectos registrados, su carpeta de código y si ya tienen memoria."""
+def list_projects() -> str:
+    """Lists the registered projects, their code folder and whether they already have a memory."""
     def f():
         filas = []
         for nombre, p in _proyectos().items():
             ruta = Path(_valor(p, "ruta")).expanduser()
             try:
                 mem = _mem(nombre)
-                estado = (f"[memoria lista · esquema v{_version_esquema(mem)}]" if (mem / "INDEX.md").exists()
-                          else "[sin memoria]")
+                estado = (f"[memory ready · schema v{_version_esquema(mem)}]" if (mem / "INDEX.md").exists()
+                          else "[no memory]")
             except ErrorMemoria as e:
-                estado = f"[configuración inválida: {e}]"
+                estado = f"[invalid configuration: {e}]"
             repos = _repos(nombre) if ruta.is_dir() else []
             filas.append(f"- {nombre}: {ruta} {estado}" + (f" · repos: {', '.join(repos)}" if repos else ""))
-        return "\n".join(filas) or "(sin proyectos)"
+        return "\n".join(filas) or "(no projects)"
     return _ejecutar(f)
 
 
@@ -57,17 +57,19 @@ def _aviso_indice(proyecto: str) -> str:
     cambios = git("log", "--format=%s", f"{sha}..HEAD").splitlines()
     if len(cambios) < UMBRAL_INDICE:
         return ""
-    return (f"⚠ INDEX.md está desactualizado: {len(cambios)} cambios en la memoria desde {fecha}. "
-            "El 'Estado actual' de arriba puede no reflejar la realidad; contrasta con acuerdos y tareas, "
-            "y propón al usuario regenerarlo con actualizar_indice (o con /cierre).")
+    return (f"⚠ INDEX.md is out of date: {len(cambios)} changes in the memory since {fecha}. "
+            "The status summary above may not reflect reality; cross-check it with decisions and tasks, "
+            "and offer the user to regenerate it with update_index (or with the close prompt).")
 
 
 @herramienta
-def obtener_contexto(proyecto: str) -> str:
-    """Carga inicial de un chat: devuelve INDEX.md y los pendientes abiertos (una línea cada uno: id, tema, fecha;
-    el detalle se lee con leer_documento). Llamar antes de responder.
-    Al final, si hay integraciones activas (codegraph, gentle-ai, engram…), una línea con ellas y su guía para
-    planificar; esa guía es condicional: úsala solo si tienes sus herramientas."""
+def get_context(project: str) -> str:
+    """Start of a chat: returns INDEX.md and the open items (one line each: id, topic, date; read the detail with
+    read_document). Call it before answering.
+    At the end, if optional integrations are active (codegraph, gentle-ai, engram…), one line listing them and their
+    planning guidance; that guidance is conditional: follow it only if you have their tools."""
+    proyecto = project
+
     def f():
         mem = _mem(proyecto)
         if _es_repo(mem):
@@ -76,27 +78,27 @@ def obtener_contexto(proyecto: str) -> str:
         partes = []
         raiz = _raiz(proyecto, verificar_existe=False)
         if not raiz.is_dir():
-            partes.append(f"⚠ La ruta registrada de '{proyecto}' ya no existe en disco ({raiz}); el contexto de "
-                          f"memoria de abajo sigue siendo válido. Corrígela con actualizar_proyecto(\"{proyecto}\", "
-                          "ruta=\"<ruta nueva>\").")
+            partes.append(f"⚠ The registered path of '{proyecto}' no longer exists on disk ({raiz}); the memory "
+                          f"context below is still valid. Fix it with update_project(\"{proyecto}\", "
+                          "path=\"<new path>\").")
         indice = mem / "INDEX.md"
-        partes.append(indice.read_text(encoding="utf-8") if indice.exists() else "(INDEX.md no existe)")
+        partes.append(indice.read_text(encoding="utf-8") if indice.exists() else "(INDEX.md does not exist)")
         partes.append(_bloque_pendientes(proyecto))     # ADR-026: del catálogo, no abiertas.md
         propuestas = ["-".join(p.stem.split("-", 2)[:2]) for p in (mem / DECISIONES).glob("ADR-*.md")
                       if _leer_registro(p)[0].get("status") == "proposed"]
         if propuestas:
-            partes.append("Decisiones propuestas pendientes de confirmar por el usuario: "
+            partes.append("Proposed decisions awaiting the user's acceptance: "
                           + ", ".join(sorted(propuestas, key=_clave_id)))
         tareas = _resumen_tareas(proyecto)
         if tareas:
-            partes.append("# Tareas de código activas\n" + "\n".join(tareas))
+            partes.append("# Active code tasks\n" + "\n".join(tareas))
         aviso = _aviso_indice(proyecto)
         if aviso:
             partes.append(aviso)
         idioma = _idioma_contenido(mem)
-        partes.append(f"Idioma del contenido: {idioma} — escribe en este idioma el contenido de los registros que "
-                      "guardes (decisiones, pendientes, tareas, sesiones, INDEX); la conversación sigue en el idioma "
-                      "del usuario.")
+        partes.append(f"Content language: {idioma} — write the content of the records you save (decisions, pending "
+                      "items, tasks, sessions, INDEX) in this language; the conversation stays in the user's "
+                      "language.")
         integraciones = _integraciones._bloque_contexto(proyecto)
         if integraciones:
             partes.append(integraciones)
@@ -128,15 +130,17 @@ def _archivos_proyecto(base: Path, usar_git: bool = True) -> list[Path]:
 
 
 @herramienta
-def buscar(proyecto: str, texto: str, max_resultados: int = 20) -> str:
-    """Busca texto (sin distinguir mayúsculas) en archivos de texto del proyecto y devuelve
-    fragmentos con ruta y línea. Úsala antes de leer documentos completos.
-    Primero salen los registros de la memoria ("ID · estado · título (ruta)"): el que tiene `texto` como id (p. ej.
-    "T-1", "adr-20") y hasta 5 cuyo título lo contiene al inicio de una palabra; luego las líneas de la memoria y
-    las del código, repartiendo el resto a partes iguales. En cada sección van primero los archivos cuyo nombre
-    contiene `texto` al inicio de una palabra o tramo camelCase (si ninguna línea coincide: "ruta: (coincide el
-    nombre del archivo)"), y se muestra una línea por archivo antes de repetir archivos. `max_resultados` cuenta
-    todas las líneas; si se omite algo, la última línea dice cuántas líneas (y archivos) por sección."""
+def search(project: str, query: str, max_results: int = 20) -> str:
+    """Searches text (case-insensitive) in the project's text files and returns snippets with path and line. Use
+    it before reading whole documents.
+    Memory records come first ("ID · status · title (path)"): the one whose id is `query` (e.g. "T-1", "adr-20")
+    and up to 5 whose title contains it at the start of a word; then memory lines and code lines, sharing the rest
+    equally. In each section, files whose name contains `query` at the start of a word or camelCase part come first
+    (if no line matches: "path: (file name matches)"), and one line per file is shown before repeating files.
+    `max_results` counts every line; if something is left out, the last line says how many lines (and files) per
+    section."""
+    proyecto, texto, max_resultados = project, query, max_results
+
     def f():
         raiz, mem = _raiz(proyecto), _mem(proyecto)
         codigo = [p for p in _archivos_proyecto(raiz) if p != mem and mem not in p.parents]
@@ -146,12 +150,14 @@ def buscar(proyecto: str, texto: str, max_resultados: int = 20) -> str:
 
 
 @herramienta
-def listar_documentos(proyecto: str, carpeta: str = "docs") -> str:
-    """Lista archivos (con tamaño) bajo una carpeta del proyecto.
-    En .project/decisions, pending y tasks lista un registro por línea: "ID · estado · título  (ruta)".
-    Una ruta con la carpeta v1 (.project/tareas, decisiones, pendientes, sesiones) se traduce y se avisa.
-    Si el listado completo es demasiado grande, lo resume por niveles: carpetas sin expandir con su cantidad de
-    archivos ("modulo/ (38 archivos)"); pide una `carpeta` más específica para ver el detalle."""
+def list_documents(project: str, folder: str = "docs") -> str:
+    """Lists files (with size) under a project folder.
+    In .project/decisions, pending and tasks it lists one record per line: "ID · status · title  (path)".
+    A path with a v1 folder (.project/tareas, decisiones, pendientes, sesiones) is translated and flagged.
+    If the full listing is too large, it is summarized by levels: unexpanded folders with their file count
+    ("module/ (38 files)"); ask for a more specific `folder` to see the detail."""
+    proyecto, carpeta = project, folder
+
     def f():
         carpeta_real = _traducir_alias(proyecto, carpeta)
         return _aviso_alias() + _listar(proyecto, carpeta_real)
@@ -169,37 +175,40 @@ def _listar(proyecto: str, carpeta: str) -> str:
         vistos = {r.ruta.rsplit("/", 1)[1] for r in registros}
         otros = [f"{carpeta.rstrip('/')}/{p.relative_to(base)}  ({p.stat().st_size} B)" for p in archivos
                  if p.relative_to(base).as_posix() not in vistos]
-        return "\n".join([_linea(r, "  ") for r in registros] + otros) or "(vacío)"
+        return "\n".join([_linea(r, "  ") for r in registros] + otros) or "(empty)"
     entradas = [(p.relative_to(base).as_posix(), p.stat().st_size) for p in archivos]
-    return _listado(carpeta, entradas) or "(vacío)"
+    return _listado(carpeta, entradas) or "(empty)"
 
 
 @herramienta
-def leer_documento(proyecto: str, ruta: str, desde_linea: int = 1, hasta_linea: int = 0) -> str:
-    """Lee un archivo de texto del proyecto, opcionalmente un rango de líneas (1-indexado).
-    Acepta también el id de un registro de la memoria ("T-24", "tasks/T-024.md", "ADR-020-slug.md"): si la ruta no
-    existe, lee el registro real y antepone la línea "(→ .project/<carpeta>/<archivo>)". Una ruta con la carpeta v1
-    (.project/tareas/…, .project/acuerdos.md…) se traduce y se avisa igual."""
+def read_document(project: str, path: str, from_line: int = 1, to_line: int = 0) -> str:
+    """Reads a project text file, optionally a line range (1-based, inclusive).
+    Also accepts a memory record id ("T-24", "tasks/T-024.md", "ADR-020-slug.md"): if the path does not exist, it
+    reads the real record and prepends the line "(→ .project/<folder>/<file>)". A path with a v1 folder
+    (.project/tareas/…, .project/acuerdos.md…) is translated and flagged the same way.
+    For a task, read_task returns a working brief (spec, amendments, the latest relevant block) instead."""
+    proyecto, ruta, desde_linea, hasta_linea = project, path, from_line, to_line
+
     def f():
         p = _ruta_segura(proyecto, ruta)
         aviso = _aviso_alias()
         if p.is_dir():
-            raise ErrorMemoria(f"{ruta} es una carpeta; para ver su contenido usa listar_documentos(\"{proyecto}\", "
+            raise ErrorMemoria(f"{ruta} is a folder; to see its content use list_documents(\"{proyecto}\", "
                                f"\"{ruta.rstrip('/')}\").")
         if not p.is_file():
             real = _resolver_id(proyecto, ruta)
             if real is None:
-                raise ErrorMemoria(f"No existe {ruta}.")
+                raise ErrorMemoria(f"{ruta} does not exist.")
             p, aviso = real, f"(→ {MEM}/{real.relative_to(_mem(proyecto)).as_posix()})\n"
         try:
             lineas = p.read_text(encoding="utf-8").splitlines()
         except UnicodeDecodeError:
-            raise ErrorMemoria(f"{ruta} no es un archivo de texto (p. ej. .docx, .pdf o una imagen); "
-                               "pídele al usuario que lo abra o lo convierta.")
+            raise ErrorMemoria(f"{ruta} is not a text file (e.g. .docx, .pdf or an image); "
+                               "ask the user to open or convert it.")
         fin = hasta_linea if hasta_linea > 0 else len(lineas)
         texto = "\n".join(lineas[max(desde_linea, 1) - 1:fin])
         if len(texto) > LIMITE_LECTURA:
-            texto = texto[:LIMITE_LECTURA] + f"\n(… truncado; {len(lineas)} líneas en total, pide un rango)"
+            texto = texto[:LIMITE_LECTURA] + f"\n(… truncated; {len(lineas)} lines in total, ask for a range)"
         return aviso + texto
     return _ejecutar(f)
 
@@ -208,47 +217,48 @@ def _escribir_documento(proyecto: str, ruta: str, contenido: str, nuevo: bool, a
     ruta = _traducir_alias(proyecto, ruta, escribir=True)
     p = _ruta_segura(proyecto, ruta, escribir=True)
     if p.suffix not in EXT_TEXTO:
-        raise ErrorMemoria("Solo archivos de texto; los binarios se generan con el agente de código.")
+        raise ErrorMemoria("Text files only; binary files are produced by the coding agent.")
     with _bloqueo(proyecto):
         if nuevo and p.exists():
-            raise ErrorMemoria(f"{ruta} ya existe; para modificarlo usa guardar_documento.")
+            raise ErrorMemoria(f"{ruta} already exists; to modify it use update_document.")
         if not nuevo and not p.exists():
-            raise ErrorMemoria(f"{ruta} no existe; para crearlo usa crear_documento.")
+            raise ErrorMemoria(f"{ruta} does not exist; to create it use create_document.")
         final = (p.read_text(encoding="utf-8").rstrip("\n") + "\n\n" + contenido) if anexar else contenido
         _escribir_atomico(p, final if final.endswith("\n") else final + "\n")
         accion = "crear" if nuevo else ("anexar" if anexar else "reemplazar")
         sha = _commit(proyecto, [p], f"{accion} {ruta}" + (f" — {motivo}" if motivo else ""))
-        return f"{_aviso_alias()}{ruta} guardado ({accion}) · commit {sha}"
+        modo = "create" if nuevo else ("append" if anexar else "replace")
+        return f"{_aviso_alias()}{ruta} saved ({modo}) · commit {sha}"
 
 
 @herramienta
-def crear_documento(proyecto: str, ruta: str, contenido: str, motivo: str = "") -> str:
-    """Crea un archivo de texto NUEVO en una zona autorizada (por defecto .project/ y docs/). Falla si ya existe.
-    Separada de guardar_documento para que el usuario pueda exigir aprobación al crear archivos."""
-    return _ejecutar(lambda: _escribir_documento(proyecto, ruta, contenido, True, False, motivo))
+def create_document(project: str, path: str, content: str, reason: str = "") -> str:
+    """Creates a NEW text file in an allowed area (by default .project/ and docs/). Fails if it already exists.
+    Separate from update_document so the user can require approval for creating files."""
+    return _ejecutar(lambda: _escribir_documento(project, path, content, True, False, reason))
 
 
 @herramienta
-def guardar_documento(proyecto: str, ruta: str, contenido: str, modo: str = "reemplazar",
-                      motivo: str = "") -> str:
-    """Modifica un archivo de texto EXISTENTE en una zona autorizada. modo: 'reemplazar' | 'anexar'.
-    Para crear un archivo nuevo usa crear_documento."""
+def update_document(project: str, path: str, content: str, mode: str = "replace", reason: str = "") -> str:
+    """Modifies an EXISTING text file in an allowed area. mode: 'replace' | 'append'.
+    To create a new file use create_document."""
     def f():
-        if modo not in ("reemplazar", "anexar"):
-            raise ErrorMemoria("modo inválido: 'reemplazar' o 'anexar' (para crear, usa crear_documento).")
-        return _escribir_documento(proyecto, ruta, contenido, False, modo == "anexar", motivo)
+        modo = MODOS_V0.get(mode.strip().lower(), mode.strip().lower())   # 'reemplazar'/'anexar' hasta 1.1
+        if modo not in ("replace", "append"):
+            raise ErrorMemoria("Invalid mode: 'replace' or 'append' (to create a file, use create_document).")
+        return _escribir_documento(project, path, content, False, modo == "append", reason)
     return _ejecutar(f)
 
 
 @herramienta
-def actualizar_indice(proyecto: str, contenido: str) -> str:
-    """Reescribe INDEX.md (resumen ejecutivo del proyecto). Debe ser un RESUMEN regenerado, no un
-    acumulado; límite ~6000 caracteres."""
+def update_index(project: str, content: str) -> str:
+    """Rewrites INDEX.md (the project's executive summary). It must be a regenerated SUMMARY, not an
+    accumulation; limit ~6000 characters."""
     def f():
-        if len(contenido) > LIMITE_INDICE:
-            raise ErrorMemoria(f"INDEX.md excede {LIMITE_INDICE} caracteres ({len(contenido)}). Resume más.")
-        with _bloqueo(proyecto):
-            p = _mem(proyecto) / "INDEX.md"
-            _escribir_atomico(p, contenido.rstrip("\n") + "\n")
-            return f"INDEX.md actualizado · commit {_commit(proyecto, [p], 'actualizar INDEX')}"
+        if len(content) > LIMITE_INDICE:
+            raise ErrorMemoria(f"INDEX.md exceeds {LIMITE_INDICE} characters ({len(content)}). Summarize more.")
+        with _bloqueo(project):
+            p = _mem(project) / "INDEX.md"
+            _escribir_atomico(p, content.rstrip("\n") + "\n")
+            return f"INDEX.md updated · commit {_commit(project, [p], 'actualizar INDEX')}"
     return _ejecutar(f)

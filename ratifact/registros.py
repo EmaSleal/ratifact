@@ -41,7 +41,7 @@ def _commit(proyecto: str, rutas: list[Path], mensaje: str) -> str:
     resultados = []
     for repo, rel in grupos.items():
         if not _es_repo(repo):
-            resultados.append("(sin git)")
+            resultados.append("(no git)")
             continue
         def git(*a):
             return subprocess.run(["git", "-C", str(repo), *a], capture_output=True, text=True)
@@ -49,8 +49,8 @@ def _commit(proyecto: str, rutas: list[Path], mensaje: str) -> str:
         r = git("commit", "-q", "-m", f"memoria: {mensaje}", "--", *rel)
         if r.returncode != 0:
             salida = (r.stdout + r.stderr).strip()
-            resultados.append("(sin cambios)" if "nothing" in salida or "nada" in salida
-                              else f"(git falló: {salida[:200]})")
+            resultados.append("(no changes)" if "nothing" in salida or "nada" in salida
+                              else f"(git failed: {salida[:200]})")
         else:
             resultados.append(git("rev-parse", "--short", "HEAD").stdout.strip())
     return " ".join(resultados)
@@ -134,7 +134,7 @@ def _buscar_registro(carpeta: Path, id_: str) -> Path:
     candidatos = sorted(p for p in carpeta.glob("*.md")
                         if p.name == f"{objetivo}.md" or p.name.startswith(f"{objetivo}-")) if carpeta.exists() else []
     if not candidatos:
-        raise ErrorMemoria(f"No existe {objetivo}.")
+        raise ErrorMemoria(f"{objetivo} does not exist.")
     return candidatos[0]
 
 
@@ -151,7 +151,7 @@ def _slug(t: str) -> str:
 # a ejecutar, y reintentar a ciegas no debe duplicar el registro. Se detecta por (proyecto, tipo, título
 # normalizado, antigüedad) — sin idempotency key del cliente (fuera de alcance v1).
 VENTANA_IDEMPOTENCIA_MINUTOS = 10
-MARCA_DUPLICADO = "ya estaba registrado"
+MARCA_DUPLICADO = "was already registered"
 
 
 def _normalizar_titulo(t: str) -> str:
@@ -193,8 +193,8 @@ def _duplicado_reciente(carpeta: Path, prefijo: str, campo: str, valor: str, est
 
 
 def _mensaje_duplicado(id_: str, extra: str = "") -> str:
-    base = (f"{id_} {MARCA_DUPLICADO}: ya hay un registro con este título creado hace menos de "
-            f"{VENTANA_IDEMPOTENCIA_MINUTOS} minutos; no se creó nada nuevo.")
+    base = (f"{id_} {MARCA_DUPLICADO}: a record with this title was created less than "
+            f"{VENTANA_IDEMPOTENCIA_MINUTOS} minutes ago; nothing new was created.")
     return f"{base}\n{extra}" if extra else base
 
 
@@ -245,6 +245,6 @@ def _resumen_tareas(proyecto: str, solo_activas: bool = True) -> list[str]:
         m, _ = _leer_registro(p)
         if solo_activas and m.get("status") in ("merged", "discarded"):
             continue
-        rama = (f" · rama {m['branch']}" if m.get("branch") else "") + (f" en {m['repo']}/" if m.get("repo") else "")
+        rama = (f" · branch {m['branch']}" if m.get("branch") else "") + (f" in {m['repo']}/" if m.get("repo") else "")
         filas.append(f"- **{m.get('id')}** [{m.get('status')}] {m.get('title')}{rama}")
     return filas

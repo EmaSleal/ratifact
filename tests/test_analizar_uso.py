@@ -55,7 +55,7 @@ def test_archivo_inexistente_avisa_y_sale_con_error(entorno, monkeypatch, capsys
 def _log_diario(ruta: Path, dias_atras: list[int], llamadas_por_dia: int) -> Path:
     ruta.parent.mkdir(parents=True, exist_ok=True)
     ahora = dt.datetime.now()
-    filas = [{"ts": (ahora - dt.timedelta(days=d, minutes=i)).isoformat(timespec="seconds"), "herramienta": "buscar",
+    filas = [{"ts": (ahora - dt.timedelta(days=d, minutes=i)).isoformat(timespec="seconds"), "herramienta": "search",
               "proyecto": "demo", "ms": 1.0, "resp_chars": 40, "error": False}
              for d in dias_atras for i in range(llamadas_por_dia)]
     ruta.write_text("\n".join(json.dumps(f) for f in filas) + "\n", encoding="utf-8")
@@ -88,24 +88,24 @@ def _log_filas(ruta: Path, filas: list[dict]) -> Path:
 
 def test_tamanos_de_respuesta_por_herramienta(entorno, monkeypatch, capsys):
     """T-007: p50/p90/máx de resp_chars por herramienta y las 5 respuestas más grandes."""
-    filas = [{"herramienta": "buscar", "resp_chars": c} for c in range(10, 110, 10)]          # 10..100
-    filas += [{"herramienta": "leer_documento", "resp_chars": 5000, "ruta": "docs/grande.md", "proyecto": "otro"}]
+    filas = [{"herramienta": "search", "resp_chars": c} for c in range(10, 110, 10)]          # 10..100
+    filas += [{"herramienta": "read_document", "resp_chars": 5000, "ruta": "docs/grande.md", "proyecto": "otro"}]
     log = _log_filas(entorno["tmp"] / "log" / "uso.jsonl", filas)
     _correr(monkeypatch, "--log", str(log))
     salida = capsys.readouterr().out
     tamanos = salida.split("Tamaño de respuesta por herramienta")[1].split("\n\n")[0].splitlines()
-    assert next(l for l in tamanos if l.startswith("buscar")).split()[1:] == ["60", "100", "100"]
+    assert next(l for l in tamanos if l.startswith("search")).split()[1:] == ["60", "100", "100"]
     seccion = salida.split("Respuestas más grandes")[1].splitlines()
-    assert "leer_documento" in seccion[1] and "otro" in seccion[1] and "5000" in seccion[1] and "docs/grande.md" in seccion[1]
+    assert "read_document" in seccion[1] and "otro" in seccion[1] and "5000" in seccion[1] and "docs/grande.md" in seccion[1]
     assert len([l for l in seccion[1:] if l.startswith("  ")]) == 5
 
 
 def test_lecturas_de_codigo_por_proyecto_y_sin_indicador_sin_rango(entorno, monkeypatch, capsys):
-    filas = [{"herramienta": "leer_documento", "resp_chars": 100, "ruta": "src/A.java"},
-             {"herramienta": "leer_documento", "resp_chars": 50, "ruta": "web/b.vue"},
-             {"herramienta": "leer_documento", "resp_chars": 70, "ruta": "x.yaml", "proyecto": "otro"},
-             {"herramienta": "leer_documento", "resp_chars": 999, "ruta": ".project/INDEX.md"},
-             {"herramienta": "buscar", "resp_chars": 10}]
+    filas = [{"herramienta": "read_document", "resp_chars": 100, "ruta": "src/A.java"},
+             {"herramienta": "read_document", "resp_chars": 50, "ruta": "web/b.vue"},
+             {"herramienta": "read_document", "resp_chars": 70, "ruta": "x.yaml", "proyecto": "otro"},
+             {"herramienta": "read_document", "resp_chars": 999, "ruta": ".project/INDEX.md"},
+             {"herramienta": "search", "resp_chars": 10}]
     log = _log_filas(entorno["tmp"] / "log" / "uso.jsonl", filas)
     _correr(monkeypatch, "--log", str(log))
     salida = capsys.readouterr().out
@@ -127,7 +127,7 @@ def _adr(carpeta: Path, id_: str, estado: str, fecha: dt.date, titulo: str) -> N
 
 
 def _memorias(entorno) -> dict:
-    """Dos proyectos: 'demo' con memoria explícita y aún en esquema v1 (T-010: analizar_uso lee las dos versiones) y
+    """Dos proyectos: 'demo' con memoria explícita y aún en schema v1 (T-010: analizar_uso lee las dos versiones) y
     'otro' con la memoria por defecto (<base>/.memorias/otro), ya en v2."""
     hoy = dt.date.today()
     mem_demo = entorno["tmp"] / "mem-demo"
@@ -146,7 +146,7 @@ def _memorias(entorno) -> dict:
 def test_decisiones_por_estado_desde_la_memoria(entorno, monkeypatch, capsys):
     _memorias(entorno)
     log = _log_filas(entorno["tmp"] / "log" / "uso.jsonl",
-                     [{"herramienta": "confirmar_decision", "resp_chars": 10}] * 3)
+                     [{"herramienta": "accept_decision", "resp_chars": 10}] * 3)
     _correr(monkeypatch, "--log", str(log), "--dias", "14")
     salida = capsys.readouterr().out
     assert "confirmadas por el usuario" not in salida
@@ -161,14 +161,14 @@ def test_decisiones_por_estado_desde_la_memoria(entorno, monkeypatch, capsys):
 def test_decisiones_respetan_el_filtro_de_proyecto(entorno, monkeypatch, capsys):
     _memorias(entorno)
     log = _log_filas(entorno["tmp"] / "log" / "uso.jsonl",
-                     [{"herramienta": "buscar", "resp_chars": 10, "proyecto": "otro"}])
+                     [{"herramienta": "search", "resp_chars": 10, "proyecto": "otro"}])
     _correr(monkeypatch, "--log", str(log), "--proyecto", "otro")
     linea = next(l for l in capsys.readouterr().out.splitlines() if l.startswith("- Decisiones creadas"))
     assert "otro:" in linea and "demo:" not in linea
 
 
 def test_decisiones_sin_projects_json_lo_dice(entorno, monkeypatch, capsys):
-    log = _log_filas(entorno["tmp"] / "log" / "uso.jsonl", [{"herramienta": "buscar", "resp_chars": 10}])
+    log = _log_filas(entorno["tmp"] / "log" / "uso.jsonl", [{"herramienta": "search", "resp_chars": 10}])
     _correr(monkeypatch, "--log", str(log))
     assert f"sin configuración ({entorno['env']['MEMORIA_PROYECTOS_CONFIG']})" in capsys.readouterr().out
 

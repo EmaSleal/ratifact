@@ -3,12 +3,12 @@ from ratifact.integraciones.base import Integracion
 
 INTEGRACION = Integracion(
     nombre="engram",
-    alcance="usuario",
+    alcance="user",
     prefijo="mem_",
-    rol="memoria de agente: aprendizajes técnicos",
-    limite="nunca decisiones ni estado de tareas; ante una contradicción gana la decisión acordada",
+    rol="agent memory: technical learnings",
+    limite="never decisions or task status; on a contradiction the accepted decision wins",
     guia={
-        "cerrar": "si tienes herramientas `mem_*` (engram), guarda ahí los aprendizajes técnicos; las decisiones "
-                  "nuevas solo se proponen al usuario en memoria-proyectos; si no, omite este paso.",
+        "close": "if you have `mem_*` tools (engram), save technical learnings there; new decisions are only "
+                 "proposed to the user in memoria-proyectos; otherwise skip this step.",
     },
 )

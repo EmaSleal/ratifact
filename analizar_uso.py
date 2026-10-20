@@ -2,11 +2,14 @@
 """Resumen del uso de memoria-proyectos a partir de logs/uso.jsonl.
 
 Uso:  python3 analizar_uso.py [--dias N] [--proyecto game] [--log RUTA]
-Log: --log, si no MEMORIA_PROYECTOS_LOG, si no <repo>/logs/uso.jsonl (el mismo que escribe el servidor).
+Log: --log, si no RATIFACT_LOG (o MEMORIA_PROYECTOS_LOG, respaldo hasta 1.1), si no <repo>/logs/uso.jsonl (el mismo
+que escribe el servidor). Las herramientas se agregan por su nombre inglés (contrato v1, T-011): las filas viejas con el
+nombre en español se traducen con HERRAMIENTAS_V0, así el historial sigue sumando por herramienta.
 Tokens estimados = caracteres / 4 (aproximación; el texto en español suele rondar 3,5–4,5).
 El indicador de decisiones no sale del log sino de la memoria de cada proyecto (projects.json): la configuración
-se resuelve igual que el servidor (MEMORIA_PROYECTOS_CONFIG o ~/.config/memoria-proyectos/projects.json) y la
-memoria con la clave "memoria" o <MEMORIA_PROYECTOS_BASE o ~/Projects>/.memorias/<nombre>. Se replica esa lógica
+se resuelve igual que el servidor (RATIFACT_CONFIG / MEMORIA_PROYECTOS_CONFIG, o ~/.config/ratifact/projects.json si
+existe, o ~/.config/memoria-proyectos/projects.json) y la memoria con la clave "memoria" o
+<RATIFACT_BASE / MEMORIA_PROYECTOS_BASE o ~/Projects>/.memorias/<nombre>. Se replica esa lógica
 (ratifact.config la fija al importarse) y se reutiliza el lector de frontmatter de ratifact.registros (sin mcp).
 Lee memorias v1 (carpetas, claves y estados en español) y v2 (en inglés): todo se normaliza a v2 antes de contar.
 """
@@ -21,12 +24,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ratifact.registros import _ids_resuelve, _leer_registro, _normalizar_id, _numero_id as _numero  # noqa: E402
-from ratifact.vocabulario import CARPETAS_V1, CLAVES_V1, ESTADOS_V1  # noqa: E402
+from ratifact.vocabulario import CARPETAS_V1, CLAVES_V1, ESTADOS_V1, HERRAMIENTAS_V0  # noqa: E402
 
 LOG_POR_DEFECTO = Path(__file__).resolve().parent / "logs" / "uso.jsonl"   # igual que LOG_USO del servidor
 ESTADOS_DECISION = ("accepted", "proposed", "superseded", "rejected")
 DIAS_PROPUESTA_VIEJA = 7
-TOKENS_ARRANQUE = 2000   # ADR-026: referencia de obtener_contexto (~8.000 caracteres)
+TOKENS_ARRANQUE = 2000   # ADR-026: referencia de get_context (~8.000 caracteres)
 # no cuentan como mención (v1 y v2)
 SECCIONES_EXCLUIDAS = {"Fuera de alcance", "Notas", "Cómo verificar", "Resuelve",
                        "Out of scope", "Notes", "How to verify", "Resolves"}
@@ -39,15 +42,26 @@ def percentil(valores: list, q: float):
     return valores[min(len(valores) - 1, int(len(valores) * q))]
 
 
+def _entorno(sufijo: str) -> str | None:
+    """RATIFACT_<sufijo> gana sobre el respaldo MEMORIA_PROYECTOS_<sufijo> (igual que ratifact.config._entorno)."""
+    return os.environ.get(f"RATIFACT_{sufijo}") or os.environ.get(f"MEMORIA_PROYECTOS_{sufijo}") or None
+
+
 def ruta_log(argumento: str | None) -> Path:
-    """--log gana sobre MEMORIA_PROYECTOS_LOG, que gana sobre la ruta por defecto (resuelto en cada llamada)."""
-    return Path(argumento or os.environ.get("MEMORIA_PROYECTOS_LOG") or LOG_POR_DEFECTO)
+    """--log gana sobre RATIFACT_LOG / MEMORIA_PROYECTOS_LOG, que ganan sobre la ruta por defecto (en cada llamada)."""
+    return Path(argumento or _entorno("LOG") or LOG_POR_DEFECTO)
 
 
 def ruta_config() -> Path:
     """Igual que ratifact.config.CONFIG, resuelto en cada llamada."""
-    return Path(os.environ.get("MEMORIA_PROYECTOS_CONFIG",
-                               Path.home() / ".config" / "memoria-proyectos" / "projects.json")).expanduser()
+    nueva = Path.home() / ".config" / "ratifact" / "projects.json"
+    defecto = nueva if nueva.exists() else Path.home() / ".config" / "memoria-proyectos" / "projects.json"
+    return Path(_entorno("CONFIG") or defecto).expanduser()
+
+
+def herramienta(fila: dict) -> str:
+    """Nombre inglés de la herramienta de una fila (las filas anteriores a T-011 traen el nombre en español)."""
+    return HERRAMIENTAS_V0.get(fila["herramienta"], fila["herramienta"])
 
 
 def _memoria(nombre: str, p: dict) -> Path:
@@ -55,7 +69,7 @@ def _memoria(nombre: str, p: dict) -> Path:
     memoria = p.get("memory") or p.get("memoria")     # projects.json en inglés o en español (gana el inglés)
     if memoria:
         return Path(memoria).expanduser()
-    base = Path(os.environ.get("MEMORIA_PROYECTOS_BASE", Path.home() / "Projects")).expanduser()
+    base = Path(_entorno("BASE") or Path.home() / "Projects").expanduser()
     return base / ".memorias" / nombre
 
 
@@ -112,10 +126,10 @@ def indicador_decisiones(desde: dt.datetime, proyecto: str | None) -> list[str]:
 
 
 def tamano_contexto(filas: list[dict]) -> list[str]:
-    """ADR-026: tamaño de la respuesta de obtener_contexto por proyecto (p50/máx en caracteres y ~tokens = /4)."""
+    """ADR-026: tamaño de la respuesta de get_context por proyecto (p50/máx en caracteres y ~tokens = /4)."""
     por = defaultdict(list)
     for f in filas:
-        if f["herramienta"] == "obtener_contexto":
+        if herramienta(f) == "get_context":
             por[f.get("proyecto")].append(f["resp_chars"])
     lineas = []
     for nombre, tam in sorted(por.items(), key=lambda kv: str(kv[0])):
@@ -208,7 +222,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dias", type=int, default=7)
     ap.add_argument("--proyecto")
-    ap.add_argument("--log", help="ruta del log (por defecto MEMORIA_PROYECTOS_LOG o logs/uso.jsonl)")
+    ap.add_argument("--log", help="ruta del log (por defecto RATIFACT_LOG, MEMORIA_PROYECTOS_LOG o logs/uso.jsonl)")
     a = ap.parse_args()
     log = ruta_log(a.log)
     if not log.is_file():
@@ -226,7 +240,7 @@ def main():
     print(f"Período: últimos {a.dias} días · {len(filas)} llamadas\n")
     por = defaultdict(list)
     for f in filas:
-        por[f["herramienta"]].append(f)
+        por[herramienta(f)].append(f)
     print(f"{'herramienta':<22}{'llamadas':>9}{'errores':>9}{'tokens resp. (prom)':>21}{'ms (p95)':>10}")
     for nombre, fs in sorted(por.items(), key=lambda kv: -len(kv[1])):
         p95 = percentil(sorted(f["ms"] for f in fs), 0.95)
@@ -240,22 +254,22 @@ def main():
         print(f"{nombre:<22}{percentil(tam, 0.5):>9}{percentil(tam, 0.9):>9}{tam[-1]:>9}")
     print("\nRespuestas más grandes")
     for f in sorted(filas, key=lambda f: (-f["resp_chars"], f["ts"]))[:5]:
-        print(f"  {f['ts']} {f['herramienta']} [{f.get('proyecto')}] {f['resp_chars']} caracteres"
+        print(f"  {f['ts']} {herramienta(f)} [{f.get('proyecto')}] {f['resp_chars']} caracteres"
               + (f" · {f.get('ruta') or f.get('carpeta')}" if f.get("ruta") or f.get("carpeta") else ""))
 
     print("\nIndicadores")
-    ctx = por.get("obtener_contexto", [])
+    ctx = por.get("get_context", [])
     if ctx:
         print(f"- Costo de arranque por chat: ~{sum(f['resp_chars'] for f in ctx) / len(ctx) / 4:.0f} tokens "
               f"(objetivo < 2000). Chats iniciados: {len(ctx)}")
     tamanos = tamano_contexto(filas)
     if tamanos:
-        print(f"- Tamaño de obtener_contexto por proyecto (referencia {TOKENS_ARRANQUE:,} tokens = "
+        print(f"- Tamaño de get_context por proyecto (referencia {TOKENS_ARRANQUE:,} tokens = "
               f"{TOKENS_ARRANQUE * 4:,} caracteres; aviso si el p50 la supera):")
         for linea in tamanos:
             print(linea)
-    lecturas = por.get("leer_documento", [])
-    busquedas = por.get("buscar", [])
+    lecturas = por.get("read_document", [])
+    busquedas = por.get("search", [])
     if lecturas or busquedas:
         print(f"- Lecturas: {len(lecturas)} vs búsquedas: {len(busquedas)}. "
               "Muchas lecturas y pocas búsquedas = se está gastando contexto de más.")
@@ -264,7 +278,7 @@ def main():
             if Path(f.get("ruta") or "").suffix.lower() in EXT_CODIGO:
                 codigo[f.get("proyecto")][0] += 1
                 codigo[f.get("proyecto")][1] += f["resp_chars"]
-        print("- Lecturas de código con leer_documento: "
+        print("- Lecturas de código con read_document: "
               + (", ".join(f"{p}: {n} ({c} caracteres)" for p, (n, c) in sorted(codigo.items(), key=lambda kv: -kv[1][1]))
                  or "ninguna"))
         vacias = sum(1 for f in busquedas if f.get("resultados") == 0)
@@ -273,12 +287,12 @@ def main():
         top = Counter(f.get("ruta") for f in lecturas).most_common(5)
         if top:
             print("- Documentos más leídos: " + ", ".join(f"{r} ×{n}" for r, n in top))
-    sesiones, indices = len(por.get("registrar_sesion", [])), len(por.get("actualizar_indice", []))
+    sesiones, indices = len(por.get("log_session", [])), len(por.get("update_index", []))
     print(f"- Cierres de sesión: {sesiones} · regeneraciones de INDEX: {indices} "
-          f"{'(nunca se usa /cierre: INDEX se queda viejo)' if ctx and not indices else ''}")
+          f"{'(nunca se usa el prompt close: INDEX se queda viejo)' if ctx and not indices else ''}")
     for linea in indicador_decisiones(desde, a.proyecto):
         print(linea)
-    creaciones = [f for nombre in ("registrar_decision", "registrar_pendiente", "registrar_tarea")
+    creaciones = [f for nombre in ("propose_decision", "add_pending", "create_task")
                   for f in por.get(nombre, [])]
     duplicados = sum(1 for f in creaciones if f.get("duplicado"))
     if creaciones:
@@ -308,7 +322,7 @@ def main():
     if errores:
         print("\nÚltimos errores")
         for f in sorted(errores, key=lambda f: f["ts"])[-5:]:
-            print(f"  {f['ts']} [{f.get('tipo_error', 'validacion')}] {f['herramienta']}: {f.get('detalle', '')}")
+            print(f"  {f['ts']} [{f.get('tipo_error', 'validacion')}] {herramienta(f)}: {f.get('detalle', '')}")
 
 
 if __name__ == "__main__":

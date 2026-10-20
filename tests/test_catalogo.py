@@ -1,6 +1,6 @@
 """T-007 / ADR-022: catálogo de la memoria derivado en cada llamada (sin índice, caché ni watcher). Alimenta la
-resolución de ids en leer_documento, el listado de registros en listar_documentos y los resultados por id/título
-de buscar. Incluye el arreglo de registrar_tarea con `repositorio` en proyectos de un solo repositorio."""
+resolución de ids en read_document, el listado de registros en list_documents y los resultados por id/título
+de search. Incluye el arreglo de create_task con `repositorio` en proyectos de un solo repositorio."""
 import pytest
 
 from conftest import log_git
@@ -47,22 +47,22 @@ def test_catalogo_lee_el_frontmatter_en_cada_llamada_sin_escribir(srv, memoria):
     filas = catalogo._catalogo("demo")
     assert _archivos(memoria) == antes                                   # nada escrito en disco
     por_id = {r.id: r for r in filas}
-    assert por_id["T-024"] == ("T-024", "tarea", "Navegación por id", "todo",
+    assert por_id["T-024"] == ("T-024", "task", "Navegación por id", "todo",
                                ".project/tasks/T-024-navegación-por-id.md", "")   # sin `date` en el frontmatter
-    assert por_id["P-008"].titulo == "Tema 8" and por_id["P-008"].tipo == "pendiente"
+    assert por_id["P-008"].titulo == "Tema 8" and por_id["P-008"].tipo == "pending"
     assert por_id["ADR-020"].ruta == f".project/decisions/{ADR_020}" and por_id["ADR-020"].estado == "accepted"
-    assert [r.id for r in filas if r.tipo == "tarea"] == ["T-001", "T-010", "T-024", "T-1000"]
+    assert [r.id for r in filas if r.tipo == "task"] == ["T-001", "T-010", "T-024", "T-1000"]
     _registro(memoria / "tasks", "T-025-nueva.md", {"id": "T-25", "title": "Nueva", "status": "todo"}, "x")
     assert "T-025" in {r.id for r in catalogo._catalogo("demo")}            # sin caché: el cambio se ve enseguida
 
 
-# ───────────────────────── criterio 2: leer_documento resuelve ids ─────────────────────────
+# ───────────────────────── criterio 2: read_document resuelve ids ─────────────────────────
 
 @pytest.mark.parametrize("ruta", ["T-24", "T-024", "T-024.md", "tasks/T-024.md", ".project/tasks/T-024.md", "t-24",
                                   "tareas/T-024.md", ".project/tareas/T-024.md"])     # también con la carpeta v1
 def test_leer_documento_resuelve_formas_de_id(srv, memoria, ruta):
     real = memoria / "tasks" / "T-024-navegación-por-id.md"
-    salida = srv.leer_documento(proyecto="demo", ruta=ruta)
+    salida = srv.read_document(project="demo", path=ruta)
     assert salida == "(→ .project/tasks/T-024-navegación-por-id.md)\n" + real.read_text().rstrip("\n"), salida
 
 
@@ -76,14 +76,14 @@ def test_leer_documento_resuelve_formas_de_id(srv, memoria, ruta):
     (".project/decisions/ADR-020-slug-equivocado.md", f"decisions/{ADR_020}", "Cuerpo de ADR-020"),
 ])
 def test_leer_documento_resuelve_rutas_reales_de_los_logs(srv, memoria, ruta, real, cuerpo):
-    salida = srv.leer_documento(proyecto="demo", ruta=ruta)
+    salida = srv.read_document(project="demo", path=ruta)
     assert salida == f"(→ .project/{real})\n" + (memoria / real).read_text().rstrip("\n"), salida
     assert cuerpo in salida
 
 
 def test_rango_se_aplica_al_archivo_resuelto(srv, memoria):
     # líneas 1-5: frontmatter; 6: título; 7: "línea 2 de T-024"
-    assert srv.leer_documento(proyecto="demo", ruta="T-24", desde_linea=7, hasta_linea=7) == \
+    assert srv.read_document(project="demo", path="T-24", from_line=7, to_line=7) == \
         "(→ .project/tasks/T-024-navegación-por-id.md)\nlínea 2 de T-024"
 
 
@@ -91,35 +91,35 @@ def test_rango_se_aplica_al_archivo_resuelto(srv, memoria):
 
 def test_ruta_exacta_se_lee_igual_que_antes(srv, memoria, proyecto):
     real = memoria / "tasks" / "T-024-navegación-por-id.md"
-    assert srv.leer_documento(proyecto="demo", ruta=".project/tasks/T-024-navegación-por-id.md") == \
+    assert srv.read_document(project="demo", path=".project/tasks/T-024-navegación-por-id.md") == \
         real.read_text().rstrip("\n")
-    assert srv.leer_documento(proyecto="demo", ruta="docs/vision.md") == "# Visión\nUn lobo alfa lidera la manada."
+    assert srv.read_document(project="demo", path="docs/vision.md") == "# Visión\nUn lobo alfa lidera la manada."
     (proyecto["repo"] / "T-001.md").write_text("archivo del código\n")      # existe tal cual: no se resuelve
-    assert srv.leer_documento(proyecto="demo", ruta="T-001.md") == "archivo del código"
+    assert srv.read_document(project="demo", path="T-001.md") == "archivo del código"
 
 
 # ───────────────────────── criterio 4: id inexistente ─────────────────────────
 
 def test_id_inexistente_nombra_el_ultimo_de_su_tipo(srv, memoria):
-    assert srv.leer_documento(proyecto="demo", ruta="ADR-099") == "ERROR: No existe ADR-099; el último es ADR-024."
-    assert srv.leer_documento(proyecto="demo", ruta="tareas/T-2000.md") == "ERROR: No existe T-2000; el último es T-1000."
+    assert srv.read_document(project="demo", path="ADR-099") == "ERROR: ADR-099 does not exist; the latest is ADR-024."
+    assert srv.read_document(project="demo", path="tareas/T-2000.md") == "ERROR: T-2000 does not exist; the latest is T-1000."
 
 
 def test_id_inexistente_con_carpeta_vacia(srv, proyecto):
-    salida = srv.leer_documento(proyecto="demo", ruta="T-005")
-    assert salida == "ERROR: No existe T-005; todavía no hay registros en .project/tasks.", salida
+    salida = srv.read_document(project="demo", path="T-005")
+    assert salida == "ERROR: T-005 does not exist; there are no records in .project/tasks yet.", salida
 
 
 def test_sin_forma_de_id_sigue_el_mensaje_de_siempre(srv, memoria):
-    assert srv.leer_documento(proyecto="demo", ruta="docs/no.md") == "ERROR: No existe docs/no.md."
-    assert srv.leer_documento(proyecto="demo", ruta="X-001") == "ERROR: No existe X-001."
+    assert srv.read_document(project="demo", path="docs/no.md") == "ERROR: docs/no.md does not exist."
+    assert srv.read_document(project="demo", path="X-001") == "ERROR: X-001 does not exist."
 
 
 # ───────────────────────── criterio 5: carpeta ─────────────────────────
 
 def test_leer_una_carpeta_apunta_a_listar_documentos(srv, memoria):
-    salida = srv.leer_documento(proyecto="demo", ruta=".project/tasks")
-    assert salida.startswith("ERROR:") and "es una carpeta" in salida and "listar_documentos" in salida, salida
+    salida = srv.read_document(project="demo", path=".project/tasks")
+    assert salida.startswith("ERROR:") and "is a folder" in salida and "list_documents" in salida, salida
 
 
 # ───────────────────────── criterio 6: solo lectura y dentro de la memoria ─────────────────────────
@@ -127,67 +127,67 @@ def test_leer_una_carpeta_apunta_a_listar_documentos(srv, memoria):
 def test_escrituras_no_resuelven_ids(srv, memoria):
     real = memoria / "tasks" / "T-024-navegación-por-id.md"
     original = real.read_text()
-    assert srv.guardar_documento(proyecto="demo", ruta="T-024", contenido="x") == \
-        "ERROR: Escritura solo permitida en: .project, docs"
-    assert srv.guardar_documento(proyecto="demo", ruta=".project/tasks/T-024.md", contenido="x") == \
-        "ERROR: .project/tasks/T-024.md no existe; para crearlo usa crear_documento."
+    assert srv.update_document(project="demo", path="T-024", content="x") == \
+        "ERROR: Writing is only allowed in: .project, docs"
+    assert srv.update_document(project="demo", path=".project/tasks/T-024.md", content="x") == \
+        "ERROR: .project/tasks/T-024.md does not exist; to create it use create_document."
     assert real.read_text() == original
 
 
 def test_resolucion_no_sale_de_la_memoria(srv, memoria, proyecto):
     commits = log_git(memoria)
-    assert srv.leer_documento(proyecto="demo", ruta="docs/T-001.md") == "ERROR: No existe docs/T-001.md."
-    assert srv.leer_documento(proyecto="demo", ruta="../T-001").startswith("ERROR: Ruta fuera del proyecto")
-    assert srv.leer_documento(proyecto="demo", ruta=".project/../../T-001").startswith("ERROR: Ruta fuera")
+    assert srv.read_document(project="demo", path="docs/T-001.md") == "ERROR: docs/T-001.md does not exist."
+    assert srv.read_document(project="demo", path="../T-001").startswith("ERROR: Path outside the project")
+    assert srv.read_document(project="demo", path=".project/../../T-001").startswith("ERROR: Path outside")
     assert log_git(memoria) == commits
 
 
-# ───────────────────────── criterio 7: listar_documentos de registros ─────────────────────────
+# ───────────────────────── criterio 7: list_documents de registros ─────────────────────────
 
 def test_listar_carpeta_de_registros_por_id(srv, memoria):
-    assert srv.listar_documentos(proyecto="demo", carpeta=".project/tasks").splitlines() == [
+    assert srv.list_documents(project="demo", folder=".project/tasks").splitlines() == [
         "T-001 · merged · Primera tarea  (.project/tasks/T-001-primera-tarea.md)",
         "T-010 · in_review · Décima tarea  (.project/tasks/T-010-décima-tarea.md)",
         "T-024 · todo · Navegación por id  (.project/tasks/T-024-navegación-por-id.md)",
         "T-1000 · todo · Tarea mil  (.project/tasks/T-1000-tarea-mil.md)",
     ]
-    assert srv.listar_documentos(proyecto="demo", carpeta=".project/pending/").splitlines()[0] == \
+    assert srv.list_documents(project="demo", folder=".project/pending/").splitlines()[0] == \
         "P-008 · open · Tema 8  (.project/pending/P-008-tema-8.md)"
-    assert "ADR-020 · accepted · ObjectMapper de Spring Boot" in srv.listar_documentos(proyecto="demo",
-                                                                                        carpeta=".project/decisions")
+    assert "ADR-020 · accepted · ObjectMapper de Spring Boot" in srv.list_documents(project="demo",
+                                                                                        folder=".project/decisions")
 
 
 def test_listar_otros_archivos_de_memoria_sin_cambios(srv, memoria):
     tam = (memoria / "DECISIONS.md").stat().st_size
-    assert f".project/DECISIONS.md  ({tam} B)" in srv.listar_documentos(proyecto="demo", carpeta=".project").splitlines()
+    assert f".project/DECISIONS.md  ({tam} B)" in srv.list_documents(project="demo", folder=".project").splitlines()
 
 
-# ───────────────────────── criterio 8: buscar ─────────────────────────
+# ───────────────────────── criterio 8: search ─────────────────────────
 
 def test_buscar_un_id_devuelve_el_registro_primero(srv, memoria, proyecto):
     (proyecto["repo"] / "docs" / "notas.md").write_text("Ver T-1 y T-10 en el código\n")
-    salida = srv.buscar(proyecto="demo", texto="T-1").splitlines()
+    salida = srv.search(project="demo", query="T-1").splitlines()
     assert salida[0] == "T-001 · merged · Primera tarea (.project/tasks/T-001-primera-tarea.md)", salida
     assert "docs/notas.md:1: Ver T-1 y T-10 en el código" in salida
 
 
 def test_buscar_por_titulo_devuelve_el_registro_primero(srv, memoria):
-    salida = srv.buscar(proyecto="demo", texto="objectmapper").splitlines()
+    salida = srv.search(project="demo", query="objectmapper").splitlines()
     assert salida[0] == f"ADR-020 · accepted · ObjectMapper de Spring Boot (.project/decisions/{ADR_020})", salida
 
 
 def test_coincidencias_de_memoria_antes_que_las_del_codigo(srv, memoria, proyecto):
     (proyecto["repo"] / "docs" / "ruido.md").write_text("\n".join("zorro gris" for _ in range(50)) + "\n")
     (memoria / "notas.md").write_text("Un zorro gris en la memoria\n")
-    salida = srv.buscar(proyecto="demo", texto="zorro gris", max_resultados=5).splitlines()
+    salida = srv.search(project="demo", query="zorro gris", max_results=5).splitlines()
     assert salida[0] == ".project/notas.md:1: Un zorro gris en la memoria", salida
-    assert len(salida) == 6 and salida[-1].startswith("(… más resultados")
+    assert len(salida) == 6 and salida[-1].startswith("(… more results")
 
 
-# ───────────────────────── criterio 10: registrar_tarea en un solo repositorio ─────────────────────────
+# ───────────────────────── criterio 10: create_task en un solo repositorio ─────────────────────────
 
 def test_un_solo_repo_ignora_repositorio(srv, proyecto):
-    salida = srv.registrar_tarea(proyecto="demo", titulo="T", objetivo="o", criterios_aceptacion="c", repositorio="x")
-    assert salida.startswith("T-001 registrada") and "(proyecto de un solo repositorio: se ignoró `repositorio`)" in salida
+    salida = srv.create_task(project="demo", title="T", goal="o", acceptance_criteria="c", repo="x")
+    assert salida.startswith("T-001 created") and "(single-repo project: `repo` was ignored)" in salida
     tarea = next((proyecto["mem"] / "tasks").glob("T-001*.md")).read_text()
     assert "repo:" not in tarea.split("---")[1]

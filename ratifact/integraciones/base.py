@@ -5,13 +5,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-FASES = ("planificar", "ejecutar", "verificar", "cerrar")
+FASES = ("plan", "execute", "verify", "close")
 
 
 @dataclass(frozen=True)
 class Integracion:
     nombre: str
-    alcance: str                                   # "proyecto" (se detecta en disco) | "usuario" (nunca se detecta)
+    alcance: str                                   # "project" (se detecta en disco) | "user" (nunca se detecta)
     prefijo: str                                   # prefijo de sus herramientas, p. ej. "codegraph_"
     rol: str
     limite: str                                    # frontera: nunca decisiones ni estado de tareas

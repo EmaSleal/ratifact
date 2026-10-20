@@ -4,16 +4,38 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from contextvars import ContextVar
 from pathlib import Path
 
 from ratifact.vocabulario import CARPETAS_V1, VISTAS_V1
 
 
-CONFIG = Path(os.environ.get(
-    "MEMORIA_PROYECTOS_CONFIG",
-    Path.home() / ".config" / "memoria-proyectos" / "projects.json",
-)).expanduser()
+# Variables de entorno (ADR-028): RATIFACT_* ganan; MEMORIA_PROYECTOS_* quedan como respaldo hasta 1.1, con una línea
+# de aviso en el log del servidor (stderr) la primera vez que se usa cada una.
+_AVISOS_ENTORNO: set[str] = set()
+
+
+def _entorno(sufijo: str) -> str | None:
+    """RATIFACT_<sufijo> o, si no está, el respaldo deprecado MEMORIA_PROYECTOS_<sufijo> (aviso único en stderr)."""
+    nuevo = os.environ.get(f"RATIFACT_{sufijo}")
+    if nuevo:
+        return nuevo
+    viejo = os.environ.get(f"MEMORIA_PROYECTOS_{sufijo}")
+    if viejo and sufijo not in _AVISOS_ENTORNO:
+        _AVISOS_ENTORNO.add(sufijo)
+        print(f"ratifact: MEMORIA_PROYECTOS_{sufijo} is deprecated; rename it to RATIFACT_{sufijo} "
+              "(the fallback is removed in 1.1).", file=sys.stderr)
+    return viejo or None
+
+
+def _config_por_defecto() -> Path:
+    """~/.config/ratifact/projects.json si existe; si no, el de siempre. No se mueve ni reescribe nada (ADR-029)."""
+    nueva = Path.home() / ".config" / "ratifact" / "projects.json"
+    return nueva if nueva.exists() else Path.home() / ".config" / "memoria-proyectos" / "projects.json"
+
+
+CONFIG = Path(_entorno("CONFIG") or _config_por_defecto()).expanduser()
 
 MEM = ".project"
 LIMITE_INDICE = 6000          # caracteres (~1.5k tokens)
@@ -38,14 +60,14 @@ class ErrorMemoria(Exception):
     pass
 
 
-BASE_PROYECTOS = Path(os.environ.get("MEMORIA_PROYECTOS_BASE", Path.home() / "Projects")).expanduser().resolve()
+BASE_PROYECTOS = Path(_entorno("BASE") or Path.home() / "Projects").expanduser().resolve()
 
 
 # ───────────────────────── configuración y rutas ─────────────────────────
 
 def _proyectos() -> dict:
     if not CONFIG.exists():
-        raise ErrorMemoria(f"No existe la configuración {CONFIG}.")
+        raise ErrorMemoria(f"Configuration file {CONFIG} does not exist.")
     return json.loads(CONFIG.read_text(encoding="utf-8"))
 
 
@@ -83,16 +105,19 @@ def _sugerencia_nombre(nombre: str, proyectos: dict) -> str | None:
     return None
 
 
+def _pista_nombre(sugerido: str | None, proyectos: dict) -> str:
+    return f" Did you mean '{sugerido}'?" if sugerido else f" Available: {', '.join(proyectos)}"
+
+
 def _raiz(proyecto: str, verificar_existe: bool = True) -> Path:
     proyectos = _proyectos()
     p = proyectos.get(proyecto)
     if not p:
         sugerido = _sugerencia_nombre(proyecto, proyectos)
-        pista = f" ¿Quisiste decir '{sugerido}'?" if sugerido else f" Disponibles: {', '.join(proyectos)}"
-        raise ErrorMemoria(f"Proyecto '{proyecto}' no registrado.{pista}")
+        raise ErrorMemoria(f"Project '{proyecto}' is not registered.{_pista_nombre(sugerido, proyectos)}")
     raiz = Path(_valor(p, "ruta")).expanduser().resolve()
     if verificar_existe and not raiz.is_dir():
-        raise ErrorMemoria(f"La ruta del proyecto no existe: {raiz}")
+        raise ErrorMemoria(f"The project path does not exist: {raiz}")
     return raiz
 
 
@@ -105,8 +130,8 @@ def _mem(proyecto: str) -> Path:
            else BASE_PROYECTOS / ".memorias" / proyecto)
     raiz = _raiz(proyecto, verificar_existe=False)
     if mem == raiz or raiz in mem.parents:
-        raise ErrorMemoria(f"La memoria de '{proyecto}' está dentro del repositorio del código ({mem}); ADR-010 lo "
-                           f"impide. Muévela a {BASE_PROYECTOS / '.memorias' / proyecto} y actualiza projects.json.")
+        raise ErrorMemoria(f"The memory of '{proyecto}' is inside the code repository ({mem}); ADR-010 forbids it. "
+                           f"Move it to {BASE_PROYECTOS / '.memorias' / proyecto} and update projects.json.")
     return mem
 
 
@@ -162,15 +187,15 @@ def _traducir_alias(proyecto: str, relativa: str, escribir: bool = False) -> str
     if len(partes) < 2 or partes[0] != MEM:
         return relativa
     if escribir and partes[1] in VISTAS and len(partes) == 2:
-        raise ErrorMemoria(f"{MEM}/{partes[1]} es una vista: se regenera sola desde los registros (decisiones y "
-                           "pendientes) y no se escribe a mano.")
+        raise ErrorMemoria(f"{MEM}/{partes[1]} is a view: it is regenerated from the records (decisions and "
+                           "pending items) and is never written by hand.")
     nuevo = CARPETAS_V1.get(partes[1]) or (VISTAS_V1.get(partes[1]) if len(partes) == 2 else None)
     if not nuevo:
         return relativa
     mem = _mem(proyecto)
     if (mem / partes[1]).exists() and (mem / nuevo).exists():
-        raise ErrorMemoria(f"La memoria de '{proyecto}' ({mem}) es inconsistente: tiene {partes[1]} (v1) y {nuevo} "
-                           "(v2) a la vez. Revísala con git antes de seguir; no se tradujo la ruta.")
+        raise ErrorMemoria(f"The memory of '{proyecto}' ({mem}) is inconsistent: it has both {partes[1]} (v1) and "
+                           f"{nuevo} (v2). Check it with git before continuing; the path was not translated.")
     traducida = Path(MEM, nuevo, *partes[2:]).as_posix()
     ALIAS_RUTA.set(traducida)
     return traducida
@@ -187,7 +212,7 @@ def _ruta_segura(proyecto: str, relativa: str, escribir: bool = False) -> Path:
     Las rutas '.project/...' apuntan siempre a la carpeta de memoria, esté donde esté."""
     raiz = _raiz(proyecto)
     if not relativa or Path(relativa).is_absolute():
-        raise ErrorMemoria("La ruta debe ser relativa a la raíz del proyecto.")
+        raise ErrorMemoria("The path must be relative to the project root.")
     relativa = _traducir_alias(proyecto, relativa, escribir)
     partes_rel = Path(relativa).parts
     if partes_rel and partes_rel[0] == MEM:
@@ -195,21 +220,21 @@ def _ruta_segura(proyecto: str, relativa: str, escribir: bool = False) -> Path:
         destino = (mem / Path(*partes_rel[1:])) if len(partes_rel) > 1 else mem
         destino = destino.resolve()
         if destino != mem and mem not in destino.parents or ".git" in destino.relative_to(mem).parts:
-            raise ErrorMemoria("Ruta fuera de la memoria del proyecto.")
+            raise ErrorMemoria("Path outside the project memory.")
         if escribir and MEM not in _zonas_escritura(proyecto):
-            raise ErrorMemoria("Escritura no permitida en la memoria.")
+            raise ErrorMemoria("Writing to the memory is not allowed.")
         return destino
     destino = (raiz / relativa).resolve()
     if destino != raiz and raiz not in destino.parents:
-        raise ErrorMemoria("Ruta fuera del proyecto.")
+        raise ErrorMemoria("Path outside the project.")
     partes = destino.relative_to(raiz).parts
     if partes and partes[0] == ".git":
-        raise ErrorMemoria("No se permite acceder a .git.")
+        raise ErrorMemoria("Access to .git is not allowed.")
     if escribir:
         zonas = _zonas_escritura(proyecto)
         en_subrepo = len(partes) > 1 and partes[0] in _repos(proyecto) and partes[1] in zonas
         if not partes or not (partes[0] in zonas or en_subrepo):
-            raise ErrorMemoria(f"Escritura solo permitida en: {', '.join(zonas)}"
-                               + (f" (o <repo>/{zonas[-1]} con repo en {', '.join(_repos(proyecto))})"
+            raise ErrorMemoria(f"Writing is only allowed in: {', '.join(zonas)}"
+                               + (f" (or <repo>/{zonas[-1]} with repo in {', '.join(_repos(proyecto))})"
                                   if _repos(proyecto) else ""))
     return destino

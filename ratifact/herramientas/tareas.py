@@ -1,4 +1,5 @@
-"""Herramientas de tareas para el agente de código: registrar, actualizar, devolver y listar tareas."""
+"""Herramientas de tareas para el agente de código: create_task, update_task, request_changes y list_tasks
+(amend_task y read_task en tareas_brief)."""
 from __future__ import annotations
 
 from ratifact import registros as _registros  # _ahora se busca en su módulo: las pruebas la reemplazan ahí
@@ -49,46 +50,47 @@ def _validar_resuelve(proyecto: str, resuelve: str) -> list[tuple[str, bool]]:
     ids = _ids_resuelve(resuelve)
     abiertos = _pendientes_abiertos(proyecto)
     existentes = {r.id for r in _registros_en(proyecto, "P")}
-    malos = [f"{i} ({'no está abierto' if i in existentes else 'no existe'})" for i, _ in ids if i not in abiertos]
+    malos = [f"{i} ({'not open' if i in existentes else 'does not exist'})" for i, _ in ids if i not in abiertos]
     if malos:
-        raise ErrorMemoria(f"`resuelve` inválido: {', '.join(malos)}. Solo pendientes abiertos (P-NNN, opcional "
-                           "\"(parcial)\" o \"(partial)\").")
+        raise ErrorMemoria(f"Invalid `resolves`: {', '.join(malos)}. Only open pending items (P-NNN, optionally "
+                           "\"(partial)\").")
     return ids
 
 
 @herramienta
-def registrar_tarea(proyecto: str, titulo: str, objetivo: str, criterios_aceptacion: str,
-                    decisiones: str = "", archivos: str = "", fuera_de_alcance: str = "",
-                    notas: str = "", repositorio: str = "", resuelve: str = "") -> str:
-    """Crea una especificación de trabajo para Claude Code en .project/tasks/T-NNN.md (estado 'todo').
-    En proyectos de varios repos, `repositorio` (obligatorio) indica la carpeta donde se trabaja; en proyectos de
-    un solo repositorio se ignora (la respuesta lo avisa).
-    Debe ser autosuficiente: Claude Code la ejecuta sin este chat. `criterios_aceptacion`: lista verificable
-    (pruebas que deben pasar, comportamiento observable). `decisiones`: ids de ADR aplicables.
-    `archivos`: rutas que probablemente se tocan. El usuario la ejecuta con /tarea T-NNN en Claude Code.
-    `resuelve`: pendientes que la tarea resuelve, separados por coma, cada uno opcionalmente con "(parcial)" o
-    "(partial)" (p. ej. "P-036, P-037 (parcial)"); deben existir y estar abiertos. Se guarda en la tarea (sección
-    "Resolves") y,
-    al integrarla, actualizar_tarea recuerda los que sigan abiertos. Nunca cierra pendientes.
-    La respuesta agrega la línea de integraciones detectadas (no se escribe en la tarea).
-    Idempotente (ADR-019): si ya hay una tarea con este título (sin distinguir mayúsculas ni espacios) creada
-    en los últimos minutos Y TODAVÍA en estado 'todo', no crea nada nuevo y devuelve el id existente
-    (con el comando /tarea para repetírselo al usuario). Si esa tarea ya cambió de estado (p. ej. in_progress:
-    ya se está ejecutando), un humano o el agente de código ya intervino, así que se registra una tarea
-    nueva."""
+def create_task(project: str, title: str, goal: str, acceptance_criteria: str, decisions: str = "",
+                files: str = "", out_of_scope: str = "", notes: str = "", repo: str = "", resolves: str = "") -> str:
+    """Creates a work specification for the coding agent in .project/tasks/T-NNN.md (status 'todo').
+    In multi-repo projects, `repo` (required) is the folder where the work happens; in single-repo projects it is
+    ignored (the response says so).
+    It must be self-contained: the coding agent runs it without this chat. `acceptance_criteria`: a verifiable list
+    (tests that must pass, observable behavior). `decisions`: applicable ADR ids. `files`: paths likely to be
+    touched. The user runs it with /run-task T-NNN.
+    `resolves`: pending items the task resolves, comma-separated, each optionally with "(partial)" (e.g.
+    "P-036, P-037 (partial)"); they must exist and be open. Stored in the task ("Resolves" section); when the task is
+    merged, update_task reminds which ones are still open. It never closes pending items.
+    The response adds the line of detected integrations (not written into the task).
+    Idempotent (ADR-019): if a task with this title (ignoring case and spaces) was created in the last minutes AND is
+    STILL 'todo', nothing new is created and the existing id is returned (with the /run-task command to repeat to
+    the user). If that task already changed status (e.g. in_progress: it is running), a human or the coding agent
+    already intervened, so a new task is recorded."""
+    proyecto, titulo, objetivo, criterios_aceptacion = project, title, goal, acceptance_criteria
+    decisiones, archivos, fuera_de_alcance, notas, repositorio, resuelve = (decisions, files, out_of_scope, notes,
+                                                                             repo, resolves)
+
     def f():
         repos, repo = _repos(proyecto), repositorio
         if repos and repositorio not in repos:
-            raise ErrorMemoria(f"Proyecto de varios repositorios: indica `repositorio` ({', '.join(repos)}).")
+            raise ErrorMemoria(f"Multi-repo project: give `repo` ({', '.join(repos)}).")
         nota = ""
         if not repos and repositorio:     # no es un error: el valor no cambia nada, solo se avisa que se ignoró
-            repo, nota = "", "\n(proyecto de un solo repositorio: se ignoró `repositorio`)"
+            repo, nota = "", "\n(single-repo project: `repo` was ignored)"
         with _bloqueo(proyecto):
             carpeta = _mem(proyecto) / TAREAS
             carpeta.mkdir(parents=True, exist_ok=True)
             dup = _duplicado_reciente(carpeta, "T", "title", titulo, "todo")
             if dup:
-                return _mensaje_duplicado(dup["id"], f"Ejecutar en Claude Code: /tarea {dup['id']}") + nota
+                return _mensaje_duplicado(dup["id"], f"Run it with: /run-task {dup['id']}") + nota
             ids = _validar_resuelve(proyecto, resuelve) if resuelve.strip() else []
             id_ = _siguiente_id(carpeta, "T")
             ruta = carpeta / f"{id_}-{_slug(titulo)}.md"
@@ -110,48 +112,55 @@ def registrar_tarea(proyecto: str, titulo: str, objetivo: str, criterios_aceptac
                 if valor:
                     secciones += [f"## {nombre}", valor]
             cmd = _comando_pruebas(proyecto, repo)
-            donde = f"Desde `{repo}/`" if repo else "Desde la raíz del repositorio"
+            donde = f"From `{repo}/`" if repo else "From the repository root"
             secciones += ["## How to verify",
                           f"{donde}: `{cmd}`" if cmd else
-                          "(sin comando de pruebas configurado: pregúntale al usuario o usa actualizar_proyecto)"]
+                          "(no test command configured: ask the user or use update_project)"]
             secciones += ["## Result", MARCA_RESULTADO]
             _escribir_registro(ruta, meta, "\n\n".join(secciones))
             sha = _commit(proyecto, [ruta], f"{id_} {titulo} (todo)")
             linea = _integraciones._linea_integraciones(proyecto)
-            return (f"{id_} registrada · rama sugerida {meta['branch']} · commit {sha}\nEjecutar en Claude Code: /tarea {id_}"
+            return (f"{id_} created · suggested branch {meta['branch']} · commit {sha}\nRun it with: /run-task {id_}"
                     + nota + (f"\n{linea}" if linea else ""))
     return _ejecutar(f)
 
 
 def _recordatorio_resuelve(proyecto: str, resuelve: str) -> str:
-    """Al integrar (ADR-027): los pendientes declarados en `resuelve` que siguen abiertos, con qué hacer en cada caso."""
-    abiertos = _pendientes_abiertos(proyecto) if resuelve else {}
-    return "\n".join(f"{i} (parcial) sigue abierto: registra qué falta" if parcial else
-                     f'{i} sigue abierto: ciérralo con cerrar_pendiente("{proyecto}", "{i}", ...) si quedó resuelto'
-                     for i, parcial in _ids_resuelve(resuelve) if i in abiertos)
+    """Al integrar (ADR-027, P-016): los pendientes declarados en `resolves` que siguen abiertos, con qué hacer en cada
+    caso. Uno parcial dice cómo registrar lo que falta: una nota anexada al pendiente, o cerrarlo y abrir otro."""
+    abiertos = {r.id: r.ruta for r in _registros_en(proyecto, "P") if r.estado == "open"} if resuelve else {}
+    return "\n".join(
+        f"{i} (partial) is still open: record what remains — append a note to its file with "
+        f'update_document("{proyecto}", "{abiertos[i]}", "<what remains>", mode="append"), or close it with '
+        f'close_pending("{proyecto}", "{i}", ...) and add the remainder with add_pending("{proyecto}", ...)'
+        if parcial else
+        f'{i} is still open: close it with close_pending("{proyecto}", "{i}", ...) if it was resolved'
+        for i, parcial in _ids_resuelve(resuelve) if i in abiertos)
 
 
 @herramienta
-def actualizar_tarea(proyecto: str, id: str, estado: str, resultado: str = "", commit: str = "") -> str:
-    """Cambia el estado de una tarea (todo, in_progress, in_review, failed, merged, discarded; también acepta los
-    nombres en español: pendiente, en_curso, en_revision, fallida, integrada, descartada). Se guarda en inglés.
-    `resultado`: qué se hizo, pruebas ejecutadas y su salida resumida, desvíos respecto de la spec.
-    'merged' y 'discarded' solo con confirmación explícita del usuario.
-    Para pedir correcciones tras revisar una tarea usa `devolver_tarea`, no este cambio de estado.
-    Con 'in_progress', la respuesta trae la guía de integraciones activas (ejecutar, verificar, cerrar), calculada en
-    ese momento; es condicional: síguela solo si tienes esas herramientas. No se escribe en la tarea.
-    Con 'merged', si la tarea declara `resuelve`, la respuesta recuerda los pendientes que siguen abiertos (no
-    cierra ni modifica ninguno)."""
+def update_task(project: str, id: str, status: str, result: str = "", commit: str = "") -> str:
+    """Changes a task's status (todo, in_progress, in_review, failed, merged, discarded; the Spanish names pendiente,
+    en_curso, en_revision, fallida, integrada, descartada are still accepted until 1.1). Stored in English.
+    `result`: what was done, tests run and their summarized output, deviations from the spec.
+    'merged' and 'discarded' only with the user's explicit confirmation.
+    To ask for corrections after reviewing a task use `request_changes`, not this status change.
+    With 'in_progress', the response brings the guidance of active integrations (execute, verify, close), computed at
+    that moment; it is conditional: follow it only if you have those tools. It is not written into the task.
+    With 'merged', if the task declares `resolves`, the response reminds which pending items are still open (it
+    never closes or modifies any)."""
+    proyecto, estado, resultado = project, status, result
+
     def f():
         nuevo = _normalizar_estado("tarea", estado)
         if nuevo == "changes_requested":
-            raise ErrorMemoria("Para devolver una tarea usa `devolver_tarea` (registra la revisión con formato fijo).")
+            raise ErrorMemoria("To send a task back use `request_changes` (it records the review in a fixed format).")
         with _bloqueo(proyecto):
             ruta = _buscar_registro(_mem(proyecto) / TAREAS, id)
             meta, cuerpo = _leer_registro(ruta)
             if meta.get("status") == "in_review" and nuevo == "todo":
-                raise ErrorMemoria(f"{meta['id']} está en revisión: para pedir correcciones usa `devolver_tarea`; "
-                                   "'todo' es solo para tareas que nunca se ejecutaron.")
+                raise ErrorMemoria(f"{meta['id']} is in review: to ask for corrections use `request_changes`; "
+                                   "'todo' is only for tasks that never ran.")
             meta["status"], meta["updated"] = nuevo, _hoy()
             if commit:
                 meta["commit"] = commit
@@ -167,36 +176,41 @@ def actualizar_tarea(proyecto: str, id: str, estado: str, resultado: str = "", c
 
 
 @herramienta
-def devolver_tarea(proyecto: str, id: str, observaciones: str, criterios_adicionales: str = "") -> str:
-    """Devuelve una tarea en revisión para que el agente de código la corrija en la MISMA rama.
-    Úsala solo cuando el usuario, tras revisar el resultado, decida pedir cambios.
-    `observaciones`: qué se aprueba y qué falla, con el porqué. `criterios_adicionales`: lista verificable de lo que
-    debe cumplir la corrección (se suma a los criterios originales). La tarea queda 'changes_requested' y se reejecuta
-    con /tarea T-NNN, que continúa sobre la rama existente sin reescribir los commits anteriores."""
+def request_changes(project: str, id: str, findings: str, additional_criteria: str = "") -> str:
+    """Sends a task in review back so the coding agent fixes it on the SAME branch.
+    Use it only when the user, after reviewing the result, decides to ask for changes.
+    `findings`: what is approved and what fails, and why. `additional_criteria`: a verifiable list of what the fix
+    must meet (added to the original criteria). The task becomes 'changes_requested' and is re-run with
+    /run-task T-NNN, which continues on the existing branch without rewriting earlier commits.
+    To extend a task that has not run yet (todo), use amend_task."""
+    proyecto, observaciones, criterios_adicionales = project, findings, additional_criteria
+
     def f():
         if not observaciones.strip():
-            raise ErrorMemoria("`observaciones` es obligatorio: el agente de código ejecuta sin este chat.")
+            raise ErrorMemoria("`findings` is required: the coding agent runs without this chat.")
         with _bloqueo(proyecto):
             ruta = _buscar_registro(_mem(proyecto) / TAREAS, id)
             meta, cuerpo = _leer_registro(ruta)
             if meta.get("status") not in ("in_review", "failed"):
-                raise ErrorMemoria(f"{meta['id']} está '{meta.get('status')}': solo se devuelven tareas in_review o failed.")
+                raise ErrorMemoria(f"{meta['id']} is '{meta.get('status')}': only in_review or failed tasks can be sent "
+                                   "back (use amend_task to extend a todo task).")
             n = int(meta.get("reviews", 0) or 0) + 1
             meta.update(status="changes_requested", updated=_hoy(), reviews=n)
-            base = f" (sobre el commit {meta['commit']})" if meta.get("commit") else ""
+            base = f" (on top of commit {meta['commit']})" if meta.get("commit") else ""
             bloque = [f"### Review {n} · {_hoy()} · changes_requested",
-                      f"Corregir en la MISMA rama `{meta.get('branch', '(la de la tarea)')}`{base}, con commits nuevos; "
-                      "los criterios originales siguen vigentes.", "", "**Findings**", observaciones.strip()]
+                      f"Fix on the SAME branch `{meta.get('branch', '(the task branch)')}`{base}, with new commits; "
+                      "the original criteria still apply.", "", "**Findings**", observaciones.strip()]
             if criterios_adicionales.strip():
                 bloque += ["", "**Additional criteria**", criterios_adicionales.strip()]
             cuerpo = _anexar_resultado(cuerpo, "\n".join(bloque))
             _escribir_registro(ruta, meta, cuerpo)
             sha = _commit(proyecto, [ruta], f"{meta['id']} → changes_requested (review {n})")
-            return f"{meta['id']} → changes_requested (revisión {n}) · commit {sha}\nReejecutar en Claude Code: /tarea {meta['id']}"
+            return f"{meta['id']} → changes_requested (review {n}) · commit {sha}\nRe-run it with: /run-task {meta['id']}"
     return _ejecutar(f)
 
 
 @herramienta
-def listar_tareas(proyecto: str, incluir_cerradas: bool = False) -> str:
-    """Lista las tareas de Claude Code con su estado y rama."""
-    return _ejecutar(lambda: "\n".join(_resumen_tareas(proyecto, not incluir_cerradas)) or "(sin tareas)")
+def list_tasks(project: str, include_closed: bool = False) -> str:
+    """Lists the code tasks with their status and branch. Closed ones (merged, discarded) only with
+    include_closed=True."""
+    return _ejecutar(lambda: "\n".join(_resumen_tareas(project, not include_closed)) or "(no tasks)")

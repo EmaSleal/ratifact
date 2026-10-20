@@ -3,13 +3,14 @@ from ratifact.integraciones.base import Integracion, carpeta_existe
 
 INTEGRACION = Integracion(
     nombre="gentle-ai",
-    alcance="proyecto",
+    alcance="project",
     detectar=carpeta_existe(".atl"),
     prefijo="sdd-",
-    rol="orquestación: sub-agentes y skills para implementar",
-    limite="nunca decisiones ni estado de tareas; la spec es el contrato",
+    rol="orchestration: sub-agents and skills to implement",
+    limite="never decisions or task status; the spec is the contract",
     guia={
-        "ejecutar": "si tienes el orquestador de gentle-ai (sub-agentes y skills `sdd-*`), puedes implementar con "
-                    "ellos: la spec define el contrato y los criterios, no el método; si no, implementa directamente.",
+        "execute": "if you have the gentle-ai orchestrator (sub-agents and `sdd-*` skills), you may implement with "
+                   "them: the spec defines the contract and the criteria, not the method; otherwise implement "
+                   "directly.",
     },
 )

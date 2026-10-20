@@ -34,8 +34,8 @@ def _git(mem, *a):
 
 
 def _migrar(srv):
-    salida = srv.obtener_contexto(proyecto="demo")
-    assert "migrada al esquema v2" in salida, salida
+    salida = srv.get_context(project="demo")
+    assert "migrated to schema v2" in salida, salida
     return salida
 
 
@@ -117,7 +117,7 @@ def test_vistas_regeneradas_esquema_e_intocables(srv, proyecto_v1):
     assert json.loads(_leer(mem, "esquema.json")) == {"version": 2}                   # centinela (ADR-030)
     for rel in ("INDEX.md", "docs/notas.md", ".gitignore"):
         assert (mem / rel).read_bytes() == antes[rel], rel
-    assert "Idioma del contenido: es" in srv.obtener_contexto(proyecto="demo")
+    assert "Content language: es" in srv.get_context(project="demo")
 
 
 # ───────────────────────── criterio 4: el cuerpo no cambia ─────────────────────────
@@ -167,7 +167,7 @@ def test_etiquetas_solo_dentro_del_bloque_de_revision(srv, proyecto_v1):
 
 def test_marcador_de_resultado_v1_se_sigue_reconociendo(srv, proyecto_v1):
     mem = proyecto_v1["mem"]
-    salida = srv.actualizar_tarea(proyecto="demo", id="T-002", estado="en_curso", resultado="empecé")
+    salida = srv.update_task(project="demo", id="T-002", status="en_curso", result="empecé")
     assert "→ in_progress" in salida
     texto = _leer(mem, "tasks/T-002-pendiente.md")
     assert "(lo completa Claude Code al terminar)" not in texto and texto.endswith("in_progress\nempecé\n")
@@ -179,8 +179,8 @@ def test_cambios_sin_commit_impiden_migrar_y_no_tocan_nada(srv, proyecto_v1):
     mem = proyecto_v1["mem"]
     (mem / "INDEX.md").write_text("editado a mano\n")
     antes = foto(mem)
-    salida = srv.listar_tareas(proyecto="demo")
-    assert salida.startswith("ERROR:") and "cambios sin commit" in salida and "INDEX.md" in salida
+    salida = srv.list_tasks(project="demo")
+    assert salida.startswith("ERROR:") and "uncommitted changes" in salida and "INDEX.md" in salida
     assert foto(mem) == antes and _git(mem, "tag") == "" and log_git(mem) == ["memoria v1"]
 
 
@@ -197,8 +197,8 @@ def test_memoria_v1_sin_git_no_se_migra(srv, proyecto_v1):
     mem = proyecto_v1["mem"]
     shutil.rmtree(mem / ".git")
     antes = foto(mem)
-    salida = srv.obtener_contexto(proyecto="demo")
-    assert salida.startswith("ERROR:") and "no es un repositorio git" in salida
+    salida = srv.get_context(project="demo")
+    assert salida.startswith("ERROR:") and "is not a git repository" in salida
     assert foto(mem) == antes
 
 
@@ -224,12 +224,12 @@ def test_falla_a_mitad_restaura_y_el_siguiente_acceso_reintenta(srv, proyecto_v1
             raise OSError("disco lleno")
         real(ruta, tipo, informe)
     monkeypatch.setattr(migracion_v2, "_migrar_registro", falla_en_el_tercero)
-    salida = srv.registrar_pendiente(proyecto="demo", tema="T", contexto="c")
-    assert salida.startswith("ERROR:") and "disco lleno" in salida and "se reintentará" in salida
+    salida = srv.add_pending(project="demo", topic="T", context="c")
+    assert salida.startswith("ERROR:") and "disco lleno" in salida and "retried on the next call" in salida
     assert foto(mem) == antes and _git(mem, "status", "--porcelain") == ""
     assert log_git(mem) == ["memoria v1"] and _git(mem, "tag") == ""
     monkeypatch.setattr(migracion_v2, "_migrar_registro", real)
-    assert "migrada al esquema v2" in srv.registrar_pendiente(proyecto="demo", tema="T", contexto="c")
+    assert "migrated to schema v2" in srv.add_pending(project="demo", topic="T", context="c")
     assert _git(mem, "tag").split() == ["pre-v2"]
 
 
@@ -239,7 +239,7 @@ def test_carpeta_v1_vacia_vuelve_tras_una_falla(srv, proyecto_v1, monkeypatch):
     subprocess.run(["git", "-C", str(mem), "commit", "-qam", "sin sesiones"], check=True)
     assert (mem / "sesiones").is_dir() and not any((mem / "sesiones").iterdir())     # vacía, sin versionar
     monkeypatch.setattr(migracion_v2, "_regenerar_vistas_en", lambda m: (_ for _ in ()).throw(OSError("falla")))
-    assert srv.obtener_contexto(proyecto="demo").startswith("ERROR:")
+    assert srv.get_context(project="demo").startswith("ERROR:")
     assert (mem / "sesiones").is_dir() and not (mem / "sessions").exists()
 
 
@@ -247,7 +247,7 @@ def test_v2_no_se_migra_de_nuevo(srv, proyecto_v1):
     mem = proyecto_v1["mem"]
     _migrar(srv)
     historial = log_git(mem)
-    assert "migrada" not in srv.obtener_contexto(proyecto="demo")
+    assert "migrated" not in srv.get_context(project="demo")
     assert log_git(mem) == historial
 
 
@@ -260,8 +260,8 @@ def test_reversible_con_git_checkout_pre_v2(srv, proyecto_v1):
 
 
 def test_herramienta_de_solo_lectura_tambien_migra(srv, proyecto_v1):
-    salida = srv.listar_tareas(proyecto="demo")
-    assert "migrada al esquema v2" in salida and "**T-002** [todo] Tarea nueva" in salida
+    salida = srv.list_tasks(project="demo")
+    assert "migrated to schema v2" in salida and "**T-002** [todo] Tarea nueva" in salida
 
 
 # ───────────────────────── memorias reales (solo copias; se omite si no están) ─────────────────────────

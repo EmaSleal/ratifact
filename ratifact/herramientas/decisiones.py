@@ -1,5 +1,5 @@
-"""Herramientas de decisiones (ADR): registrar, confirmar (una o en lote), revisar, decidir con formulario,
-descartar y reemplazar."""
+"""Herramientas de decisiones (ADR): propose, accept (una o en lote), review, decide con formulario, reject y
+supersede."""
 from __future__ import annotations
 
 import re
@@ -18,14 +18,15 @@ from ratifact.vocabulario import DECISIONES
 
 
 @herramienta
-def registrar_decision(proyecto: str, titulo: str, decision: str, justificacion: str,
-                       alternativas: str = "", resumen: str = "") -> str:
-    """Crea un ADR. SIEMPRE queda como 'proposed'. Para acordarla, llama después confirmar_decision:
-    esa herramienta pide la aprobación del usuario. `resumen`: una línea para la vista de acuerdos.
-    Idempotente (ADR-019): si ya hay un ADR con este título (sin distinguir mayúsculas ni espacios) creado en
-    los últimos minutos Y TODAVÍA en estado 'proposed', no crea nada nuevo y devuelve el id existente. Si ese
-    ADR ya cambió de estado (p. ej. rejected: el usuario pidió otra versión), un humano ya intervino, así
-    que se registra una ADR nueva."""
+def propose_decision(project: str, title: str, decision: str, rationale: str,
+                     alternatives: str = "", summary: str = "") -> str:
+    """Creates an ADR. It is ALWAYS 'proposed'. To accept it, call accept_decision afterwards: that tool asks for
+    the user's approval. `summary`: one line for the decisions view.
+    Idempotent (ADR-019): if an ADR with this title (ignoring case and spaces) was created in the last minutes AND
+    is STILL 'proposed', nothing new is created and the existing id is returned. If that ADR already changed status
+    (e.g. rejected: the user asked for another version), a human already intervened, so a new ADR is recorded."""
+    proyecto, titulo, justificacion, alternativas, resumen = project, title, rationale, alternatives, summary
+
     def f():
         with _bloqueo(proyecto):
             carpeta = _mem(proyecto) / DECISIONES
@@ -43,23 +44,25 @@ def registrar_decision(proyecto: str, titulo: str, decision: str, justificacion:
                 cuerpo += f"\n## Alternatives considered\n{alternativas}\n"
             _escribir_registro(ruta, meta, cuerpo)
             sha = _commit(proyecto, [ruta, *_regenerar_vistas(proyecto)], f"{id_} {titulo} ({meta['status']})")
-            return f"{id_} registrada como {meta['status']} · commit {sha}"
+            return f"{id_} recorded as {meta['status']} · commit {sha}"
     return _ejecutar(f)
 
 
 @herramienta
-def confirmar_decision(proyecto: str, id: str, cita_usuario: str) -> str:
-    """Pasa una decisión de 'proposed' a 'accepted'. Es la ÚNICA vía para acordar una decisión y el cliente
-    pide la aprobación del usuario en cada llamada. `cita_usuario`: el texto literal con que el usuario
-    confirmó en el chat (queda guardado en el ADR como evidencia). Nunca la llames sin esa confirmación."""
+def accept_decision(project: str, id: str, user_quote: str) -> str:
+    """Moves a decision from 'proposed' to 'accepted'. It is the ONLY way to accept a decision and the client asks
+    for the user's approval on every call. `user_quote`: the user's literal words confirming it in the chat (stored
+    in the ADR as evidence). Never call it without that confirmation."""
+    proyecto, cita_usuario = project, user_quote
+
     def f():
         if len(cita_usuario.strip()) < 2:
-            raise ErrorMemoria("Falta cita_usuario: el texto literal con que el usuario confirmó.")
+            raise ErrorMemoria(FALTA_CITA)
         with _bloqueo(proyecto):
             ruta = _buscar_registro(_mem(proyecto) / DECISIONES, id)
             meta, cuerpo = _leer_registro(ruta)
             if meta.get("status") != "proposed":
-                raise ErrorMemoria(f"{meta.get('id')} está '{meta.get('status')}'; solo se confirman propuestas.")
+                raise ErrorMemoria(f"{meta.get('id')} is '{meta.get('status')}'; only proposed decisions can be accepted.")
             meta["status"], meta["accepted"] = "accepted", _hoy()
             cuerpo = cuerpo.rstrip() + f"\n\n## Acceptance ({_hoy()})\n> {cita_usuario.strip()}\n"
             _escribir_registro(ruta, meta, cuerpo)
@@ -69,18 +72,20 @@ def confirmar_decision(proyecto: str, id: str, cita_usuario: str) -> str:
 
 
 @herramienta
-def confirmar_decisiones_lote(proyecto: str, ids: list[str], cita_usuario: str) -> str:
-    """Confirma VARIAS propuestas con una sola aprobación del usuario, que ve la lista completa al aprobar. Úsala
-    solo cuando el usuario confirmó explícitamente esas decisiones en un mismo mensaje; `cita_usuario` es ese
-    mensaje literal. Todo o nada: si alguna no es propuesta o no existe, no se confirma ninguna."""
+def accept_decisions(project: str, ids: list[str], user_quote: str) -> str:
+    """Accepts SEVERAL proposals with a single user approval; the user sees the full list when approving. Use it only
+    when the user explicitly accepted those decisions in the same message; `user_quote` is that literal message.
+    All or nothing: if any of them is not proposed or does not exist, none is accepted."""
+    proyecto, cita_usuario = project, user_quote
+
     def f():
         if len(cita_usuario.strip()) < 2:
-            raise ErrorMemoria("Falta cita_usuario: el texto literal con que el usuario confirmó.")
+            raise ErrorMemoria(FALTA_CITA)
         unicos = list(dict.fromkeys(_normalizar_id(i) for i in ids if i.strip()))
         if not unicos:
-            raise ErrorMemoria("La lista de ids está vacía.")
+            raise ErrorMemoria("The list of ids is empty.")
         if len(unicos) > 30:
-            raise ErrorMemoria("Máximo 30 decisiones por lote.")
+            raise ErrorMemoria("At most 30 decisions per batch.")
         with _bloqueo(proyecto):
             carpeta = _mem(proyecto) / DECISIONES
             registros = []
@@ -88,7 +93,7 @@ def confirmar_decisiones_lote(proyecto: str, ids: list[str], cita_usuario: str) 
                 ruta = _buscar_registro(carpeta, id_)
                 meta, cuerpo = _leer_registro(ruta)
                 if meta.get("status") != "proposed":
-                    raise ErrorMemoria(f"{meta.get('id')} está '{meta.get('status')}'; no se confirmó ninguna.")
+                    raise ErrorMemoria(f"{meta.get('id')} is '{meta.get('status')}'; none was accepted.")
                 registros.append((ruta, meta, cuerpo))
             for ruta, meta, cuerpo in registros:
                 meta["status"], meta["accepted"] = "accepted", _hoy()
@@ -101,14 +106,16 @@ def confirmar_decisiones_lote(proyecto: str, ids: list[str], cita_usuario: str) 
 
 
 @herramienta
-def revisar_propuestas(proyecto: str, desde_id: str = "", cantidad: int = 10, resumen: bool = False) -> str:
-    """Devuelve las decisiones en estado 'proposed' para que el usuario decida confirmar, ajustar o descartar.
-    Paginado: `cantidad` por página (máx. 25) a partir de `desde_id` (p. ej. "ADR-020"). Con `resumen=True`
-    devuelve una línea por propuesta (útil para ver el panorama antes de entrar al detalle)."""
+def review_proposals(project: str, from_id: str = "", limit: int = 10, summary: bool = False) -> str:
+    """Returns the decisions in 'proposed' status so the user can decide to accept, adjust or reject them.
+    Paginated: `limit` per page (max 25) starting at `from_id` (e.g. "ADR-020"). With `summary=True` it returns one
+    line per proposal (useful to see the overview before going into detail)."""
+    proyecto, desde_id, cantidad, resumen = project, from_id, limit, summary
+
     def f():
         desde = _numero_id(desde_id) if desde_id else 0
         if desde is None:
-            raise ErrorMemoria(f"desde_id inválido: '{desde_id}' (usa la forma \"ADR-020\").")
+            raise ErrorMemoria(f"Invalid from_id: '{desde_id}' (use the form \"ADR-020\").")
         carpeta = _mem(proyecto) / DECISIONES
         archivos = sorted(carpeta.glob("ADR-*.md"), key=lambda a: _clave_id(a.name)) \
             if carpeta.exists() else []
@@ -118,29 +125,33 @@ def revisar_propuestas(proyecto: str, desde_id: str = "", cantidad: int = 10, re
             if m.get("status") == "proposed" and (_numero_id(m.get("id", "")) or 0) >= desde:
                 propuestas.append((m, cuerpo))
         if not propuestas:
-            return "(no hay propuestas pendientes)"
+            return SIN_PROPUESTAS
         n = max(1, min(cantidad, 25))
         pagina, resto = propuestas[:n], propuestas[n:]
         if resumen:
             cuerpo_txt = "\n".join(f"- **{m.get('id')}** {m.get('title')} — {m.get('summary', '')}" for m, _ in pagina)
         else:
-            cuerpo_txt = "\n\n---\n\n".join(f"{c.strip()}\n\n_(propuesta del {m.get('date')})_" for m, c in pagina)
-        pie = (f"\n\n(Quedan {len(resto)} propuesta(s): continúa con desde_id=\"{resto[0][0].get('id')}\".)"
+            cuerpo_txt = "\n\n---\n\n".join(f"{c.strip()}\n\n_(proposed on {m.get('date')})_" for m, c in pagina)
+        pie = (f"\n\n({len(resto)} proposal(s) left: continue with from_id=\"{resto[0][0].get('id')}\".)"
                if resto else "")
-        return (f"{len(propuestas)} propuesta(s) por revisar; se muestran {len(pagina)}. Preséntaselas al usuario como "
-                "preguntas de opción múltiple si la aplicación lo permite (confirmar / ajustar / descartar / posponer). "
-                "Luego: confirmar (confirmar_decision, o confirmar_decisiones_lote si el usuario aprueba varias en "
-                "un mismo mensaje), ajustar (registrar una nueva y reemplazar_decision) o descartar (descartar_decision). "
-                "Escrituras de a una, no en paralelo.\n\n" + cuerpo_txt + pie)
+        return (f"{len(propuestas)} proposal(s) to review; showing {len(pagina)}. Present them to the user as "
+                "multiple-choice questions if the app supports it (accept / adjust / reject / postpone). "
+                "Then: accept (accept_decision, or accept_decisions if the user approves several in the same "
+                "message), adjust (propose a new one and supersede_decision) or reject (reject_decision). "
+                "One write at a time, not in parallel.\n\n" + cuerpo_txt + pie)
     return _ejecutar(f)
 
 
+FALTA_CITA = "Missing user_quote: the user's literal words confirming the decision."
+SIN_PROPUESTAS = "(no proposals awaiting review)"
+
+
 class DecisionUsuario(BaseModel):
-    accion: str = Field(
-        json_schema_extra={"enum": ["confirmar", "descartar", "ajustar", "posponer"]},
-        description="confirmar = pasa a accepted · descartar = se cierra (rejected) · ajustar = pedir una nueva versión · "
-                    "posponer = sigue como propuesta")
-    comentario: str = Field(default="", description="Opcional. Motivo del descarte o qué cambiar al ajustar.")
+    action: str = Field(
+        json_schema_extra={"enum": ["accept", "reject", "adjust", "postpone"]},
+        description="accept = becomes accepted · reject = closed (rejected) · adjust = ask for a new version · "
+                    "postpone = stays proposed")
+    comment: str = Field(default="", description="Optional. Reason for rejecting, or what to change when adjusting.")
 
 
 def _texto_propuesta(cuerpo: str, limite: int = 1200) -> str:
@@ -150,17 +161,17 @@ def _texto_propuesta(cuerpo: str, limite: int = 1200) -> str:
 
 @herramienta_async
 @_ejecutar_async
-async def decidir_propuestas(proyecto: str, ctx: Context) -> str:
-    """SOLO para aplicaciones que soportan formularios MCP (elicitation), como Claude Code. En Claude Desktop o
-    claude.ai NO la uses: llama revisar_propuestas y presenta las opciones (confirmar / ajustar / descartar /
-    posponer) con tus propias tarjetas o preguntas de opción múltiple; luego aplica confirmar_decision o
-    descartar_decision según lo que el usuario elija.
-    Abre un formulario por cada propuesta pendiente; las respuestas vienen del usuario sin pasar por el modelo,
-    así que confirmaciones y descartes se aplican directamente. Devuelve el resumen y las propuestas a ajustar."""
+async def decide_proposals(project: str, ctx: Context) -> str:
+    """ONLY for apps that support MCP forms (elicitation), such as Claude Code. In Claude Desktop or claude.ai do NOT
+    use it: call review_proposals and present the options (accept / adjust / reject / postpone) with your own cards
+    or multiple-choice questions; then apply accept_decision or reject_decision as the user chooses.
+    Opens one form per pending proposal; the answers come from the user without going through the model, so
+    acceptances and rejections are applied directly. Returns the summary and the proposals to adjust."""
+    proyecto = project
     params = getattr(ctx.session, "client_params", None)
     if not (params and params.capabilities and params.capabilities.elicitation):
-        return ("Esta aplicación no soporta formularios MCP. Usa revisar_propuestas y presenta las opciones con tus "
-                "propias tarjetas o preguntas de opción múltiple; luego confirmar_decision / descartar_decision.")
+        return ("This app does not support MCP forms. Use review_proposals and present the options with your own "
+                "cards or multiple-choice questions; then accept_decision / reject_decision.")
     carpeta = _mem(proyecto) / DECISIONES
     pendientes = []
     for p in sorted(carpeta.glob("ADR-*.md"), key=lambda a: _clave_id(a.name)) if carpeta.exists() else []:
@@ -168,58 +179,60 @@ async def decidir_propuestas(proyecto: str, ctx: Context) -> str:
         if m.get("status") == "proposed":
             pendientes.append((m.get("id"), cuerpo))
     if not pendientes:
-        return "(no hay propuestas pendientes)"
+        return SIN_PROPUESTAS
 
     hechos, ajustes, pospuestas = [], [], []
     for i, (id_, cuerpo) in enumerate(pendientes, 1):
         try:
-            r = await ctx.elicit(f"Propuesta {i} de {len(pendientes)}\n\n{_texto_propuesta(cuerpo)}", DecisionUsuario)
+            r = await ctx.elicit(f"Proposal {i} of {len(pendientes)}\n\n{_texto_propuesta(cuerpo)}", DecisionUsuario)
         except Exception as e:   # el cliente no implementa formularios (elicitation)
-            return ("ERROR: este cliente no soporta formularios interactivos "
-                    f"({type(e).__name__}). Usa revisar_propuestas y luego confirmar_decision / descartar_decision.")
+            return ("ERROR: this client does not support interactive forms "
+                    f"({type(e).__name__}). Use review_proposals and then accept_decision / reject_decision.")
         if r.action != "accept" or r.data is None:
             pospuestas += [x[0] for x in pendientes[i - 1:]]
-            hechos.append(f"Revisión interrumpida por el usuario en {id_} ({r.action}).")
+            hechos.append(f"Review interrupted by the user at {id_} ({r.action}).")
             break
         d = r.data
-        nota = d.comentario.strip()
-        if d.accion not in ("confirmar", "descartar", "ajustar", "posponer"):
+        nota = d.comment.strip()
+        if d.action not in ("accept", "reject", "adjust", "postpone"):
             pospuestas.append(id_)
             continue
-        if d.accion == "confirmar":
-            cita = "[formulario] confirmar" + (f" — {nota}" if nota else "")
-            hechos.append(f"{id_}: {confirmar_decision(proyecto=proyecto, id=id_, cita_usuario=cita)}")
-        elif d.accion == "descartar":
-            motivo = nota or "Descartada por el usuario desde el formulario."
-            hechos.append(f"{id_}: {descartar_decision(proyecto=proyecto, id=id_, motivo=motivo)}")
-        elif d.accion == "ajustar":
-            ajustes.append(f"- {id_}: {nota or '(sin indicaciones: pregúntale qué cambiar)'}")
+        if d.action == "accept":
+            cita = "[form] accept" + (f" — {nota}" if nota else "")
+            hechos.append(f"{id_}: {accept_decision(project=proyecto, id=id_, user_quote=cita)}")
+        elif d.action == "reject":
+            motivo = nota or "Rejected by the user from the form."
+            hechos.append(f"{id_}: {reject_decision(project=proyecto, id=id_, reason=motivo)}")
+        elif d.action == "adjust":
+            ajustes.append(f"- {id_}: {nota or '(no instructions: ask the user what to change)'}")
         else:
             pospuestas.append(id_)
 
-    salida = ["Resultado de la revisión:", *(f"- {h}" for h in hechos)]
+    salida = ["Review result:", *(f"- {h}" for h in hechos)]
     if pospuestas:
-        salida.append(f"- Siguen como propuesta: {', '.join(pospuestas)}")
+        salida.append(f"- Still proposed: {', '.join(pospuestas)}")
     if ajustes:
-        salida += ["", "El usuario pidió AJUSTAR estas propuestas. Redacta la versión nueva de cada una con "
-                   "registrar_decision, luego reemplazar_decision(anterior, nueva), y vuelve a ofrecerle "
-                   "decidir_propuestas para que confirme las nuevas:", *ajustes]
+        salida += ["", "The user asked to ADJUST these proposals. Draft the new version of each with "
+                   "propose_decision, then supersede_decision(old, new), and offer decide_proposals again so "
+                   "the user can accept the new ones:", *ajustes]
     return "\n".join(salida)
 
 
 @herramienta
-def descartar_decision(proyecto: str, id: str, motivo: str) -> str:
-    """Cierra una propuesta que el usuario NO aprueba. Queda como 'rejected' con su motivo (no se borra: el
-    historial conserva qué se consideró y por qué no se adoptó). Solo por indicación explícita del usuario."""
+def reject_decision(project: str, id: str, reason: str) -> str:
+    """Closes a proposal the user does NOT approve. It becomes 'rejected' with its reason (it is not deleted: the
+    history keeps what was considered and why it was not adopted). Only on the user's explicit instruction."""
+    proyecto, motivo = project, reason
+
     def f():
         if len(motivo.strip()) < 3:
-            raise ErrorMemoria("Falta el motivo del descarte.")
+            raise ErrorMemoria("Missing the reason for rejecting.")
         with _bloqueo(proyecto):
             ruta = _buscar_registro(_mem(proyecto) / DECISIONES, id)
             meta, cuerpo = _leer_registro(ruta)
             if meta.get("status") != "proposed":
-                raise ErrorMemoria(f"{meta.get('id')} está '{meta.get('status')}'; solo se descartan propuestas. "
-                                   "Para dejar sin efecto una acordada, usa reemplazar_decision.")
+                raise ErrorMemoria(f"{meta.get('id')} is '{meta.get('status')}'; only proposed decisions can be "
+                                   "rejected. To revoke an accepted one, use supersede_decision.")
             meta["status"], meta["rejected"] = "rejected", _hoy()
             cuerpo = cuerpo.rstrip() + f"\n\n## Rejected ({_hoy()})\n{motivo.strip()}\n"
             _escribir_registro(ruta, meta, cuerpo)
@@ -229,8 +242,11 @@ def descartar_decision(proyecto: str, id: str, motivo: str) -> str:
 
 
 @herramienta
-def reemplazar_decision(proyecto: str, id_anterior: str, id_nuevo: str) -> str:
-    """Marca una decisión como reemplazada por otra ya registrada (estado 'superseded'; las decisiones no se borran)."""
+def supersede_decision(project: str, old_id: str, new_id: str) -> str:
+    """Marks a decision as superseded by another one already recorded (status 'superseded'; decisions are never
+    deleted)."""
+    proyecto, id_anterior, id_nuevo = project, old_id, new_id
+
     def f():
         with _bloqueo(proyecto):
             carpeta = _mem(proyecto) / DECISIONES
@@ -241,5 +257,5 @@ def reemplazar_decision(proyecto: str, id_anterior: str, id_nuevo: str) -> str:
             meta["status"], meta["superseded_by"] = "superseded", nuevo
             _escribir_registro(ruta, meta, cuerpo)
             sha = _commit(proyecto, [ruta, *_regenerar_vistas(proyecto)], f"{meta['id']} superseded by {nuevo}")
-            return f"{meta['id']} → superseded (reemplazada por {nuevo}) · commit {sha}"
+            return f"{meta['id']} → superseded (by {nuevo}) · commit {sha}"
     return _ejecutar(f)

@@ -1,200 +1,36 @@
 {
   "herramientas": [
     {
-      "descripcion": "Reescribe INDEX.md (resumen ejecutivo del proyecto). Debe ser un RESUMEN regenerado, no un\n    acumulado; límite ~6000 caracteres.",
-      "esquema_entrada": {
-        "properties": {
-          "contenido": {
-            "title": "Contenido",
-            "type": "string"
-          },
-          "proyecto": {
-            "title": "Proyecto",
-            "type": "string"
-          }
-        },
-        "required": [
-          "proyecto",
-          "contenido"
-        ],
-        "title": "actualizar_indiceArguments",
-        "type": "object"
-      },
-      "nombre": "actualizar_indice"
-    },
-    {
-      "descripcion": "Actualiza un proyecto ya registrado en projects.json sin editarlo a mano. Reemplaza a configurar_pruebas\n    (eliminada). Indica al menos uno de `ruta`, `pruebas`, `repositorio`, `redetectar=True` o `integraciones`;\n    sin ninguno, devuelve error y no toca el archivo.\n    `ruta`: nueva carpeta del código, cuando se movió. Mismas validaciones que registrar_proyecto (debe quedar\n    dentro de la carpeta de proyectos, ser una carpeta existente, y no contener la memoria del proyecto —\n    ADR-010). Si el proyecto es de varios repos y el `pruebas` guardado queda con claves que ya no son repos\n    bajo la ruta nueva, el cambio se aplica igual pero la respuesta avisa cuáles y sugiere `redetectar=True`.\n    `pruebas`: comando con que el agente de código verifica las tareas (/tarea). En proyectos de varios repos,\n    `repositorio` indica a cuál se aplica.\n    `redetectar`: True para volver a detectar el comando a partir de los archivos del proyecto en vez de darlo\n    con `pruebas` (ambos a la vez son incompatibles: no tiene sentido pedir redetección y dar el comando).\n    En un proyecto de un solo repo redetecta el comando completo; en uno de varios repos redetecta todos, o\n    solo `repositorio` si se indica.\n    `integraciones`: activa o apaga integraciones opcionales del proyecto, p. ej. \"codegraph=off,gentle-ai=auto\"\n    (valores auto|off; por defecto auto: se usan si se detectan). Una apagada no aparece en ninguna respuesta.",
-      "esquema_entrada": {
-        "properties": {
-          "integraciones": {
-            "default": "",
-            "title": "Integraciones",
-            "type": "string"
-          },
-          "nombre": {
-            "title": "Nombre",
-            "type": "string"
-          },
-          "pruebas": {
-            "default": "",
-            "title": "Pruebas",
-            "type": "string"
-          },
-          "redetectar": {
-            "default": false,
-            "title": "Redetectar",
-            "type": "boolean"
-          },
-          "repositorio": {
-            "default": "",
-            "title": "Repositorio",
-            "type": "string"
-          },
-          "ruta": {
-            "default": "",
-            "title": "Ruta",
-            "type": "string"
-          }
-        },
-        "required": [
-          "nombre"
-        ],
-        "title": "actualizar_proyectoArguments",
-        "type": "object"
-      },
-      "nombre": "actualizar_proyecto"
-    },
-    {
-      "descripcion": "Cambia el estado de una tarea (todo, in_progress, in_review, failed, merged, discarded; también acepta los\n    nombres en español: pendiente, en_curso, en_revision, fallida, integrada, descartada). Se guarda en inglés.\n    `resultado`: qué se hizo, pruebas ejecutadas y su salida resumida, desvíos respecto de la spec.\n    'merged' y 'discarded' solo con confirmación explícita del usuario.\n    Para pedir correcciones tras revisar una tarea usa `devolver_tarea`, no este cambio de estado.\n    Con 'in_progress', la respuesta trae la guía de integraciones activas (ejecutar, verificar, cerrar), calculada en\n    ese momento; es condicional: síguela solo si tienes esas herramientas. No se escribe en la tarea.\n    Con 'merged', si la tarea declara `resuelve`, la respuesta recuerda los pendientes que siguen abiertos (no\n    cierra ni modifica ninguno).",
-      "esquema_entrada": {
-        "properties": {
-          "commit": {
-            "default": "",
-            "title": "Commit",
-            "type": "string"
-          },
-          "estado": {
-            "title": "Estado",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "proyecto": {
-            "title": "Proyecto",
-            "type": "string"
-          },
-          "resultado": {
-            "default": "",
-            "title": "Resultado",
-            "type": "string"
-          }
-        },
-        "required": [
-          "proyecto",
-          "id",
-          "estado"
-        ],
-        "title": "actualizar_tareaArguments",
-        "type": "object"
-      },
-      "nombre": "actualizar_tarea"
-    },
-    {
-      "descripcion": "Busca texto (sin distinguir mayúsculas) en archivos de texto del proyecto y devuelve\n    fragmentos con ruta y línea. Úsala antes de leer documentos completos.\n    Primero salen los registros de la memoria (\"ID · estado · título (ruta)\"): el que tiene `texto` como id (p. ej.\n    \"T-1\", \"adr-20\") y hasta 5 cuyo título lo contiene al inicio de una palabra; luego las líneas de la memoria y\n    las del código, repartiendo el resto a partes iguales. En cada sección van primero los archivos cuyo nombre\n    contiene `texto` al inicio de una palabra o tramo camelCase (si ninguna línea coincide: \"ruta: (coincide el\n    nombre del archivo)\"), y se muestra una línea por archivo antes de repetir archivos. `max_resultados` cuenta\n    todas las líneas; si se omite algo, la última línea dice cuántas líneas (y archivos) por sección.",
-      "esquema_entrada": {
-        "properties": {
-          "max_resultados": {
-            "default": 20,
-            "title": "Max Resultados",
-            "type": "integer"
-          },
-          "proyecto": {
-            "title": "Proyecto",
-            "type": "string"
-          },
-          "texto": {
-            "title": "Texto",
-            "type": "string"
-          }
-        },
-        "required": [
-          "proyecto",
-          "texto"
-        ],
-        "title": "buscarArguments",
-        "type": "object"
-      },
-      "nombre": "buscar"
-    },
-    {
-      "descripcion": "Cierra un pendiente (estado 'closed'). Si la resolución generó una decisión, indica su id_decision.",
+      "descripcion": "Moves a decision from 'proposed' to 'accepted'. It is the ONLY way to accept a decision and the client asks\n    for the user's approval on every call. `user_quote`: the user's literal words confirming it in the chat (stored\n    in the ADR as evidence). Never call it without that confirmation.",
       "esquema_entrada": {
         "properties": {
           "id": {
             "title": "Id",
             "type": "string"
           },
-          "id_decision": {
-            "default": "",
-            "title": "Id Decision",
+          "project": {
+            "title": "Project",
             "type": "string"
           },
-          "proyecto": {
-            "title": "Proyecto",
-            "type": "string"
-          },
-          "resolucion": {
-            "title": "Resolucion",
+          "user_quote": {
+            "title": "User Quote",
             "type": "string"
           }
         },
         "required": [
-          "proyecto",
+          "project",
           "id",
-          "resolucion"
+          "user_quote"
         ],
-        "title": "cerrar_pendienteArguments",
+        "title": "accept_decisionArguments",
         "type": "object"
       },
-      "nombre": "cerrar_pendiente"
+      "nombre": "accept_decision"
     },
     {
-      "descripcion": "Pasa una decisión de 'proposed' a 'accepted'. Es la ÚNICA vía para acordar una decisión y el cliente\n    pide la aprobación del usuario en cada llamada. `cita_usuario`: el texto literal con que el usuario\n    confirmó en el chat (queda guardado en el ADR como evidencia). Nunca la llames sin esa confirmación.",
+      "descripcion": "Accepts SEVERAL proposals with a single user approval; the user sees the full list when approving. Use it only\n    when the user explicitly accepted those decisions in the same message; `user_quote` is that literal message.\n    All or nothing: if any of them is not proposed or does not exist, none is accepted.",
       "esquema_entrada": {
         "properties": {
-          "cita_usuario": {
-            "title": "Cita Usuario",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "proyecto": {
-            "title": "Proyecto",
-            "type": "string"
-          }
-        },
-        "required": [
-          "proyecto",
-          "id",
-          "cita_usuario"
-        ],
-        "title": "confirmar_decisionArguments",
-        "type": "object"
-      },
-      "nombre": "confirmar_decision"
-    },
-    {
-      "descripcion": "Confirma VARIAS propuestas con una sola aprobación del usuario, que ve la lista completa al aprobar. Úsala\n    solo cuando el usuario confirmó explícitamente esas decisiones en un mismo mensaje; `cita_usuario` es ese\n    mensaje literal. Todo o nada: si alguna no es propuesta o no existe, no se confirma ninguna.",
-      "esquema_entrada": {
-        "properties": {
-          "cita_usuario": {
-            "title": "Cita Usuario",
-            "type": "string"
-          },
           "ids": {
             "items": {
               "type": "string"
@@ -202,550 +38,768 @@
             "title": "Ids",
             "type": "array"
           },
-          "proyecto": {
-            "title": "Proyecto",
+          "project": {
+            "title": "Project",
+            "type": "string"
+          },
+          "user_quote": {
+            "title": "User Quote",
             "type": "string"
           }
         },
         "required": [
-          "proyecto",
+          "project",
           "ids",
-          "cita_usuario"
+          "user_quote"
         ],
-        "title": "confirmar_decisiones_loteArguments",
+        "title": "accept_decisionsArguments",
         "type": "object"
       },
-      "nombre": "confirmar_decisiones_lote"
+      "nombre": "accept_decisions"
     },
     {
-      "descripcion": "Crea un archivo de texto NUEVO en una zona autorizada (por defecto .project/ y docs/). Falla si ya existe.\n    Separada de guardar_documento para que el usuario pueda exigir aprobación al crear archivos.",
+      "descripcion": "Records an open question or unresolved topic. Idempotent (ADR-019): if a pending item with this topic\n    (ignoring case and spaces) was created in the last minutes AND is STILL 'open', nothing new is created and the\n    existing id is returned. If that item was already closed, a human already intervened, so a new one is recorded.",
       "esquema_entrada": {
         "properties": {
-          "contenido": {
-            "title": "Contenido",
+          "context": {
+            "title": "Context",
             "type": "string"
           },
-          "motivo": {
+          "owner": {
             "default": "",
-            "title": "Motivo",
+            "title": "Owner",
             "type": "string"
           },
-          "proyecto": {
-            "title": "Proyecto",
+          "project": {
+            "title": "Project",
             "type": "string"
           },
-          "ruta": {
-            "title": "Ruta",
+          "topic": {
+            "title": "Topic",
             "type": "string"
           }
         },
         "required": [
-          "proyecto",
-          "ruta",
-          "contenido"
+          "project",
+          "topic",
+          "context"
         ],
-        "title": "crear_documentoArguments",
+        "title": "add_pendingArguments",
         "type": "object"
       },
-      "nombre": "crear_documento"
+      "nombre": "add_pending"
     },
     {
-      "descripcion": "SOLO para aplicaciones que soportan formularios MCP (elicitation), como Claude Code. En Claude Desktop o\n    claude.ai NO la uses: llama revisar_propuestas y presenta las opciones (confirmar / ajustar / descartar /\n    posponer) con tus propias tarjetas o preguntas de opción múltiple; luego aplica confirmar_decision o\n    descartar_decision según lo que el usuario elija.\n    Abre un formulario por cada propuesta pendiente; las respuestas vienen del usuario sin pasar por el modelo,\n    así que confirmaciones y descartes se aplican directamente. Devuelve el resumen y las propuestas a ajustar.",
+      "descripcion": "Extends a task that has not run yet (status todo) or was sent back (changes_requested) with additional\n    acceptance criteria and/or notes. Any other status is rejected (after a review, use request_changes).\n    Appends a dated \"### Amendment N\" block (sub-labels \"Additional criteria\" / \"Notes\") to the task's \"Amendments\"\n    section; the original criteria stay untouched. One commit per amendment; give at least one of the two fields.\n    Idempotent (ADR-019): an identical amendment recorded in the last minutes is not written again.",
       "esquema_entrada": {
         "properties": {
-          "proyecto": {
-            "title": "Proyecto",
-            "type": "string"
-          }
-        },
-        "required": [
-          "proyecto"
-        ],
-        "title": "decidir_propuestasArguments",
-        "type": "object"
-      },
-      "nombre": "decidir_propuestas"
-    },
-    {
-      "descripcion": "Cierra una propuesta que el usuario NO aprueba. Queda como 'rejected' con su motivo (no se borra: el\n    historial conserva qué se consideró y por qué no se adoptó). Solo por indicación explícita del usuario.",
-      "esquema_entrada": {
-        "properties": {
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "motivo": {
-            "title": "Motivo",
-            "type": "string"
-          },
-          "proyecto": {
-            "title": "Proyecto",
-            "type": "string"
-          }
-        },
-        "required": [
-          "proyecto",
-          "id",
-          "motivo"
-        ],
-        "title": "descartar_decisionArguments",
-        "type": "object"
-      },
-      "nombre": "descartar_decision"
-    },
-    {
-      "descripcion": "Devuelve una tarea en revisión para que el agente de código la corrija en la MISMA rama.\n    Úsala solo cuando el usuario, tras revisar el resultado, decida pedir cambios.\n    `observaciones`: qué se aprueba y qué falla, con el porqué. `criterios_adicionales`: lista verificable de lo que\n    debe cumplir la corrección (se suma a los criterios originales). La tarea queda 'changes_requested' y se reejecuta\n    con /tarea T-NNN, que continúa sobre la rama existente sin reescribir los commits anteriores.",
-      "esquema_entrada": {
-        "properties": {
-          "criterios_adicionales": {
+          "additional_criteria": {
             "default": "",
-            "title": "Criterios Adicionales",
+            "title": "Additional Criteria",
             "type": "string"
           },
           "id": {
             "title": "Id",
             "type": "string"
           },
-          "observaciones": {
-            "title": "Observaciones",
-            "type": "string"
-          },
-          "proyecto": {
-            "title": "Proyecto",
-            "type": "string"
-          }
-        },
-        "required": [
-          "proyecto",
-          "id",
-          "observaciones"
-        ],
-        "title": "devolver_tareaArguments",
-        "type": "object"
-      },
-      "nombre": "devolver_tarea"
-    },
-    {
-      "descripcion": "Modifica un archivo de texto EXISTENTE en una zona autorizada. modo: 'reemplazar' | 'anexar'.\n    Para crear un archivo nuevo usa crear_documento.",
-      "esquema_entrada": {
-        "properties": {
-          "contenido": {
-            "title": "Contenido",
-            "type": "string"
-          },
-          "modo": {
-            "default": "reemplazar",
-            "title": "Modo",
-            "type": "string"
-          },
-          "motivo": {
+          "notes": {
             "default": "",
-            "title": "Motivo",
+            "title": "Notes",
             "type": "string"
           },
-          "proyecto": {
-            "title": "Proyecto",
-            "type": "string"
-          },
-          "ruta": {
-            "title": "Ruta",
+          "project": {
+            "title": "Project",
             "type": "string"
           }
         },
         "required": [
-          "proyecto",
-          "ruta",
-          "contenido"
+          "project",
+          "id"
         ],
-        "title": "guardar_documentoArguments",
+        "title": "amend_taskArguments",
         "type": "object"
       },
-      "nombre": "guardar_documento"
+      "nombre": "amend_task"
     },
     {
-      "descripcion": "Crea la estructura .project/ vacía de un proyecto registrado (idempotente), en el esquema actual (v2:\n    decisions/, pending/, sessions/, tasks/, content_language \"en\").",
+      "descripcion": "Closes a pending item (status 'closed'). If the resolution produced a decision, give its decision_id.",
       "esquema_entrada": {
         "properties": {
-          "proyecto": {
-            "title": "Proyecto",
+          "decision_id": {
+            "default": "",
+            "title": "Decision Id",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          },
+          "resolution": {
+            "title": "Resolution",
             "type": "string"
           }
         },
         "required": [
-          "proyecto"
+          "project",
+          "id",
+          "resolution"
         ],
-        "title": "inicializar_memoriaArguments",
+        "title": "close_pendingArguments",
         "type": "object"
       },
-      "nombre": "inicializar_memoria"
+      "nombre": "close_pending"
     },
     {
-      "descripcion": "Devuelve, listas para copiar, las instrucciones del proyecto de Claude y el bloque para CLAUDE.md/AGENTS.md\n    con el nombre correcto del proyecto. Entrégaselas al usuario tal cual, sin resumir.",
+      "descripcion": "Creates a NEW text file in an allowed area (by default .project/ and docs/). Fails if it already exists.\n    Separate from update_document so the user can require approval for creating files.",
       "esquema_entrada": {
         "properties": {
-          "proyecto": {
-            "title": "Proyecto",
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
             "type": "string"
           }
         },
         "required": [
-          "proyecto"
+          "project",
+          "path",
+          "content"
         ],
-        "title": "instrucciones_proyectoArguments",
+        "title": "create_documentArguments",
         "type": "object"
       },
-      "nombre": "instrucciones_proyecto"
+      "nombre": "create_document"
     },
     {
-      "descripcion": "Lee un archivo de texto del proyecto, opcionalmente un rango de líneas (1-indexado).\n    Acepta también el id de un registro de la memoria (\"T-24\", \"tasks/T-024.md\", \"ADR-020-slug.md\"): si la ruta no\n    existe, lee el registro real y antepone la línea \"(→ .project/<carpeta>/<archivo>)\". Una ruta con la carpeta v1\n    (.project/tareas/…, .project/acuerdos.md…) se traduce y se avisa igual.",
+      "descripcion": "Creates a work specification for the coding agent in .project/tasks/T-NNN.md (status 'todo').\n    In multi-repo projects, `repo` (required) is the folder where the work happens; in single-repo projects it is\n    ignored (the response says so).\n    It must be self-contained: the coding agent runs it without this chat. `acceptance_criteria`: a verifiable list\n    (tests that must pass, observable behavior). `decisions`: applicable ADR ids. `files`: paths likely to be\n    touched. The user runs it with /run-task T-NNN.\n    `resolves`: pending items the task resolves, comma-separated, each optionally with \"(partial)\" (e.g.\n    \"P-036, P-037 (partial)\"); they must exist and be open. Stored in the task (\"Resolves\" section); when the task is\n    merged, update_task reminds which ones are still open. It never closes pending items.\n    The response adds the line of detected integrations (not written into the task).\n    Idempotent (ADR-019): if a task with this title (ignoring case and spaces) was created in the last minutes AND is\n    STILL 'todo', nothing new is created and the existing id is returned (with the /run-task command to repeat to\n    the user). If that task already changed status (e.g. in_progress: it is running), a human or the coding agent\n    already intervened, so a new task is recorded.",
       "esquema_entrada": {
         "properties": {
-          "desde_linea": {
-            "default": 1,
-            "title": "Desde Linea",
-            "type": "integer"
-          },
-          "hasta_linea": {
-            "default": 0,
-            "title": "Hasta Linea",
-            "type": "integer"
-          },
-          "proyecto": {
-            "title": "Proyecto",
+          "acceptance_criteria": {
+            "title": "Acceptance Criteria",
             "type": "string"
           },
-          "ruta": {
-            "title": "Ruta",
+          "decisions": {
+            "default": "",
+            "title": "Decisions",
+            "type": "string"
+          },
+          "files": {
+            "default": "",
+            "title": "Files",
+            "type": "string"
+          },
+          "goal": {
+            "title": "Goal",
+            "type": "string"
+          },
+          "notes": {
+            "default": "",
+            "title": "Notes",
+            "type": "string"
+          },
+          "out_of_scope": {
+            "default": "",
+            "title": "Out Of Scope",
+            "type": "string"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          },
+          "repo": {
+            "default": "",
+            "title": "Repo",
+            "type": "string"
+          },
+          "resolves": {
+            "default": "",
+            "title": "Resolves",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
             "type": "string"
           }
         },
         "required": [
-          "proyecto",
-          "ruta"
+          "project",
+          "title",
+          "goal",
+          "acceptance_criteria"
         ],
-        "title": "leer_documentoArguments",
+        "title": "create_taskArguments",
         "type": "object"
       },
-      "nombre": "leer_documento"
+      "nombre": "create_task"
     },
     {
-      "descripcion": "Lista archivos (con tamaño) bajo una carpeta del proyecto.\n    En .project/decisions, pending y tasks lista un registro por línea: \"ID · estado · título  (ruta)\".\n    Una ruta con la carpeta v1 (.project/tareas, decisiones, pendientes, sesiones) se traduce y se avisa.\n    Si el listado completo es demasiado grande, lo resume por niveles: carpetas sin expandir con su cantidad de\n    archivos (\"modulo/ (38 archivos)\"); pide una `carpeta` más específica para ver el detalle.",
+      "descripcion": "ONLY for apps that support MCP forms (elicitation), such as Claude Code. In Claude Desktop or claude.ai do NOT\n    use it: call review_proposals and present the options (accept / adjust / reject / postpone) with your own cards\n    or multiple-choice questions; then apply accept_decision or reject_decision as the user chooses.\n    Opens one form per pending proposal; the answers come from the user without going through the model, so\n    acceptances and rejections are applied directly. Returns the summary and the proposals to adjust.",
       "esquema_entrada": {
         "properties": {
-          "carpeta": {
+          "project": {
+            "title": "Project",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "decide_proposalsArguments",
+        "type": "object"
+      },
+      "nombre": "decide_proposals"
+    },
+    {
+      "descripcion": "Start of a chat: returns INDEX.md and the open items (one line each: id, topic, date; read the detail with\n    read_document). Call it before answering.\n    At the end, if optional integrations are active (codegraph, gentle-ai, engram…), one line listing them and their\n    planning guidance; that guidance is conditional: follow it only if you have their tools.",
+      "esquema_entrada": {
+        "properties": {
+          "project": {
+            "title": "Project",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "get_contextArguments",
+        "type": "object"
+      },
+      "nombre": "get_context"
+    },
+    {
+      "descripcion": "Creates the empty .project/ structure of a registered project (idempotent), in the current schema (v2:\n    decisions/, pending/, sessions/, tasks/, content_language \"en\").",
+      "esquema_entrada": {
+        "properties": {
+          "project": {
+            "title": "Project",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "init_memoryArguments",
+        "type": "object"
+      },
+      "nombre": "init_memory"
+    },
+    {
+      "descripcion": "Lists files (with size) under a project folder.\n    In .project/decisions, pending and tasks it lists one record per line: \"ID · status · title  (path)\".\n    A path with a v1 folder (.project/tareas, decisiones, pendientes, sesiones) is translated and flagged.\n    If the full listing is too large, it is summarized by levels: unexpanded folders with their file count\n    (\"module/ (38 files)\"); ask for a more specific `folder` to see the detail.",
+      "esquema_entrada": {
+        "properties": {
+          "folder": {
             "default": "docs",
-            "title": "Carpeta",
+            "title": "Folder",
             "type": "string"
           },
-          "proyecto": {
-            "title": "Proyecto",
+          "project": {
+            "title": "Project",
             "type": "string"
           }
         },
         "required": [
-          "proyecto"
+          "project"
         ],
-        "title": "listar_documentosArguments",
+        "title": "list_documentsArguments",
         "type": "object"
       },
-      "nombre": "listar_documentos"
+      "nombre": "list_documents"
     },
     {
-      "descripcion": "Lista los proyectos registrados, su carpeta de código y si ya tienen memoria.",
+      "descripcion": "Lists the registered projects, their code folder and whether they already have a memory.",
       "esquema_entrada": {
         "properties": {},
-        "title": "listar_proyectosArguments",
+        "title": "list_projectsArguments",
         "type": "object"
       },
-      "nombre": "listar_proyectos"
+      "nombre": "list_projects"
     },
     {
-      "descripcion": "Lista las tareas de Claude Code con su estado y rama.",
+      "descripcion": "Lists the code tasks with their status and branch. Closed ones (merged, discarded) only with\n    include_closed=True.",
       "esquema_entrada": {
         "properties": {
-          "incluir_cerradas": {
+          "include_closed": {
             "default": false,
-            "title": "Incluir Cerradas",
+            "title": "Include Closed",
             "type": "boolean"
           },
-          "proyecto": {
-            "title": "Proyecto",
+          "project": {
+            "title": "Project",
             "type": "string"
           }
         },
         "required": [
-          "proyecto"
+          "project"
         ],
-        "title": "listar_tareasArguments",
+        "title": "list_tasksArguments",
         "type": "object"
       },
-      "nombre": "listar_tareas"
+      "nombre": "list_tasks"
     },
     {
-      "descripcion": "Carga inicial de un chat: devuelve INDEX.md y los pendientes abiertos (una línea cada uno: id, tema, fecha;\n    el detalle se lee con leer_documento). Llamar antes de responder.\n    Al final, si hay integraciones activas (codegraph, gentle-ai, engram…), una línea con ellas y su guía para\n    planificar; esa guía es condicional: úsala solo si tienes sus herramientas.",
+      "descripcion": "End of a chat (close prompt): appends the session summary to sessions/YYYY-MM-DD.md.",
       "esquema_entrada": {
         "properties": {
-          "proyecto": {
-            "title": "Proyecto",
-            "type": "string"
-          }
-        },
-        "required": [
-          "proyecto"
-        ],
-        "title": "obtener_contextoArguments",
-        "type": "object"
-      },
-      "nombre": "obtener_contexto"
-    },
-    {
-      "descripcion": "Marca una decisión como reemplazada por otra ya registrada (estado 'superseded'; las decisiones no se borran).",
-      "esquema_entrada": {
-        "properties": {
-          "id_anterior": {
-            "title": "Id Anterior",
+          "project": {
+            "title": "Project",
             "type": "string"
           },
-          "id_nuevo": {
-            "title": "Id Nuevo",
-            "type": "string"
-          },
-          "proyecto": {
-            "title": "Proyecto",
+          "summary": {
+            "title": "Summary",
             "type": "string"
           }
         },
         "required": [
-          "proyecto",
-          "id_anterior",
-          "id_nuevo"
+          "project",
+          "summary"
         ],
-        "title": "reemplazar_decisionArguments",
+        "title": "log_sessionArguments",
         "type": "object"
       },
-      "nombre": "reemplazar_decision"
+      "nombre": "log_session"
     },
     {
-      "descripcion": "Crea un ADR. SIEMPRE queda como 'proposed'. Para acordarla, llama después confirmar_decision:\n    esa herramienta pide la aprobación del usuario. `resumen`: una línea para la vista de acuerdos.\n    Idempotente (ADR-019): si ya hay un ADR con este título (sin distinguir mayúsculas ni espacios) creado en\n    los últimos minutos Y TODAVÍA en estado 'proposed', no crea nada nuevo y devuelve el id existente. Si ese\n    ADR ya cambió de estado (p. ej. rejected: el usuario pidió otra versión), un humano ya intervino, así\n    que se registra una ADR nueva.",
+      "descripcion": "Returns, ready to copy, the Claude project instructions and the CLAUDE.md/AGENTS.md block with the right\n    project name. Give them to the user as they are, without summarizing.",
       "esquema_entrada": {
         "properties": {
-          "alternativas": {
+          "project": {
+            "title": "Project",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "project_instructionsArguments",
+        "type": "object"
+      },
+      "nombre": "project_instructions"
+    },
+    {
+      "descripcion": "Creates an ADR. It is ALWAYS 'proposed'. To accept it, call accept_decision afterwards: that tool asks for\n    the user's approval. `summary`: one line for the decisions view.\n    Idempotent (ADR-019): if an ADR with this title (ignoring case and spaces) was created in the last minutes AND\n    is STILL 'proposed', nothing new is created and the existing id is returned. If that ADR already changed status\n    (e.g. rejected: the user asked for another version), a human already intervened, so a new ADR is recorded.",
+      "esquema_entrada": {
+        "properties": {
+          "alternatives": {
             "default": "",
-            "title": "Alternativas",
+            "title": "Alternatives",
             "type": "string"
           },
           "decision": {
             "title": "Decision",
             "type": "string"
           },
-          "justificacion": {
-            "title": "Justificacion",
+          "project": {
+            "title": "Project",
             "type": "string"
           },
-          "proyecto": {
-            "title": "Proyecto",
+          "rationale": {
+            "title": "Rationale",
             "type": "string"
           },
-          "resumen": {
+          "summary": {
             "default": "",
-            "title": "Resumen",
+            "title": "Summary",
             "type": "string"
           },
-          "titulo": {
-            "title": "Titulo",
+          "title": {
+            "title": "Title",
             "type": "string"
           }
         },
         "required": [
-          "proyecto",
-          "titulo",
+          "project",
+          "title",
           "decision",
-          "justificacion"
+          "rationale"
         ],
-        "title": "registrar_decisionArguments",
+        "title": "propose_decisionArguments",
         "type": "object"
       },
-      "nombre": "registrar_decision"
+      "nombre": "propose_decision"
     },
     {
-      "descripcion": "Registra una decisión abierta o tema sin resolver. Idempotente (ADR-019): si ya hay un pendiente con\n    este tema (sin distinguir mayúsculas ni espacios) creado en los últimos minutos Y TODAVÍA en estado\n    'open', no crea nada nuevo y devuelve el id existente. Si ese pendiente ya se cerró, un humano ya\n    intervino, así que se registra un pendiente nuevo.",
+      "descripcion": "Reads a project text file, optionally a line range (1-based, inclusive).\n    Also accepts a memory record id (\"T-24\", \"tasks/T-024.md\", \"ADR-020-slug.md\"): if the path does not exist, it\n    reads the real record and prepends the line \"(→ .project/<folder>/<file>)\". A path with a v1 folder\n    (.project/tareas/…, .project/acuerdos.md…) is translated and flagged the same way.\n    For a task, read_task returns a working brief (spec, amendments, the latest relevant block) instead.",
       "esquema_entrada": {
         "properties": {
-          "contexto": {
-            "title": "Contexto",
-            "type": "string"
-          },
-          "dueno": {
-            "default": "",
-            "title": "Dueno",
-            "type": "string"
-          },
-          "proyecto": {
-            "title": "Proyecto",
-            "type": "string"
-          },
-          "tema": {
-            "title": "Tema",
-            "type": "string"
-          }
-        },
-        "required": [
-          "proyecto",
-          "tema",
-          "contexto"
-        ],
-        "title": "registrar_pendienteArguments",
-        "type": "object"
-      },
-      "nombre": "registrar_pendiente"
-    },
-    {
-      "descripcion": "Da de alta un proyecto: lo agrega a projects.json, inicializa su memoria (repo git propio) y devuelve las\n    instrucciones para pegar en Claude y en CLAUDE.md/AGENTS.md. `ruta`: carpeta del código (debe existir dentro de\n    la carpeta de proyectos). `memoria`: opcional; por defecto <carpeta de proyectos>/.memorias/<nombre>,\n    fuera del repositorio del código. `pruebas`: comando para correr las pruebas; si se omite se detecta\n    (Maven, Gradle, npm/pnpm/yarn, Godot, pytest, cargo, go). Solo con confirmación del usuario.",
-      "esquema_entrada": {
-        "properties": {
-          "memoria": {
-            "default": "",
-            "title": "Memoria",
-            "type": "string"
-          },
-          "nombre": {
-            "title": "Nombre",
-            "type": "string"
-          },
-          "pruebas": {
-            "default": "",
-            "title": "Pruebas",
-            "type": "string"
-          },
-          "ruta": {
-            "title": "Ruta",
-            "type": "string"
-          }
-        },
-        "required": [
-          "nombre",
-          "ruta"
-        ],
-        "title": "registrar_proyectoArguments",
-        "type": "object"
-      },
-      "nombre": "registrar_proyecto"
-    },
-    {
-      "descripcion": "Cierre de chat (/cierre): anexa el resumen de la sesión a sessions/AAAA-MM-DD.md.",
-      "esquema_entrada": {
-        "properties": {
-          "proyecto": {
-            "title": "Proyecto",
-            "type": "string"
-          },
-          "resumen": {
-            "title": "Resumen",
-            "type": "string"
-          }
-        },
-        "required": [
-          "proyecto",
-          "resumen"
-        ],
-        "title": "registrar_sesionArguments",
-        "type": "object"
-      },
-      "nombre": "registrar_sesion"
-    },
-    {
-      "descripcion": "Crea una especificación de trabajo para Claude Code en .project/tasks/T-NNN.md (estado 'todo').\n    En proyectos de varios repos, `repositorio` (obligatorio) indica la carpeta donde se trabaja; en proyectos de\n    un solo repositorio se ignora (la respuesta lo avisa).\n    Debe ser autosuficiente: Claude Code la ejecuta sin este chat. `criterios_aceptacion`: lista verificable\n    (pruebas que deben pasar, comportamiento observable). `decisiones`: ids de ADR aplicables.\n    `archivos`: rutas que probablemente se tocan. El usuario la ejecuta con /tarea T-NNN en Claude Code.\n    `resuelve`: pendientes que la tarea resuelve, separados por coma, cada uno opcionalmente con \"(parcial)\" o\n    \"(partial)\" (p. ej. \"P-036, P-037 (parcial)\"); deben existir y estar abiertos. Se guarda en la tarea (sección\n    \"Resolves\") y,\n    al integrarla, actualizar_tarea recuerda los que sigan abiertos. Nunca cierra pendientes.\n    La respuesta agrega la línea de integraciones detectadas (no se escribe en la tarea).\n    Idempotente (ADR-019): si ya hay una tarea con este título (sin distinguir mayúsculas ni espacios) creada\n    en los últimos minutos Y TODAVÍA en estado 'todo', no crea nada nuevo y devuelve el id existente\n    (con el comando /tarea para repetírselo al usuario). Si esa tarea ya cambió de estado (p. ej. in_progress:\n    ya se está ejecutando), un humano o el agente de código ya intervino, así que se registra una tarea\n    nueva.",
-      "esquema_entrada": {
-        "properties": {
-          "archivos": {
-            "default": "",
-            "title": "Archivos",
-            "type": "string"
-          },
-          "criterios_aceptacion": {
-            "title": "Criterios Aceptacion",
-            "type": "string"
-          },
-          "decisiones": {
-            "default": "",
-            "title": "Decisiones",
-            "type": "string"
-          },
-          "fuera_de_alcance": {
-            "default": "",
-            "title": "Fuera De Alcance",
-            "type": "string"
-          },
-          "notas": {
-            "default": "",
-            "title": "Notas",
-            "type": "string"
-          },
-          "objetivo": {
-            "title": "Objetivo",
-            "type": "string"
-          },
-          "proyecto": {
-            "title": "Proyecto",
-            "type": "string"
-          },
-          "repositorio": {
-            "default": "",
-            "title": "Repositorio",
-            "type": "string"
-          },
-          "resuelve": {
-            "default": "",
-            "title": "Resuelve",
-            "type": "string"
-          },
-          "titulo": {
-            "title": "Titulo",
-            "type": "string"
-          }
-        },
-        "required": [
-          "proyecto",
-          "titulo",
-          "objetivo",
-          "criterios_aceptacion"
-        ],
-        "title": "registrar_tareaArguments",
-        "type": "object"
-      },
-      "nombre": "registrar_tarea"
-    },
-    {
-      "descripcion": "Devuelve las decisiones en estado 'proposed' para que el usuario decida confirmar, ajustar o descartar.\n    Paginado: `cantidad` por página (máx. 25) a partir de `desde_id` (p. ej. \"ADR-020\"). Con `resumen=True`\n    devuelve una línea por propuesta (útil para ver el panorama antes de entrar al detalle).",
-      "esquema_entrada": {
-        "properties": {
-          "cantidad": {
-            "default": 10,
-            "title": "Cantidad",
+          "from_line": {
+            "default": 1,
+            "title": "From Line",
             "type": "integer"
           },
-          "desde_id": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          },
+          "to_line": {
+            "default": 0,
+            "title": "To Line",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "project",
+          "path"
+        ],
+        "title": "read_documentArguments",
+        "type": "object"
+      },
+      "nombre": "read_document"
+    },
+    {
+      "descripcion": "Working brief of a task, instead of reading the whole file: the frontmatter, the full spec (Goal, Acceptance\n    criteria, Resolves, Applicable decisions, Files involved, Out of scope, Notes, Amendments, How to verify), every\n    Amendment block, the block relevant to the status in full (changes_requested → latest Review; in_review or\n    failed → latest Result block; in_progress → the latest Review it answers) and a one-line index (heading · line\n    range · size) of every other Result/Review block, readable with read_document and that range.",
+      "esquema_entrada": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project",
+          "id"
+        ],
+        "title": "read_taskArguments",
+        "type": "object"
+      },
+      "nombre": "read_task"
+    },
+    {
+      "descripcion": "Registers a project: adds it to projects.json, initializes its memory (its own git repo) and returns the\n    instructions to paste into Claude and into CLAUDE.md/AGENTS.md. `path`: the code folder (must exist inside the\n    projects folder). `memory`: optional; by default <projects folder>/.memorias/<name>, outside the code\n    repository. `tests`: command to run the tests; if omitted it is detected (Maven, Gradle, npm/pnpm/yarn, Godot,\n    pytest, cargo, go). Only with the user's confirmation.",
+      "esquema_entrada": {
+        "properties": {
+          "memory": {
             "default": "",
-            "title": "Desde Id",
+            "title": "Memory",
             "type": "string"
           },
-          "proyecto": {
-            "title": "Proyecto",
+          "name": {
+            "title": "Name",
             "type": "string"
           },
-          "resumen": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "tests": {
+            "default": "",
+            "title": "Tests",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "path"
+        ],
+        "title": "register_projectArguments",
+        "type": "object"
+      },
+      "nombre": "register_project"
+    },
+    {
+      "descripcion": "Closes a proposal the user does NOT approve. It becomes 'rejected' with its reason (it is not deleted: the\n    history keeps what was considered and why it was not adopted). Only on the user's explicit instruction.",
+      "esquema_entrada": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project",
+          "id",
+          "reason"
+        ],
+        "title": "reject_decisionArguments",
+        "type": "object"
+      },
+      "nombre": "reject_decision"
+    },
+    {
+      "descripcion": "Sends a task in review back so the coding agent fixes it on the SAME branch.\n    Use it only when the user, after reviewing the result, decides to ask for changes.\n    `findings`: what is approved and what fails, and why. `additional_criteria`: a verifiable list of what the fix\n    must meet (added to the original criteria). The task becomes 'changes_requested' and is re-run with\n    /run-task T-NNN, which continues on the existing branch without rewriting earlier commits.\n    To extend a task that has not run yet (todo), use amend_task.",
+      "esquema_entrada": {
+        "properties": {
+          "additional_criteria": {
+            "default": "",
+            "title": "Additional Criteria",
+            "type": "string"
+          },
+          "findings": {
+            "title": "Findings",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project",
+          "id",
+          "findings"
+        ],
+        "title": "request_changesArguments",
+        "type": "object"
+      },
+      "nombre": "request_changes"
+    },
+    {
+      "descripcion": "Returns the decisions in 'proposed' status so the user can decide to accept, adjust or reject them.\n    Paginated: `limit` per page (max 25) starting at `from_id` (e.g. \"ADR-020\"). With `summary=True` it returns one\n    line per proposal (useful to see the overview before going into detail).",
+      "esquema_entrada": {
+        "properties": {
+          "from_id": {
+            "default": "",
+            "title": "From Id",
+            "type": "string"
+          },
+          "limit": {
+            "default": 10,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          },
+          "summary": {
             "default": false,
-            "title": "Resumen",
+            "title": "Summary",
             "type": "boolean"
           }
         },
         "required": [
-          "proyecto"
+          "project"
         ],
-        "title": "revisar_propuestasArguments",
+        "title": "review_proposalsArguments",
         "type": "object"
       },
-      "nombre": "revisar_propuestas"
+      "nombre": "review_proposals"
+    },
+    {
+      "descripcion": "Searches text (case-insensitive) in the project's text files and returns snippets with path and line. Use\n    it before reading whole documents.\n    Memory records come first (\"ID · status · title (path)\"): the one whose id is `query` (e.g. \"T-1\", \"adr-20\")\n    and up to 5 whose title contains it at the start of a word; then memory lines and code lines, sharing the rest\n    equally. In each section, files whose name contains `query` at the start of a word or camelCase part come first\n    (if no line matches: \"path: (file name matches)\"), and one line per file is shown before repeating files.\n    `max_results` counts every line; if something is left out, the last line says how many lines (and files) per\n    section.",
+      "esquema_entrada": {
+        "properties": {
+          "max_results": {
+            "default": 20,
+            "title": "Max Results",
+            "type": "integer"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project",
+          "query"
+        ],
+        "title": "searchArguments",
+        "type": "object"
+      },
+      "nombre": "search"
+    },
+    {
+      "descripcion": "Marks a decision as superseded by another one already recorded (status 'superseded'; decisions are never\n    deleted).",
+      "esquema_entrada": {
+        "properties": {
+          "new_id": {
+            "title": "New Id",
+            "type": "string"
+          },
+          "old_id": {
+            "title": "Old Id",
+            "type": "string"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project",
+          "old_id",
+          "new_id"
+        ],
+        "title": "supersede_decisionArguments",
+        "type": "object"
+      },
+      "nombre": "supersede_decision"
+    },
+    {
+      "descripcion": "Modifies an EXISTING text file in an allowed area. mode: 'replace' | 'append'.\n    To create a new file use create_document.",
+      "esquema_entrada": {
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "mode": {
+            "default": "replace",
+            "title": "Mode",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project",
+          "path",
+          "content"
+        ],
+        "title": "update_documentArguments",
+        "type": "object"
+      },
+      "nombre": "update_document"
+    },
+    {
+      "descripcion": "Rewrites INDEX.md (the project's executive summary). It must be a regenerated SUMMARY, not an\n    accumulation; limit ~6000 characters.",
+      "esquema_entrada": {
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project",
+          "content"
+        ],
+        "title": "update_indexArguments",
+        "type": "object"
+      },
+      "nombre": "update_index"
+    },
+    {
+      "descripcion": "Updates a project already registered in projects.json without editing it by hand. Give at least one of\n    `path`, `tests`, `repo`, `redetect=True` or `integrations`; with none, it returns an error and leaves the file\n    untouched.\n    `path`: new code folder, when it moved. Same checks as register_project (inside the projects folder, an\n    existing folder, and not containing the project's memory — ADR-010). If the project is multi-repo and the stored\n    `tests` keeps keys that are no longer repos under the new path, the change is applied anyway but the response\n    lists them and suggests `redetect=True`.\n    `tests`: command the coding agent uses to verify tasks (/run-task). In multi-repo projects, `repo` says which\n    repo it applies to.\n    `redetect`: True to detect the command again from the project files instead of giving it with `tests` (both at\n    once are incompatible). In a single-repo project it redetects the whole command; in a multi-repo one it\n    redetects all repos, or only `repo` if given.\n    `integrations`: turns optional integrations of the project on or off, e.g. \"codegraph=off,gentle-ai=auto\"\n    (values auto|off; default auto: used when detected). One turned off never appears in any response.",
+      "esquema_entrada": {
+        "properties": {
+          "integrations": {
+            "default": "",
+            "title": "Integrations",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "default": "",
+            "title": "Path",
+            "type": "string"
+          },
+          "redetect": {
+            "default": false,
+            "title": "Redetect",
+            "type": "boolean"
+          },
+          "repo": {
+            "default": "",
+            "title": "Repo",
+            "type": "string"
+          },
+          "tests": {
+            "default": "",
+            "title": "Tests",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "update_projectArguments",
+        "type": "object"
+      },
+      "nombre": "update_project"
+    },
+    {
+      "descripcion": "Changes a task's status (todo, in_progress, in_review, failed, merged, discarded; the Spanish names pendiente,\n    en_curso, en_revision, fallida, integrada, descartada are still accepted until 1.1). Stored in English.\n    `result`: what was done, tests run and their summarized output, deviations from the spec.\n    'merged' and 'discarded' only with the user's explicit confirmation.\n    To ask for corrections after reviewing a task use `request_changes`, not this status change.\n    With 'in_progress', the response brings the guidance of active integrations (execute, verify, close), computed at\n    that moment; it is conditional: follow it only if you have those tools. It is not written into the task.\n    With 'merged', if the task declares `resolves`, the response reminds which pending items are still open (it\n    never closes or modifies any).",
+      "esquema_entrada": {
+        "properties": {
+          "commit": {
+            "default": "",
+            "title": "Commit",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          },
+          "result": {
+            "default": "",
+            "title": "Result",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project",
+          "id",
+          "status"
+        ],
+        "title": "update_taskArguments",
+        "type": "object"
+      },
+      "nombre": "update_task"
     }
   ],
   "prompts": [
@@ -753,23 +807,23 @@
       "argumentos": [
         {
           "descripcion": null,
-          "nombre": "proyecto",
+          "nombre": "project",
           "requerido": false
         }
       ],
-      "descripcion": "Cierra la sesión: registra decisiones, pendientes y bitácora, y regenera INDEX.md",
-      "nombre": "cierre"
+      "descripcion": "Closes the session: records decisions, pending items and the session log, and regenerates INDEX.md",
+      "nombre": "close"
     },
     {
       "argumentos": [
         {
           "descripcion": null,
-          "nombre": "proyecto",
+          "nombre": "project",
           "requerido": false
         }
       ],
-      "descripcion": "Carga el contexto del proyecto antes de empezar a trabajar",
-      "nombre": "inicio"
+      "descripcion": "Loads the project context before starting to work",
+      "nombre": "start"
     }
   ]
 }
