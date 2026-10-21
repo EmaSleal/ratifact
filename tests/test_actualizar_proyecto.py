@@ -23,7 +23,7 @@ def test_actualizar_ruta_valida_igual_que_registrar_proyecto(srv, proyecto, ento
     assert not salida.startswith("ERROR"), salida
     assert str(proyecto["repo"]) in salida and str(nueva) in salida     # criterio 3: ruta vieja y nueva
     config = json.loads(ruta_config.read_text())
-    assert config["demo"]["ruta"] == str(nueva)
+    assert config["demo"]["path"] == str(nueva)
 
 
 def test_actualizar_ruta_rechaza_memoria_adentro_adr010(srv, entorno):
@@ -126,7 +126,7 @@ def test_redetectar_un_solo_repo_redetecta_el_proyecto_completo(srv, entorno):
     assert not salida.startswith("ERROR"), salida
     assert "go test ./..." in salida and "(detected)" in salida
     config = json.loads(Path(entorno["env"]["MEMORIA_PROYECTOS_CONFIG"]).read_text())
-    assert config["web2"]["pruebas"] == "go test ./..."
+    assert config["web2"]["tests"] == "go test ./..."
 
 
 def test_redetectar_multirepo_sin_repositorio_redetecta_todos(srv, entorno):
@@ -137,13 +137,13 @@ def test_redetectar_multirepo_sin_repositorio_redetecta_todos(srv, entorno):
     front = crear_repo(raiz / "frontend")   # sin archivos reconocibles todavía
     srv.register_project(name="multi2", path=str(raiz))
     config_antes = json.loads(Path(entorno["env"]["MEMORIA_PROYECTOS_CONFIG"]).read_text())
-    assert config_antes["multi2"]["pruebas"] == {"backend": "mvn test"}   # frontend sin nada reconocible aún
+    assert config_antes["multi2"]["tests"] == {"backend": "mvn test"}   # frontend sin nada reconocible aún
 
     (front / "go.mod").write_text("module frontend")   # ahora sí se puede detectar
     salida = srv.update_project(name="multi2", redetect=True)
     assert not salida.startswith("ERROR"), salida
     config = json.loads(Path(entorno["env"]["MEMORIA_PROYECTOS_CONFIG"]).read_text())
-    assert config["multi2"]["pruebas"] == {"backend": "mvn test", "frontend": "go test ./..."}
+    assert config["multi2"]["tests"] == {"backend": "mvn test", "frontend": "go test ./..."}
 
 
 def test_cambio_de_ruta_avisa_claves_de_pruebas_huerfanas(srv, entorno):
@@ -157,7 +157,7 @@ def test_cambio_de_ruta_avisa_claves_de_pruebas_huerfanas(srv, entorno):
     (front / "package.json").write_text('{"scripts": {"test": "vitest"}}')
     srv.register_project(name="multi3", path=str(raiz))
     config = json.loads(Path(entorno["env"]["MEMORIA_PROYECTOS_CONFIG"]).read_text())
-    assert config["multi3"]["pruebas"] == {"backend": "mvn test", "frontend": "npm test"}
+    assert config["multi3"]["tests"] == {"backend": "mvn test", "frontend": "npm test"}
 
     # la ruta nueva solo tiene "backend"; "frontend" queda huérfana
     nueva_raiz = entorno["base"] / "multi3-mudado"
@@ -167,8 +167,8 @@ def test_cambio_de_ruta_avisa_claves_de_pruebas_huerfanas(srv, entorno):
     assert not salida.startswith("ERROR"), salida
     assert "orphan" in salida and "frontend" in salida and "redetect=True" in salida
     config = json.loads(Path(entorno["env"]["MEMORIA_PROYECTOS_CONFIG"]).read_text())
-    assert config["multi3"]["ruta"] == str(nueva_raiz.resolve())
-    assert config["multi3"]["pruebas"] == {"backend": "mvn test", "frontend": "npm test"}   # se aplicó el cambio
+    assert config["multi3"]["path"] == str(nueva_raiz.resolve())
+    assert config["multi3"]["tests"] == {"backend": "mvn test", "frontend": "npm test"}   # se aplicó el cambio
 
 
 def test_memoria_sigue_funcionando_si_la_ruta_del_codigo_desaparece(srv, proyecto):

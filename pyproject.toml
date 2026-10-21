@@ -1,24 +1,52 @@
 [project]
 name = "ratifact"
-version = "1.0.0rc1"
-description = "Local MCP server that turns each repository into the persistent memory of its project."
-readme = "LEEME.md"
+version = "1.0.0"
+description = "Local MCP server that turns each repository into the persistent memory of its project: decisions, open items, tasks and sessions in a git repository of their own."
+readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
-dependencies = ["mcp>=1.2,<2"]
+license-files = ["LICENSE"]
+authors = [{ name = "Emanuel" }]
+keywords = ["mcp", "model-context-protocol", "claude", "codex", "memory", "adr", "agents"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Documentation",
+]
+# tomli: TOML parser to validate ~/.codex/config.toml on Python 3.10 (3.11+ has tomllib).
+dependencies = ["mcp>=1.2,<2", "tomli>=1.1; python_version < '3.11'"]
+
+# Placeholder: the GitHub owner is confirmed by the user before publishing (docs/publish.md).
+[project.urls]
+Homepage = "https://github.com/EmaSleal/ratifact"
+Repository = "https://github.com/EmaSleal/ratifact"
+Issues = "https://github.com/EmaSleal/ratifact/issues"
+Changelog = "https://github.com/EmaSleal/ratifact/blob/main/docs/upgrade-v1.md"
 
 [project.scripts]
 ratifact = "ratifact.cli:main"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
+# The run-task / tarea skills ship inside the package (ratifact/skills): `ratifact install` links them from the
+# installed copy, never from a working copy.
 [tool.hatch.build.targets.wheel]
 packages = ["ratifact"]
 
 [tool.hatch.build.targets.sdist]
-include = ["ratifact", "LEEME.md", "pyproject.toml"]
+include = ["ratifact", "README.md", "LEEME.md", "LICENSE", "pyproject.toml"]
 
 # Las pruebas corren con `uv run --with pytest --with "mcp>=1.2,<2" pytest -q` desde la copia de trabajo, sin crear
 # un entorno del proyecto (.venv/uv.lock): el paquete se instala con `uv tool install <ruta del repo>`.

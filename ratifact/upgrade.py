@@ -11,10 +11,11 @@ from pathlib import Path
 from typing import Callable
 
 from ratifact import rutas
-from ratifact.config import CLAVES_CONFIG, ErrorMemoria
+from ratifact import config as _cfg
+from ratifact.config import CLAVES_CONFIG
 from ratifact.esquema import VERSION_ESQUEMA, _inicializada
 from ratifact.instalacion import (VIEJA, Instalacion, Proceso, Proyecto, bloqueo_tomado, inventario,
-                                  procesos_servidor, separar_procesos)
+                                  mensaje_sugerencia, procesos_servidor, separar_procesos, sugerencias_config)
 from ratifact.registros import _vistas_en
 
 
@@ -136,12 +137,15 @@ def describir(plan: Plan) -> list[str]:
 
 
 def main(aplicar: bool = False, procesos: Callable[[], list[Proceso]] = procesos_servidor,
-         log_viejo: Path | None = None) -> int:
+         log_viejo: Path | None = None, origen: Path | None = None) -> int:
     from ratifact.upgrade_aplicar import ErrorUpgrade, ejecutar
     try:
         plan = planificar(procesos=procesos, log_viejo=log_viejo)
-    except ErrorMemoria as e:
+    except _cfg.ErrorMemoria as e:
         print(f"ratifact upgrade: {e}")
+        sugerencia = mensaje_sugerencia(sugerencias_config(procesos(), origen or rutas.origen()))
+        if sugerencia:
+            print(f"Hint: {sugerencia}.")
         return 1
     print(f"Configuration: {plan.inst.config}")
     configs = sorted({str(p.config) for p in plan.otros_servidores})
@@ -152,11 +156,12 @@ def main(aplicar: bool = False, procesos: Callable[[], list[Proceso]] = procesos
     if plan.vacio:
         print("Nothing to do: everything is already upgraded.")
         return 0
-    print("Plan:" if not aplicar else "Applying:")
+    abortado = aplicar and bool(plan.bloqueos)
+    print("Aborted — nothing was changed:" if abortado else "Applying:" if aplicar else "Plan:")
     for linea in describir(plan):
         print(f"  {linea}")
     if plan.bloqueos:
-        print("Cannot apply:" if aplicar else "--apply would abort:")
+        print("Reasons:" if aplicar else "--apply would abort:")
         for b in plan.bloqueos:
             print(f"  - {b}")
         return 1

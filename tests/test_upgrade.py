@@ -47,6 +47,8 @@ def vieja(hogar, entorno):
     subprocess.run(["git", "-C", str(mem_dos), "commit", "-qam", "vistas viejas"], check=True)
     config = Path(entorno["env"]["MEMORIA_PROYECTOS_CONFIG"])
     datos = json.loads(config.read_text())
+    espanol = {v: k for k, v in {"ruta": "path", "memoria": "memory", "escritura": "writable", "pruebas": "tests"}.items()}
+    datos["dos"] = {espanol.get(k, k): v for k, v in datos["dos"].items()}     # as written before T-013
     datos["dos"]["integraciones"] = {"codegraph": "off"}
     for nombre, mem in (("uno", base / ".memorias" / "uno"), ("juego", base / "juego" / ".project")):
         crear_memoria_v1(mem)
@@ -92,7 +94,7 @@ def test_servidor_corriendo_aborta_nombrandolo(vieja, entorno, capsys):
     codigo, salida = correr(vieja, capsys, aplicar=True, procesos=procesos)
     assert codigo == 1 and "server running: pid 4242" in salida
     assert "Ignored: 1 server process using another configuration (/otra/projects.json; pids 4343)" in salida
-    assert "4343" not in salida.split("Cannot apply")[1]
+    assert "4343" not in salida.split("Reasons:")[1]
     assert arbol(entorno["tmp"]) == antes
 
 
@@ -241,3 +243,42 @@ def test_variable_relativa_sin_cwd_legible_bloquea(vieja, entorno, tmp_path, cap
     antes = arbol(entorno["tmp"])
     codigo, salida = correr(vieja, capsys, aplicar=True, procesos=lambda: procesos_servidor(proc))
     assert codigo == 1 and "server running: pid 502" in salida and arbol(entorno["tmp"]) == antes
+
+
+# ───────────────────────── T-013: abort header and missing default configuration ─────────────────────────
+
+def test_apply_abortado_lo_dice_en_la_cabecera_y_sale_con_error(vieja, entorno, capsys):
+    """Criterion 9: an aborted --apply does not say "Applying:"."""
+    from ratifact.instalacion import Proceso
+    antes = arbol(entorno["tmp"])
+    codigo, salida = correr(vieja, capsys, aplicar=True, procesos=lambda: [Proceso(9, "ratifact serve", None)])
+    assert codigo != 0 and arbol(entorno["tmp"]) == antes
+    assert "Applying:" not in salida
+    cabecera, resto = salida.split("Aborted — nothing was changed:\n")
+    plan, razones = resto.split("Reasons:\n")
+    assert "1. migrate uno" in plan and "server running: pid 9" in razones
+
+
+def test_sin_configuracion_por_defecto_sugiere_el_comando_exacto(hogar, entorno, monkeypatch, capsys, tmp_path):
+    """Criterion 8: no default projects.json, but a server runs with MEMORIA_PROYECTOS_CONFIG, or projects.json is next
+    to the source install → `RATIFACT_CONFIG=<path> ratifact upgrade`."""
+    from ratifact import doctor, upgrade
+    from ratifact.instalacion import Proceso
+    monkeypatch.delenv("MEMORIA_PROYECTOS_CONFIG")
+    en_uso = tmp_path / "repo" / "projects.json"
+    en_uso.parent.mkdir()
+    en_uso.write_text("{}")
+    por_defecto = lambda: [Proceso(5, "ratifact serve", en_uso)]          # a server of another HOME, no variable
+    assert upgrade.main(procesos=por_defecto, origen=tmp_path / "nada") == 1
+    assert "RATIFACT_CONFIG=" not in capsys.readouterr().out
+    procesos = lambda: [Proceso(5, "uv run --script /r/servidor.py", en_uso, por_variable=True)]
+    assert upgrade.main(procesos=procesos, origen=tmp_path / "nada") == 1
+    assert f"`RATIFACT_CONFIG={en_uso} ratifact upgrade`" in capsys.readouterr().out
+    copia = tmp_path / "copia"                                   # a working copy with projects.json next to it
+    (copia / "ratifact").mkdir(parents=True)
+    for nombre in ("pyproject.toml", "servidor.py", "projects.json"):
+        (copia / nombre).write_text("{}")
+    assert doctor.main(procesos=lambda: [], paquete=copia / "ratifact", log_viejo=None) == 1
+    assert f"`RATIFACT_CONFIG={copia / 'projects.json'} ratifact upgrade`" in capsys.readouterr().out
+    assert upgrade.main(procesos=lambda: [], origen=tmp_path / "nada") == 1
+    assert "RATIFACT_CONFIG=" not in capsys.readouterr().out    # nothing found: no made-up suggestion

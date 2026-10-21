@@ -43,12 +43,12 @@ def test_comando_explicito_y_actualizar_proyecto(srv, entorno):
     repo = crear_repo(entorno["base"] / "web")
     srv.register_project(name="web", path=str(repo), tests="make check")
     config = json.loads(Path(entorno["env"]["MEMORIA_PROYECTOS_CONFIG"]).read_text())
-    assert config["web"]["pruebas"] == "make check"
+    assert config["web"]["tests"] == "make check"
     (repo / "go.mod").write_text("module web")
     assert "`go test ./...`" in srv.update_project(name="web", tests="go test ./...")
     assert "`npm run e2e`" in srv.update_project(name="web", tests="npm run e2e")
     config = json.loads(Path(entorno["env"]["MEMORIA_PROYECTOS_CONFIG"]).read_text())
-    assert config["web"]["pruebas"] == "npm run e2e"
+    assert config["web"]["tests"] == "npm run e2e"
     assert "is not registered" in srv.update_project(name="nada", tests="x") or \
         srv.update_project(name="nada", tests="x").startswith("ERROR")
 

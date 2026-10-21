@@ -8,7 +8,7 @@ import subprocess
 from pathlib import Path
 
 from ratifact.app import _ejecutar, herramienta
-from ratifact.config import (BASE_PROYECTOS, CONFIG, MEM, _DIR, ErrorMemoria, _clave_escritura, _es_repo, _mem,
+from ratifact.config import (BASE_PROYECTOS, CONFIG, MEM, ErrorMemoria, _clave_escritura, _es_repo, _mem,
                              _pista_nombre, _proyectos, _raiz, _repos, _repos_de, _sugerencia_nombre, _valor)
 from ratifact.esquema import ARCHIVO_ESQUEMA, IDIOMA_NUEVAS, _bloqueo, _escribir_esquema
 from ratifact.integraciones.registro import _parsear_integraciones
@@ -99,20 +99,11 @@ def _instrucciones(proyecto: str) -> str:
             + (" — in a multi-repo project, in the root folder AND in each repo (Codex only reads AGENTS.md from the "
                "git repo root downwards)" if _repos(proyecto) else "") + ":\n\n"
             f"```\n{PLANTILLA_AGENTES.format(proyecto=proyecto)}{_linea_pruebas(proyecto)}\n```\n\n"
-            f"3) Once per machine, so that `/run-task` exists in every project (Claude Code, Pi and Codex):\n\n"
-            f"```\n{_enlaces_run_task()}\n```\n"
-            "(Codex does not follow a SKILL.md linked as a file: the whole folder is linked. Depending on the version "
-            "it reads ~/.codex/skills or ~/.agents/skills; it is installed in both. If a run-task/ folder already "
-            "exists there, delete it first.)")
-
-
-def _enlaces_run_task() -> str:
-    """Comandos para enlazar /run-task (y el alias deprecado /tarea, hasta 1.1) en Claude Code, Pi y Codex."""
-    return (f"mkdir -p ~/.claude/commands ~/.pi/agent/prompts ~/.codex/skills ~/.agents/skills\n"
-            f"ln -sf {_DIR / 'run-task.md'} ~/.claude/commands/run-task.md\n"
-            f"ln -sf {_DIR / 'run-task.md'} ~/.pi/agent/prompts/run-task.md\n"
-            f"ln -sfn {_DIR / 'skills' / 'run-task'} ~/.codex/skills/run-task\n"
-            f"ln -sfn {_DIR / 'skills' / 'run-task'} ~/.agents/skills/run-task")
+            "3) Once per machine, so that the clients run the `ratifact` server and `/run-task` exists in every "
+            "project (Claude Desktop, Claude Code, Pi and Codex), run in a terminal:\n\n"
+            "```\nratifact install          # shows the plan\nratifact install --apply  # does it, with backups\n```\n"
+            "(It links the run-task skill from the installed package: the whole folder for Codex, which does not "
+            "follow a SKILL.md linked as a file.)")
 
 
 @herramienta

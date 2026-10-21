@@ -23,10 +23,19 @@ def respaldo(config: Path) -> Path:
     return config.with_name(config.name + SUFIJO_RESPALDO)
 
 
+def estado() -> Path:
+    """$XDG_STATE_HOME/ratifact (por defecto ~/.local/state/ratifact)."""
+    return Path(os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")).expanduser() / "ratifact"
+
+
 def log_por_defecto() -> Path:
     """$XDG_STATE_HOME/ratifact/uso.jsonl (por defecto ~/.local/state/ratifact/uso.jsonl): nunca dentro del paquete."""
-    estado = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
-    return Path(estado).expanduser() / "ratifact" / "uso.jsonl"
+    return estado() / "uso.jsonl"
+
+
+def respaldos() -> Path:
+    """Where `ratifact install` backs up files that live inside a repository (T-013): never next to them."""
+    return estado() / "backups"
 
 
 def _paquete() -> Path:

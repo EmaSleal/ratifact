@@ -1,4 +1,6 @@
-# memoria-proyectos (ratifact) — instalación
+# ratifact (antes memoria-proyectos) — instalación
+
+English: [README.md](README.md) (qué es, instalación, primer proyecto, /run-task, comandos, integraciones, upgrade).
 
 Servidor MCP local: comando `ratifact serve` (paquete instalable, sección 0; `servidor.py` es su envoltorio hasta 1.1). Proyectos registrados: `projects.json`.
 Desde la v1 (T-011) el contrato está en inglés: herramientas, parámetros, descripciones y respuestas
@@ -10,44 +12,56 @@ servidor avisa una vez por variable). Sin variable, la configuración es `~/.con
 no `~/.config/memoria-proyectos/projects.json` (no se mueve ni reescribe nada).
 
 ## 0. Comando `ratifact` (instalación fija)
-Desde T-012 el repositorio es un paquete instalable (`pyproject.toml`, MIT). `uv tool install ~/Projects/.memoria-proyectos`
-instala una copia fija (no editable) y deja el ejecutable `~/.local/bin/ratifact`; después de cada integración en main:
-`uv tool install --reinstall ~/Projects/.memoria-proyectos` y reiniciar los clientes. Los clientes se configuran con
-`ratifact serve` (fragmentos exactos en `docs/upgrade-v1.md`, sección "Clients from the fixed installation"); las
-configuraciones de abajo con `servidor.py` siguen funcionando hasta 1.1.
+Desde T-012 el repositorio es un paquete instalable (`pyproject.toml`, MIT). `uv tool install ratifact` (desde PyPI) o
+`uv tool install ~/Projects/.memoria-proyectos` (desde la copia local) instala una copia fija (no editable) y deja el
+ejecutable `~/.local/bin/ratifact`; después de cada integración en main: `uv tool install --reinstall
+~/Projects/.memoria-proyectos` y reiniciar los clientes. Los clientes se configuran con `ratifact install --apply`
+(T-013, sección 1); las configuraciones viejas con `servidor.py` siguen funcionando hasta 1.1.
 
 | Subcomando | Qué hace |
 |---|---|
 | `ratifact serve` | Servidor MCP por stdio (lo que lanzan los clientes). `servidor.py` es un envoltorio de esto hasta 1.1. |
+| `ratifact install [--apply] [--client NOMBRE]` | Configura los clientes MCP que encuentra (Claude Desktop, Claude Code, Pi, Codex) y enlaza `/run-task` (sección 1). Sin `--apply` solo muestra el plan. |
 | `ratifact report [--days N] [--project P] [--log RUTA]` | Resumen del uso (sección 7). `analizar_uso.py` es un envoltorio hasta 1.1 (acepta `--dias`/`--proyecto`). |
-| `ratifact doctor` | Solo lectura: versión y de dónde corre (instalación fija o copia de trabajo, con aviso — P-017), configuración usada y grafía de sus claves, por proyecto código, memoria (ruta, esquema, `.memorias/` viejo o `.ratifact/` nuevo, estado git) e integraciones detectadas, log, variables `MEMORIA_PROYECTOS_*` y acciones pendientes. Sale con 0 si no hay nada pendiente, 1 si hay acciones. |
-| `ratifact upgrade` | Paso explícito de ADR-029 con todos los clientes cerrados. Sin opciones solo muestra el plan; `--apply` lo ejecuta: migra a v2 las memorias v1, mueve `<base>/.memorias/<p>` a `<base>/.ratifact/<p>` (las rutas propias nunca se mueven), escribe `~/.config/ratifact/projects.json` con claves en inglés y renombra el viejo a `projects.json.bak-v1`, regenera las vistas y copia el log viejo. Aborta si hay un servidor corriendo con esa configuración, un `.lock` tomado o una memoria con cambios sin commit; idempotente; si un paso falla, lo revierte. |
+| `ratifact doctor` | Solo lectura: versión y de dónde corre (instalación fija o copia de trabajo, con aviso — P-017), configuración usada y grafía de sus claves, por proyecto código, memoria (ruta, esquema, `.memorias/` viejo o `.ratifact/` nuevo, estado git) e integraciones detectadas, log, variables `MEMORIA_PROYECTOS_*` y acciones pendientes, y el estado de cada cliente (configurado con ratifact / configuración vieja / sin configurar / no encontrado). Sale con 0 si no hay nada pendiente, 1 si hay acciones. Si no existe la configuración por defecto pero hay servidores corriendo con `RATIFACT_CONFIG`/`MEMORIA_PROYECTOS_CONFIG` o un `projects.json` junto al repositorio de origen, sugiere el comando exacto (`RATIFACT_CONFIG=<ruta> ratifact upgrade`). |
+| `ratifact upgrade` | Paso explícito de ADR-029 con todos los clientes cerrados. Sin opciones solo muestra el plan; `--apply` lo ejecuta: migra a v2 las memorias v1, mueve `<base>/.memorias/<p>` a `<base>/.ratifact/<p>` (las rutas propias nunca se mueven), escribe `~/.config/ratifact/projects.json` con claves en inglés y renombra el viejo a `projects.json.bak-v1`, regenera las vistas y copia el log viejo. Aborta si hay un servidor corriendo con esa configuración, un `.lock` tomado o una memoria con cambios sin commit (cabecera "Aborted — nothing was changed:", el plan y los motivos; código de salida 1); idempotente; si un paso falla, lo revierte. |
 | `ratifact --version` | Versión instalada. |
 
-## 1. Claude Desktop
-Agregue esto a `~/.config/Claude/claude_desktop_config.json` (dentro de `"mcpServers"`) y reinicie la app:
+## 1. Clientes MCP: `ratifact install`
+Una vez por equipo, con el comando instalado (sección 0):
 
-```json
-"memoria-proyectos": {
-  "command": "uv",
-  "args": ["run", "--script", "/home/mano-pc/Projects/.memoria-proyectos/servidor.py"],
-  "env": { "RATIFACT_CONFIG": "/home/mano-pc/Projects/.memoria-proyectos/projects.json" }
-}
 ```
-Sin `uv`: `pip install "mcp>=1.2,<2"` y use `"command": "python3", "args": ["/home/mano-pc/Projects/.memoria-proyectos/servidor.py"]`.
-Si Claude Desktop no encuentra `uv`, use la ruta absoluta (`which uv`).
+ratifact install            # plan: qué clientes encontró y qué cambiaría; no toca nada
+ratifact install --apply    # lo hace, con respaldo de cada archivo
+```
+
+Configura los clientes que encuentra: Claude Desktop (`~/.config/Claude/claude_desktop_config.json`; en macOS
+`~/Library/Application Support/Claude/claude_desktop_config.json`), Claude Code (`claude mcp add --scope user` si existe
+el comando `claude`; si no, `~/.claude.json`), Pi (`~/.pi/agent/mcp.json`) y Codex (`~/.codex/config.toml`). Cada uno
+queda con el servidor `ratifact`, comando = ruta absoluta del ejecutable instalado, `args ["serve"]` y sin variables de
+entorno; el resto del archivo (otros MCP, preferencias) queda idéntico. Antes de escribir guarda
+`<archivo>.bak-ratifact-<fecha>` junto al archivo (los archivos dentro de un proyecto —`CLAUDE.md`, `AGENTS.md`,
+`.claude/settings.json`— se respaldan en `~/.local/state/ratifact/backups/<fecha>/<ruta absoluta>`, nunca dentro del
+repositorio; un archivo que no se reescribe no tiene respaldo), valida el resultado volviéndolo a parsear y reemplaza el original de forma atómica; un
+archivo inválido (p. ej. una coma de más en el JSON) se informa y no se toca. Un cliente no instalado se informa y se
+salta; `--client claude-desktop|claude-code|pi|codex` limita a uno. Un segundo `--apply` no cambia nada y lo dice.
+
+Además: reemplaza la entrada vieja `memoria-proyectos` (nunca quedan las dos), renombra los permisos de Claude Code
+`mcp__memoria-proyectos__<herramienta>` → `mcp__ratifact__<herramienta>` (en `~/.claude/settings.json` y en el
+`.claude/settings.json` de cada proyecto registrado; los nombres en español de v0 se traducen), mueve las tablas de
+aprobación por herramienta de Codex a la clave nueva, reescribe el bloque generado de `CLAUDE.md`/`AGENTS.md` de los
+proyectos registrados (solo ese texto exacto, con respaldo fuera del repositorio), enlaza `/run-task` (sección 12), crea
+`~/.config/ratifact/projects.json` vacío si no hay ninguna configuración, informa las integraciones detectadas por
+proyecto y cómo apagarlas (sin preguntar, ADR-025) y lista lo que no puede hacer solo (las aprobaciones de Claude
+Desktop, sección 10). Reinicie los clientes después.
 
 ## Nota de versión
-El servidor fija `mcp>=1.2,<2` en la cabecera de `servidor.py`. La serie 2.x de la librería `mcp` cambió la API y el servidor
-se desconecta al arrancar. No quite ese límite sin probar antes con `./diagnostico.sh`.
-Sin `uv`, instale igual: `pip install "mcp>=1.2,<2"`.
+El servidor fija `mcp>=1.2,<2`. La serie 2.x de la librería `mcp` cambió la API y el servidor se desconecta al
+arrancar. No quite ese límite sin probar antes con `./diagnostico.sh`.
 
 ## 2. Claude Code
-```bash
-claude mcp add memoria-proyectos --scope user \
-  -e RATIFACT_CONFIG=/home/mano-pc/Projects/.memoria-proyectos/projects.json \
-  -- uv run --script /home/mano-pc/Projects/.memoria-proyectos/servidor.py
-```
+Lo configura `ratifact install --apply` (sección 1): equivale a
+`claude mcp add --scope user ratifact -- <home>/.local/bin/ratifact serve`.
 
 ## 3. Instrucciones del proyecto en claude.ai
 El texto exacto (en inglés, con los nombres de herramientas v1) lo devuelve `project_instructions("<proyecto>")`:
@@ -166,8 +180,8 @@ con la tarea y su fecha de integración. Lee memorias v1 y v2. También cuenta, 
 ## 8. Confirmación de decisiones
 Toda decisión nace como propuesta. La única vía a "acordada" es `accept_decision`, que exige la frase literal del
 usuario (`user_quote`, guardada en el ADR) y debe requerir aprobación en cada cliente:
-- Claude Desktop: Configuración → conectores/MCP → memoria-proyectos → `accept_decision` → requiere aprobación.
-- Claude Code: `"mcp__memoria-proyectos__accept_decision"` y `"mcp__memoria-proyectos__accept_decisions"` en `permissions.ask` de `.claude/settings.json`.
+- Claude Desktop: Configuración → conectores/MCP → ratifact → `accept_decision` → requiere aprobación.
+- Claude Code: `"mcp__ratifact__accept_decision"` y `"mcp__ratifact__accept_decisions"` en `permissions.ask` de `.claude/settings.json` (`ratifact install` renombra los `mcp__memoria-proyectos__…` existentes).
 - Pi: sin permisos configurables; la evidencia queda en la sección "Confirmación" del ADR.
 
 ## 9. Revisar propuestas
@@ -181,8 +195,8 @@ modelo. Si la aplicación no soporta formularios (MCP elicitation), la herramien
 ## 10. Aprobaciones en Claude Desktop
 Crear registros en la memoria debe pasar por usted; modificar o leer, no. Marque como "requiere aprobación":
 `propose_decision`, `add_pending`, `create_task`, `create_document`, `register_project`, `accept_decision` y
-`accept_decisions`. Las aprobaciones se guardan por nombre de herramienta: tras la v1 hay que marcarlas de nuevo con los
-nombres nuevos (`docs/upgrade-v1.md`).
+`accept_decisions`. Las aprobaciones se guardan por nombre de servidor y de herramienta: tras pasar a la clave
+`ratifact` (T-013) hay que marcarlas de nuevo; `ratifact install` lo recuerda en sus pasos manuales.
 Deje en "permitir siempre" el resto (lecturas, `read_task`, `amend_task`, `update_document` sobre archivos existentes, `update_task`,
 `update_index`, `log_session`, `reject_decision`, `supersede_decision`). El servidor no tiene herramientas
 para borrar archivos: nada se elimina, solo cambia de estado. En Claude Code no se usan aprobaciones para el código.
@@ -193,19 +207,18 @@ Corren contra una carpeta temporal: no tocan `projects.json`, la telemetría ni 
 `test_cobertura.py` falla si se agrega una herramienta sin pruebas (ADR-009, criterio 1).
 
 ## 12. /run-task global (una vez por equipo)
-`/run-task` es genérico: la fuente es `skills/run-task/SKILL.md` (`run-task.md` es un enlace a ella) y se instala a nivel de usuario con enlaces, así existe en todos los proyectos y se
-actualiza solo con el repositorio:
-```
-mkdir -p ~/.claude/commands ~/.pi/agent/prompts
-ln -sf ~/Projects/.memoria-proyectos/run-task.md ~/.claude/commands/run-task.md
-ln -sf ~/Projects/.memoria-proyectos/run-task.md ~/.pi/agent/prompts/run-task.md
-mkdir -p ~/.codex/skills ~/.agents/skills   # Codex: según la versión lee una u otra carpeta
-ln -sfn ~/Projects/.memoria-proyectos/skills/run-task ~/.codex/skills/run-task
-ln -sfn ~/Projects/.memoria-proyectos/skills/run-task ~/.agents/skills/run-task
-```
-`/tarea` (`tarea.md`, `skills/tarea/`) queda como alias deprecado que remite a `/run-task` hasta 1.1, así los enlaces
-viejos siguen funcionando.
-Si usa gentle-shell independiente, repita el segundo enlace en `~/.gentle-shell/agent/prompts/`.
+`/run-task` es genérico: la fuente es `ratifact/skills/run-task/SKILL.md`, que viaja dentro del paquete instalado
+(`skills/` y `run-task.md` en la raíz del repositorio son enlaces a ella). `ratifact install --apply` lo enlaza desde la
+copia instalada (nunca desde la copia de trabajo), así existe en todos los proyectos:
+
+- Claude Code: `~/.claude/commands/run-task.md`
+- Pi: `~/.pi/agent/prompts/run-task.md` (y `~/.pi/agent/skills/run-task` si existe esa carpeta)
+- Codex: `~/.codex/skills/run-task` y `~/.agents/skills/run-task` (según la versión lee una u otra; se enlaza la carpeta
+  entera porque Codex no sigue un `SKILL.md` enlazado como archivo)
+
+`/tarea` (`ratifact/skills/tarea/`) queda como alias deprecado que remite a `/run-task` hasta 1.1 y se enlaza igual.
+Un destino que ya existe como archivo o carpeta real (no enlace) nunca se reemplaza: el plan pide borrarlo a mano.
+Si usa gentle-shell independiente, enlace también `~/.gentle-shell/agent/prompts/run-task.md` a la misma fuente.
 
 ## 13. Versión de esquema de la memoria
 
@@ -246,23 +259,24 @@ Para desarrolladores: un cambio de formato sube `VERSION_ESQUEMA` y agrega la fu
 
 ## 14. Codex (CLI, extensión de IDE y app de escritorio)
 
-Las tres comparten `~/.codex/config.toml`. Agregue:
+Las tres comparten `~/.codex/config.toml`; lo configura `ratifact install --apply` (sección 1) con una edición acotada:
+solo reescribe las tablas `[mcp_servers.memoria-proyectos]`/`[mcp_servers.ratifact]` y sus subtablas (borra la `.env`,
+renombra las `.tools.<herramienta>` con su `approval_mode`) y deja el resto del archivo byte por byte. Queda:
 
 ```toml
-[mcp_servers.memoria-proyectos]
-command = "uv"
-args = ["run", "--script", "/home/mano-pc/Projects/.memoria-proyectos/servidor.py"]
-startup_timeout_sec = 30   # el primer arranque de uv resuelve dependencias
-
-[mcp_servers.memoria-proyectos.env]
-RATIFACT_CONFIG = "/home/mano-pc/Projects/.memoria-proyectos/projects.json"
+[mcp_servers.ratifact]
+command = "<home>/.local/bin/ratifact"
+args = ["serve"]
 ```
+
+Si el servidor está definido de otra forma (tabla en línea, claves con puntos), no toca el archivo y da las
+instrucciones para hacerlo a mano.
 
 Codex eliminó los comandos personalizados (`~/.codex/prompts`) en marzo de 2026; `/run-task` se instala como skill
 (enlaces de carpeta de la sección 12; Codex no sigue un `SKILL.md` enlazado como archivo) y se invoca con `$run-task T-NNN`. Codex lee `AGENTS.md`
 de forma nativa, pero solo desde la raíz del repo git hacia abajo: en proyectos de varios repos ponga el bloque en la
 carpeta raíz (si abre Codex ahí) y en el `AGENTS.md` de cada repo. Si hay otra memoria de agente instalada (engram),
-el servidor declara en sus instrucciones MCP que memoria-proyectos es la fuente de verdad del proyecto.
+el servidor declara en sus instrucciones MCP que ratifact es la fuente de verdad del proyecto.
 
 ## 15. Idempotencia de creación (ADR-019)
 
@@ -297,7 +311,11 @@ vive en `ratifact/` (ADR-020); ningún módulo supera 300 líneas y no hay impor
 
 | Módulo | Responsabilidad |
 |---|---|
-| `ratifact/cli.py` | Comando `ratifact` (`serve`, `report`, `doctor`, `upgrade`, `--version`); `servidor()` carga herramientas y prompts. |
+| `ratifact/cli.py` | Comando `ratifact` (`serve`, `install`, `report`, `doctor`, `upgrade`, `--version`); `servidor()` carga herramientas y prompts. |
+| `ratifact/instalar.py`, `ratifact/instalar_extras.py` | `ratifact install` (T-013): plan y ejecución; permisos de Claude Code, bloque de CLAUDE.md/AGENTS.md y enlaces de `/run-task`. |
+| `ratifact/clientes.py`, `ratifact/clientes_toml.py` | Clientes MCP (Claude Desktop, Claude Code, Pi, Codex): detección, estado (también para doctor) y edición de su configuración; la de Codex es una edición acotada del TOML. |
+| `ratifact/archivos.py` | Escritura segura de archivos de otros programas: validación, respaldo `.bak-ratifact-<fecha>` y reemplazo atómico. |
+| `ratifact/skills/` | Skills `run-task` y `tarea` (alias hasta 1.1), incluidas en el paquete. |
 | `ratifact/rutas.py` | Rutas sin projects.json: configuración nueva/vieja, log por defecto (XDG), copia de trabajo o instalación fija y repositorio de origen. |
 | `ratifact/informe.py`, `ratifact/informe_memoria.py` | `ratifact report` (antes `analizar_uso.py`): agregados del log y los indicadores que salen de las memorias. |
 | `ratifact/instalacion.py` | Inventario de solo lectura para doctor/upgrade: projects.json y sus claves, memorias (ubicación, esquema, git), integraciones, servidores en marcha y `.lock` tomados. |

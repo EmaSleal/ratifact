@@ -19,7 +19,7 @@ from ratifact.registros import MARCA_DUPLICADO
 
 
 mcp = FastMCP(
-    "memoria-proyectos",
+    "ratifact",
     instructions=(
         "Persistent project memory on the user's machine. When a chat about a project starts, call "
         "get_context(project) before answering. Every decision is recorded as 'proposed'; it only becomes "
@@ -85,6 +85,12 @@ def _argumentos(firma: inspect.Signature, args: tuple, kwargs: dict) -> dict:
         return kwargs
 
 
+def descripcion(fn) -> str:
+    """Docstring normalizado con inspect.cleandoc (T-013): Python 3.13+ quita la sangría de los docstrings al compilar
+    y 3.10–3.12 no, así que sin normalizar cada versión mostraría a los clientes un texto distinto."""
+    return inspect.cleandoc(fn.__doc__ or "")
+
+
 def herramienta(fn):
     """Registra la función como herramienta MCP y mide cada llamada."""
     firma = inspect.signature(fn)
@@ -105,7 +111,7 @@ def herramienta(fn):
             return respuesta
         finally:
             ALIAS_RUTA.reset(token)
-    return mcp.tool()(envoltura)
+    return mcp.tool(description=descripcion(fn))(envoltura)
 
 
 def _primer_acceso(argumentos: dict) -> tuple[str, str | None]:
@@ -140,7 +146,7 @@ def herramienta_async(fn):
             raise
         _registrar_uso(fn.__name__, argumentos, respuesta, (time.perf_counter() - inicio) * 1000)
         return respuesta
-    return mcp.tool()(envoltura)
+    return mcp.tool(description=descripcion(fn))(envoltura)
 
 
 def _mensaje_error(e: Exception) -> str:

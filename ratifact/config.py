@@ -69,11 +69,6 @@ CARPETAS_IGNORADAS = {".git", ".godot", "node_modules", "target", "build", "dist
 LIMITE_ARCHIVO_BUSQUEDA = 1_000_000   # bytes: archivos más grandes no se recorren en buscar
 
 
-# Repositorio de memoria-proyectos (donde están run-task.md y skills/): la copia de trabajo o, en una instalación fija,
-# el repositorio desde el que se instaló (rutas.origen).
-_DIR = rutas.origen() or Path(__file__).resolve().parents[1]
-
-
 class ErrorMemoria(Exception):
     pass
 
@@ -103,14 +98,14 @@ def _valor(p: dict, clave: str, defecto=None):
 
 
 def _clave_escritura(p: dict, clave: str) -> str:
-    """Nombre con que se escribe `clave` en la entrada `p`: el que ya tiene; si no tiene ninguno, inglés solo si la
-    entrada ya usa claves inglesas."""
+    """Nombre con que se escribe `clave` en la entrada `p`: el que ya tiene; si no tiene ninguno, español solo si la
+    entrada ya usa claves en español (una entrada vacía —configuración nueva, T-013— se escribe en inglés)."""
     en = CLAVES_CONFIG[clave]
     if en in p:
         return en
     if clave in p:
         return clave
-    return en if any(k in p for k in CLAVES_CONFIG.values()) else clave
+    return clave if any(k in p for k in CLAVES_CONFIG) and not any(k in p for k in CLAVES_CONFIG.values()) else en
 
 
 def _sugerencia_nombre(nombre: str, proyectos: dict) -> str | None:

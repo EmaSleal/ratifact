@@ -1,7 +1,8 @@
 {
-  "mi-proyecto": {
-    "ruta": "/home/usuario/Projects/mi-proyecto/repo",
-    "memoria": "/home/usuario/Projects/mi-proyecto/.project",
-    "escritura": [".project", "docs"]
+  "my-project": {
+    "path": "~/Projects/my-project/repo",
+    "memory": "~/Projects/.ratifact/my-project",
+    "writable": [".project", "docs"],
+    "tests": "uv run pytest -q"
   }
 }

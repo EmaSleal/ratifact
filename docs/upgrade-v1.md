@@ -45,18 +45,21 @@ command line(s) of the project; keep them below the block.
 
 ```
 ## Project memory (read first)
-This repository uses the `memoria-proyectos` MCP server (ratifact) with project `<project>`. Before working, call
+This repository uses the `ratifact` MCP server with project `<project>`. Before working, call
 `get_context("<project>")`. Only **accepted** decisions are rules; proposals are not implemented without the
 user's confirmation. Code tasks run with `/run-task T-NNN` (in Codex: `$run-task T-NNN`).
-Decisions, pending items and tasks live in `memoria-proyectos`; on a contradiction with another memory, the
+Decisions, pending items and tasks live in `ratifact`; on a contradiction with another memory, the
 accepted decision wins.
 ```
+
+(Until T-013 the block said ``uses the `memoria-proyectos` MCP server (ratifact)``; `ratifact install --apply` rewrites
+that exact block in the registered projects — see "ratifact install" below.)
 
 ## 3. Update per-tool approval settings to the new names
 
 Approvals are stored per tool name, so the old settings no longer apply.
 
-Claude Desktop (Settings → Connectors / MCP → memoria-proyectos), mark as **requires approval**:
+Claude Desktop (Settings → Connectors / MCP → ratifact), mark as **requires approval**:
 
 - `propose_decision`
 - `add_pending`
@@ -73,26 +76,20 @@ Claude Code (`.claude/settings.json` or `~/.claude/settings.json`), in `permissi
 (`mcp__memoria-proyectos__confirmar_decision`, `…__confirmar_decisiones_lote`, …) with:
 
 ```json
-"mcp__memoria-proyectos__accept_decision",
-"mcp__memoria-proyectos__accept_decisions"
+"mcp__ratifact__accept_decision",
+"mcp__ratifact__accept_decisions"
 ```
 
-and in `permissions.allow` replace any old Spanish tool names with their new names (table below).
+and in `permissions.allow` replace any old Spanish tool names with their new names (table below). Since T-013
+`ratifact install --apply` does this rename (prefix and v0 tool names) by itself.
 
 ## 4. Relink /run-task
 
-`/tarea` is now `/run-task` (`$run-task` in Codex). Run once per machine:
-
-```
-mkdir -p ~/.claude/commands ~/.pi/agent/prompts ~/.codex/skills ~/.agents/skills
-ln -sf ~/Projects/.memoria-proyectos/run-task.md ~/.claude/commands/run-task.md
-ln -sf ~/Projects/.memoria-proyectos/run-task.md ~/.pi/agent/prompts/run-task.md
-ln -sfn ~/Projects/.memoria-proyectos/skills/run-task ~/.codex/skills/run-task
-ln -sfn ~/Projects/.memoria-proyectos/skills/run-task ~/.agents/skills/run-task
-```
-
-The old `/tarea` links keep working until 1.1: `tarea.md` / `skills/tarea` are a thin deprecated alias that points to
-`run-task`. Remove them after 1.1:
+`/tarea` is now `/run-task` (`$run-task` in Codex). Since T-013, run once per machine `ratifact install --apply`: it
+links `run-task` (and the deprecated `/tarea` alias, until 1.1) from the **installed** package into
+`~/.claude/commands/`, `~/.pi/agent/prompts/`, `~/.codex/skills/` and `~/.agents/skills/` (Codex gets the whole skill
+folder). Links made earlier by hand to the working copy are replaced; a real file or folder in their place is left
+alone and reported. Remove the alias links after 1.1:
 `rm ~/.claude/commands/tarea.md ~/.pi/agent/prompts/tarea.md ~/.codex/skills/tarea ~/.agents/skills/tarea`.
 
 ## 5. (Optional) Rename the environment variables
@@ -102,11 +99,12 @@ log. To silence it, rename them in each client configuration (`~/.config/Claude/
 `claude mcp add … -e …`, `~/.codex/config.toml`):
 
 ```
-RATIFACT_CONFIG=/home/mano-pc/Projects/.memoria-proyectos/projects.json
+RATIFACT_CONFIG=<home>/Projects/.memoria-proyectos/projects.json
 ```
 
 Without any variable, the configuration is `~/.config/ratifact/projects.json` if it exists, else
-`~/.config/memoria-proyectos/projects.json`. The MCP server key (`memoria-proyectos`) does not change in this release.
+`~/.config/memoria-proyectos/projects.json`. The MCP server key (`memoria-proyectos`) did not change in this release;
+T-013 renames it to `ratifact` (below).
 
 ## What still accepts the old Spanish values (until 1.1)
 
@@ -169,7 +167,7 @@ as thin wrappers until 1.1, so the current client configurations do not break in
 
 ```
 uv tool install ~/Projects/.memoria-proyectos
-ratifact --version          # ratifact 1.0.0rc1
+ratifact --version          # ratifact 1.0.0
 ratifact doctor             # read-only: what is installed, where, and what is pending
 ```
 
@@ -203,45 +201,10 @@ when you switch the client to the fragments below.
 
 ### 3. Point each client at `ratifact serve`
 
-No environment variables are needed: the configuration is `~/.config/ratifact/projects.json` and the log
-`~/.local/state/ratifact/uso.jsonl`. The MCP server key stays `memoria-proyectos`, so tool approvals keep their names.
-
-Claude Desktop — `~/.config/Claude/claude_desktop_config.json`, inside `"mcpServers"` (replace the old entry):
-
-```json
-"memoria-proyectos": {
-  "command": "/home/mano-pc/.local/bin/ratifact",
-  "args": ["serve"]
-}
-```
-
-Claude Code:
-
-```
-claude mcp remove memoria-proyectos --scope user
-claude mcp add memoria-proyectos --scope user -- /home/mano-pc/.local/bin/ratifact serve
-```
-
-Pi — `~/.pi/agent/mcp.json`, inside `"mcpServers"`:
-
-```json
-"memoria-proyectos": {
-  "command": "/home/mano-pc/.local/bin/ratifact",
-  "args": ["serve"]
-}
-```
-
-Codex — `~/.codex/config.toml` (replace the `command`/`args` lines and delete the
-`[mcp_servers.memoria-proyectos.env]` table; keep the per-tool `approval_mode` tables):
-
-```toml
-[mcp_servers.memoria-proyectos]
-command = "/home/mano-pc/.local/bin/ratifact"
-args = ["serve"]
-startup_timeout_sec = 30
-```
-
-Then restart every client and run `ratifact doctor`: it should end with `Pending actions: none`.
+Since T-013 this is `ratifact install --apply` (next section): it writes the entry of each client with the absolute
+path of the installed executable (`uv tool dir --bin`, usually `<home>/.local/bin/ratifact`), args `["serve"]` and no
+environment variables, under the new server key `ratifact`. Then restart every client and run `ratifact doctor`: it
+should end with `Pending actions: none`.
 
 ### 4. After every merge into main
 
@@ -252,3 +215,59 @@ uv tool install --reinstall ~/Projects/.memoria-proyectos
 ```
 
 and restart every client (Claude Desktop, Claude Code, Pi, Codex) so they launch the new copy.
+
+## ratifact install (T-013)
+
+Applies to: T-013 (ADR-032, last step of v1). Installing and configuring ratifact no longer requires editing any file
+by hand.
+
+```
+ratifact install            # plan: clients found, what would change; nothing is written
+ratifact install --apply    # with every client closed
+ratifact install --apply    # a second run changes nothing and says so
+ratifact doctor             # each client: configured with ratifact / old configuration / not configured / not found
+```
+
+What `--apply` does, each part independent of the others (an error in one client does not stop the rest):
+
+1. **projects.json from scratch.** With no configuration at all (no variable, no `~/.config/ratifact/projects.json`,
+   no `~/.config/memoria-proyectos/projects.json`), it creates an empty `~/.config/ratifact/projects.json`; projects
+   registered there are written with English keys and their memory in `<projects folder>/.ratifact/<name>`. If only
+   the old file exists it says to run `ratifact upgrade`; if a running server uses another projects.json (or there is
+   one next to the source install) it prints `RATIFACT_CONFIG=<path> ratifact upgrade` instead of creating anything.
+2. **Clients.** Claude Desktop, Claude Code (`claude mcp add --scope user`, or `~/.claude.json` without the `claude`
+   command), Pi and Codex get the server key `ratifact` with `command` = absolute path of the installed executable,
+   `args = ["serve"]` and no env. A `memoria-proyectos` entry is replaced (never both); other servers and settings stay
+   identical; unknown keys of the old entry (e.g. Codex `startup_timeout_sec`, Pi `lifecycle`) are kept. Each file is
+   backed up as `<file>.bak-ratifact-<date>`, the new text is validated by parsing it again (JSON; TOML with tomllib,
+   or tomli on Python 3.10) and replaced atomically. An invalid input file is reported with its line and left
+   untouched. Codex is a bounded edit: only the server's own tables change (the `.env` table is dropped and
+   `.tools.<tool>` approval tables move to `[mcp_servers.ratifact.tools.<tool>]`, v0 Spanish names translated).
+3. **Claude Code permissions.** In `~/.claude/settings.json` and in `.claude/settings.json` of each registered
+   project, `permissions.allow` / `ask` / `deny` entries `mcp__memoria-proyectos__<tool>` become
+   `mcp__ratifact__<tool>` (and `mcp__memoria-proyectos` → `mcp__ratifact`), in the same list.
+4. **CLAUDE.md / AGENTS.md.** In each registered project (and each repo of a multi-repo project), the block generated
+   until T-013 is replaced by the one above — only that exact text; a block edited by hand is left alone (listed as a
+   manual step, no backup).
+
+Backups: client files outside repositories (`claude_desktop_config.json`, `~/.claude.json`, `~/.claude/settings.json`,
+`~/.pi/agent/mcp.json`, `~/.codex/config.toml`) get `<file>.bak-ratifact-<date>` next to them. Files inside a registered
+project (`CLAUDE.md`, `AGENTS.md`, the project's `.claude/settings.json`) are backed up under
+`$XDG_STATE_HOME/ratifact/backups/<date>/<absolute path>` (default `~/.local/state/ratifact/backups/…`), never inside the
+repository; a second backup of the same file on the same day gets `-2`, `-3`… and never overwrites the first.
+5. **/run-task links** (section 4 above).
+
+What it cannot change, and lists with instructions: Claude Desktop tool approvals (stored per server name inside the
+app: mark `propose_decision`, `add_pending`, `create_task`, `create_document`, `register_project`, `accept_decision`
+and `accept_decisions` as **requires approval** again), Claude Code servers added with a project/local scope, link
+destinations that are real files or folders, and a Codex server defined outside its own table. At the end it reports
+the integrations detected per project and how to turn one off (`update_project("<project>",
+integrations="codegraph=off")`); it never asks.
+
+`ratifact install` must run from the fixed installation: from a working copy it shows the plan but refuses `--apply`
+(the links would point to the working copy, P-017), and an executable inside the uv cache (`uvx`) is not used for the
+clients.
+
+Also in T-013: an aborted `ratifact upgrade --apply` prints `Aborted — nothing was changed:` followed by the plan and
+the reasons, with a non-zero exit code; tool descriptions are normalized with `inspect.cleandoc` before registering
+them, so every Python version (3.10–3.14) shows the clients the same text.

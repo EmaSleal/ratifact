@@ -353,7 +353,7 @@ def test_guia_de_actualizacion_trae_el_texto_exacto_a_pegar():
     guia = (RAIZ_REPO / "docs" / "upgrade-v1.md").read_text(encoding="utf-8")
     assert PLANTILLA_INSTRUCCIONES.format(proyecto="<project>") in guia
     assert PLANTILLA_AGENTES.format(proyecto="<project>") in guia
-    assert "ln -sf ~/Projects/.memoria-proyectos/run-task.md ~/.claude/commands/run-task.md" in guia
+    assert "ratifact install --apply" in guia and "## ratifact install (T-013)" in guia
     for nombre in ("accept_decision", "accept_decisions", "propose_decision", "register_project", *HERRAMIENTAS_NUEVAS):
         assert f"`{nombre}`" in guia, nombre
     for es, en in HERRAMIENTAS_V0.items():

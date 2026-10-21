@@ -179,6 +179,7 @@ def test_decisiones_sin_projects_json_lo_dice(entorno, monkeypatch, capsys):
     assert f"sin configuración ({entorno['env']['MEMORIA_PROYECTOS_CONFIG']})" in capsys.readouterr().out
 
 
-def test_ruta_de_configuracion_igual_que_el_servidor(monkeypatch):
+def test_ruta_de_configuracion_igual_que_el_servidor(monkeypatch, tmp_path):
     monkeypatch.delenv("MEMORIA_PROYECTOS_CONFIG", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path))          # independent of the real ~/.config of whoever runs the tests
     assert analizar_uso.ruta_config() == Path.home() / ".config" / "memoria-proyectos" / "projects.json"

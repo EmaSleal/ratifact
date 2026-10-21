@@ -1,0 +1,31 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: pytest (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.10", "3.11", "3.12", "3.13"]
+    env:
+      # No global git identity: every test must set its own (memories are git repositories).
+      GIT_CONFIG_GLOBAL: /dev/null
+      GIT_CONFIG_NOSYSTEM: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Run the suite
+        run: >-
+          uv run --no-project --python ${{ matrix.python }}
+          --with pytest --with "mcp>=1.2,<2"
+          pytest -q

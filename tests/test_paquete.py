@@ -56,7 +56,7 @@ def test_instalacion_fija_y_serve_no_escribe_en_site_packages(tmp_path, monkeypa
     assert (sitio / "ratifact" / "cli.py").is_file()                                       # copia, no editable
     assert not any(str(RAIZ_REPO) in pth.read_text() for pth in sitio.glob("*.pth"))
     assert subprocess.run([str(ratifact), "--version"], capture_output=True, text=True, env=env).stdout.strip() \
-        == "ratifact 1.0.0rc1"
+        == "ratifact 1.0.0"
     antes = _arbol(sitio)
 
     entrada = _mensajes(

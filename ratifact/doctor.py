@@ -1,6 +1,7 @@
 """`ratifact doctor` (solo lectura): versión y de dónde corre (instalación fija o copia de trabajo, P-017),
 configuración en uso y grafía de sus claves, estado de cada proyecto (código, memoria, esquema, ubicación por defecto
-vieja/nueva, git, integraciones), log, variables MEMORIA_PROYECTOS_* y la lista de acciones pendientes. Código de
+vieja/nueva, git, integraciones), log, variables MEMORIA_PROYECTOS_*, estado de cada cliente MCP (T-013) y la lista de
+acciones pendientes. Código de
 salida 0 si no hay nada pendiente, 1 si hay acciones. No escribe nada."""
 from __future__ import annotations
 
@@ -9,9 +10,11 @@ from pathlib import Path
 from typing import Callable
 
 from ratifact import __version__, rutas
-from ratifact.config import ErrorMemoria, _ruta_config
+from ratifact import config as _cfg
+from ratifact.config import _ruta_config
 from ratifact.esquema import VERSION_ESQUEMA
-from ratifact.instalacion import Proceso, procesos_servidor, separar_procesos
+from ratifact.instalacion import (Proceso, mensaje_sugerencia, procesos_servidor, separar_procesos,
+                                  sugerencias_config)
 from ratifact.upgrade import describir, planificar
 
 SUFIJOS_ENTORNO = ("CONFIG", "LOG", "BASE")
@@ -89,6 +92,36 @@ def _servidores(plan, procesos: list[Proceso]) -> list[str]:
             + (f" · with other configurations (ignored): {len(otros)}" if otros else "")]
 
 
+def _clientes(acciones: list[str], paquete: Path | None = None) -> list[str]:
+    """configured with ratifact / old configuration / not configured / not found, per client (T-013)."""
+    from ratifact import clientes as cl
+    lineas = ["Clients:"]
+    for c in cl.clientes():
+        e = cl.estado(c)
+        lineas.append(f"  {c.titulo}: {e}" + (f" ({c.archivo})" if c.encontrado else ""))
+        if e == cl.VIEJA:
+            acciones.append(f"{c.titulo} has the old configuration ({cl.CLAVE_VIEJA} or another command): run "
+                            "`ratifact install --apply` (`ratifact install` alone shows the plan)")
+        elif e.startswith("error"):
+            acciones.append(f"{c.titulo}: {e}")
+    return lineas + _enlaces({c.nombre for c in cl.clientes() if c.encontrado}, acciones, paquete)
+
+
+def _enlaces(encontrados: set[str], acciones: list[str], paquete: Path | None) -> list[str]:
+    """/run-task links of the clients found: missing ones are informative; one pointing elsewhere (e.g. to a working
+    copy, or broken after `uv tool install --reinstall` with another Python) is a pending action."""
+    from ratifact.instalar_extras import planificar_enlaces
+    enlaces = planificar_enlaces(Path.home(), (paquete or Path(__file__).resolve().parent) / "skills", encontrados)
+    otros = [e for e in enlaces if e.accion == "replace"]
+    faltan = [e for e in enlaces if e.accion == "create"]
+    if otros:
+        acciones.append(f"{len(otros)} /run-task link(s) point elsewhere (e.g. {otros[0].destino} → {otros[0].previo}): "
+                        "run `ratifact install --apply`")
+    estado = "ok" if not (otros or faltan) else f"{len(faltan)} missing, {len(otros)} pointing elsewhere"
+    return [f"/run-task links: {estado}" + (" (`ratifact install --apply` links them)" if faltan and not otros
+                                            else "")] if enlaces else []
+
+
 def informe(procesos: Callable[[], list[Proceso]] = procesos_servidor, paquete: Path | None = None,
             log_viejo: Path | None = None) -> tuple[list[str], list[str]]:
     """(líneas del informe, acciones pendientes)."""
@@ -97,10 +130,12 @@ def informe(procesos: Callable[[], list[Proceso]] = procesos_servidor, paquete: 
               *_config(acciones)]
     try:
         plan = planificar(procesos=lambda: [], log_viejo=log_viejo)
-    except ErrorMemoria as e:
-        acciones.append(str(e))
-        return lineas + _log(log_viejo) + _entorno(acciones), acciones
-    lineas += _proyectos(plan, acciones) + _log(log_viejo) + _entorno(acciones) + _servidores(plan, procesos())
+    except _cfg.ErrorMemoria as e:
+        sugerencia = mensaje_sugerencia(sugerencias_config(procesos(), rutas.origen(paquete)))
+        acciones.append(str(e) + (f" Hint: {sugerencia}." if sugerencia else ""))
+        return lineas + _log(log_viejo) + _entorno(acciones) + _clientes(acciones, paquete), acciones
+    lineas += (_proyectos(plan, acciones) + _log(log_viejo) + _entorno(acciones) + _servidores(plan, procesos())
+               + _clientes(acciones, paquete))
     if not plan.vacio:
         pasos = describir(plan)
         acciones.insert(0, "run `ratifact upgrade` to review the plan, then `ratifact upgrade --apply` with every "

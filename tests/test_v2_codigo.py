@@ -140,6 +140,10 @@ def test_si_estan_las_dos_gana_la_inglesa(srv, proyecto, entorno):
 
 def test_las_escrituras_conservan_la_grafia_existente(srv, proyecto, entorno):
     _proyecto_en_ingles(entorno)
+    datos = json.loads(_config(entorno).read_text())        # demo as written before T-013 (Spanish keys)
+    datos["demo"] = {{"path": "ruta", "memory": "memoria", "writable": "escritura", "tests": "pruebas"}.get(k, k): v
+                     for k, v in datos["demo"].items()}
+    _config(entorno).write_text(json.dumps(datos))
     srv.update_project(name="ing", tests="pytest -q")
     srv.update_project(name="demo", tests="npm test")
     datos = json.loads(_config(entorno).read_text())

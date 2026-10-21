@@ -11,7 +11,7 @@ def test_alta_crea_memoria_con_repo_propio_e_instrucciones(srv, proyecto, entorn
     assert (proyecto["mem"] / ".git").exists()
     assert "memoria: inicializar memoria" in log_git(proyecto["mem"])
     config = json.loads(Path(entorno["env"]["MEMORIA_PROYECTOS_CONFIG"]).read_text())
-    assert config["demo"]["memoria"] == str(proyecto["mem"])
+    assert config["demo"]["memory"] == str(proyecto["mem"])
     instr = srv.project_instructions(project="demo")
     assert "project: demo" in instr and 'get_context("demo")' in instr
 
@@ -117,8 +117,7 @@ def test_sin_nombres_de_proyecto_fijos_en_el_codigo():
 def test_instrucciones_cubren_codex(srv, proyecto):
     """ADR-008: Codex no tiene comandos propios (custom prompts eliminados); /run-task se instala como skill."""
     salida = srv.project_instructions(project="demo")
-    assert "skills/run-task ~/.codex/skills/run-task" in salida
-    assert "skills/run-task ~/.agents/skills/run-task" in salida
+    assert "ratifact install --apply" in salida and "the whole folder for Codex" in salida     # T-013
     assert "$run-task T-NNN" in salida and "/tarea" not in salida
     raiz = srv.Path(srv.__file__).parent
     for nombre in ("run-task", "tarea"):     # tarea: alias deprecado hasta 1.1

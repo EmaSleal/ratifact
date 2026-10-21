@@ -11,7 +11,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ratifact import rutas
-from ratifact.config import (CLAVES_CONFIG, ErrorMemoria, _base, _es_repo, _mem_por_defecto, _ruta_config,
+from ratifact import config as _cfg
+from ratifact.config import (CLAVES_CONFIG, _base, _es_repo, _mem_por_defecto, _ruta_config,
                              _valor)
 from ratifact.esquema import _inicializada, _version_esquema
 from ratifact.integraciones.registro import INTEGRACIONES, _detectada
@@ -101,7 +102,7 @@ def _proyecto(nombre: str, entrada: dict, base: Path) -> Proyecto:
     if p.existe and _inicializada(mem):
         try:
             p.version = _version_esquema(mem)
-        except ErrorMemoria as e:
+        except _cfg.ErrorMemoria as e:
             p.error = str(e)
     p.integraciones = _integraciones(entrada, codigo) if codigo else []
     return p
@@ -112,11 +113,11 @@ def inventario(config: Path | None = None, base: Path | None = None) -> Instalac
     config = config or _ruta_config()
     base = base or _base()
     if not config.is_file():
-        raise ErrorMemoria(f"Configuration file {config} does not exist.")
+        raise _cfg.ErrorMemoria(f"Configuration file {config} does not exist.")
     try:
         datos = json.loads(config.read_text(encoding="utf-8"))
     except ValueError as e:
-        raise ErrorMemoria(f"{config} is not valid JSON ({e}).") from e
+        raise _cfg.ErrorMemoria(f"{config} is not valid JSON ({e}).") from e
     proyectos = [_proyecto(n, e, base) for n, e in datos.items() if isinstance(e, dict)]
     return Instalacion(config, datos, base, proyectos)
 
@@ -128,6 +129,7 @@ class Proceso:
     pid: int
     comando: str
     config: Path | None      # projects.json que usa; None si no se pudo leer su entorno
+    por_variable: bool = False      # lo eligió RATIFACT_CONFIG / MEMORIA_PROYECTOS_CONFIG (no la ruta por defecto)
 
 
 def _es_servidor(args: list[str]) -> bool:
@@ -185,10 +187,12 @@ def procesos_servidor(proc: Path = Path("/proc")) -> list[Proceso]:
             cwd = None
         try:
             pares = (l.decode(errors="replace").partition("=") for l in (d / "environ").read_bytes().split(b"\0"))
-            config = _config_de({k: v for k, _, v in pares if k}, cwd)
+            entorno = {k: v for k, _, v in pares if k}
+            config = _config_de(entorno, cwd)
         except OSError:
-            config = None
-        salida.append(Proceso(int(d.name), " ".join(args), config))
+            entorno, config = {}, None
+        variable = bool(entorno.get("RATIFACT_CONFIG") or entorno.get("MEMORIA_PROYECTOS_CONFIG"))
+        salida.append(Proceso(int(d.name), " ".join(args), config, variable))
     return sorted(salida, key=lambda p: p.pid)
 
 
@@ -213,3 +217,31 @@ def bloqueo_tomado(mem: Path) -> bool:
             return True
         fcntl.flock(f, fcntl.LOCK_UN)
     return False
+
+
+# ───────────────────────── configuración por defecto ausente (T-013) ─────────────────────────
+
+def sugerencias_config(procesos: list[Proceso], origen: Path | None) -> list[Path]:
+    """Sin variable CONFIG y sin projects.json por defecto (nuevo ni viejo): los projects.json que usan los servidores
+    en marcha (RATIFACT_CONFIG / MEMORIA_PROYECTOS_CONFIG) y el que está junto al repositorio de origen."""
+    if os.environ.get("RATIFACT_CONFIG") or os.environ.get("MEMORIA_PROYECTOS_CONFIG"):
+        return []
+    if rutas.config_nueva().exists() or rutas.config_vieja().exists():
+        return []
+    candidatas = [p.config for p in procesos if p.por_variable and p.config is not None and p.config.is_file()]
+    if origen is not None and (origen / "projects.json").is_file():
+        candidatas.append(origen / "projects.json")
+    salida: list[Path] = []
+    for c in candidatas:
+        if c.resolve() not in {s.resolve() for s in salida}:
+            salida.append(c)
+    return salida
+
+
+def mensaje_sugerencia(candidatas: list[Path]) -> str:
+    """El comando exacto para cada configuración encontrada (vacío si no hay ninguna)."""
+    if not candidatas:
+        return ""
+    comandos = "; ".join(f"`RATIFACT_CONFIG={c} ratifact upgrade`" for c in candidatas)
+    return (f"the default configuration {rutas.config_nueva()} does not exist, but a projects.json is in use "
+            f"(running servers or next to the source install): review the plan with {comandos}")

@@ -115,9 +115,9 @@ def test_actualizar_proyecto_apaga_y_reactiva_integraciones(srv, proyecto, entor
     salida = srv.update_project(name="demo", integrations="codegraph=off, engram=off")
     assert not salida.startswith("ERROR"), salida
     assert "integrations" in salida and "codegraph=off" in salida
-    assert _config(entorno)["demo"]["integraciones"] == {"codegraph": "off", "engram": "off"}
+    assert _config(entorno)["demo"]["integrations"] == {"codegraph": "off", "engram": "off"}
     srv.update_project(name="demo", integrations="codegraph=auto,gentle-ai=auto")
-    assert _config(entorno)["demo"]["integraciones"] == {"engram": "off"}   # auto se omite
+    assert _config(entorno)["demo"]["integrations"] == {"engram": "off"}   # auto se omite
     srv.update_project(name="demo", integrations="engram=auto")
     assert "integraciones" not in _config(entorno)["demo"]
 

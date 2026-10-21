@@ -45,8 +45,11 @@ def test_rutas_por_defecto_fuera_del_paquete(srv, monkeypatch, tmp_path):
     from ratifact import app, config
     assert app.LOG_USO == tmp_path / "estado" / "ratifact" / "uso.jsonl"
     assert srv.LOG_USO == app.LOG_USO
-    assert config._DIR == RAIZ_REPO
-    assert (config._DIR / "skills" / "tarea" / "SKILL.md").is_file()
+    import ratifact
+    skills = Path(ratifact.__file__).parent / "skills"            # shipped inside the package (T-013)
+    assert (skills / "run-task" / "SKILL.md").is_file() and (skills / "tarea" / "SKILL.md").is_file()
+    assert (RAIZ_REPO / "skills" / "run-task" / "SKILL.md").resolve() == (skills / "run-task" / "SKILL.md").resolve()
+    assert (RAIZ_REPO / "run-task.md").resolve() == (skills / "run-task" / "SKILL.md").resolve()
 
 
 _BASES_VISTAS = []
@@ -64,7 +67,7 @@ def test_cada_prueba_registra_bajo_su_propia_base(srv, entorno, nombre):
     assert not salida.startswith("ERROR"), salida
     proyectos = json.loads(config.CONFIG.read_text(encoding="utf-8"))
     assert list(proyectos) == [nombre]
-    assert Path(proyectos[nombre]["memoria"]) == base / ".ratifact" / nombre
+    assert Path(proyectos[nombre]["memory"]) == base / ".ratifact" / nombre
     assert (base / ".ratifact" / nombre / ".git").exists()
     if nombre == "dos" and not _BASES_VISTAS:
         pytest.skip("la comparación necesita que 'uno' haya corrido antes en la misma sesión")

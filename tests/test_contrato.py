@@ -49,6 +49,17 @@ def test_contrato_de_herramientas_y_prompts_sin_cambios(srv):
     assert actual == esperado, "El contrato MCP cambió respecto de tests/contrato_herramientas.json"
 
 
+def test_descripciones_normalizadas_al_registrar(srv):
+    """T-013 criterio 10: las descripciones se registran ya normalizadas (inspect.cleandoc), así todos los clientes ven
+    el mismo texto en Python 3.10 a 3.14."""
+    import inspect
+    herramientas = asyncio.run(srv.mcp.list_tools())
+    assert len(herramientas) == 28
+    for t in herramientas:
+        assert t.description and t.description == inspect.cleandoc(t.description), t.name
+        assert "\n    " not in t.description, t.name
+
+
 if __name__ == "__main__":
     import sys
     sys.path.insert(0, str(INSTANTANEA.parents[1]))

@@ -17,11 +17,11 @@ def test_version_igual_en_pyproject_y_en_el_paquete(capsys):
     import ratifact
     from ratifact import cli
     pyproject = (RAIZ_REPO / "pyproject.toml").read_text()
-    assert re.search(r'^version = "(.+)"$', pyproject, re.M).group(1) == ratifact.__version__ == "1.0.0rc1"
+    assert re.search(r'^version = "(.+)"$', pyproject, re.M).group(1) == ratifact.__version__ == "1.0.0"
     assert 'ratifact = "ratifact.cli:main"' in pyproject and 'name = "ratifact"' in pyproject
     with pytest.raises(SystemExit) as salida:
         cli.main(["--version"])
-    assert salida.value.code == 0 and capsys.readouterr().out.strip() == "ratifact 1.0.0rc1"
+    assert salida.value.code == 0 and capsys.readouterr().out.strip() == "ratifact 1.0.0"
 
 
 def test_subcomandos_en_la_ayuda(capsys):
@@ -63,7 +63,7 @@ def test_doctor_informa_y_no_escribe_nada(vieja, entorno, capsys):
     assert arbol(entorno["tmp"]) == antes
     assert codigo == 1
     base = vieja["base"]
-    for esperado in ("ratifact 1.0.0rc1", f"Running from: working copy {RAIZ_REPO}", "P-017",
+    for esperado in ("ratifact 1.0.0", f"Running from: working copy {RAIZ_REPO}", "P-017",
                      f"Configuration: {vieja['config']} (from MEMORIA_PROYECTOS_CONFIG (deprecated))",
                      "Keys in projects.json: Spanish",
                      f"memory: {base / '.memorias' / 'uno'} · schema v1 · old default (.memorias/) · git: clean",

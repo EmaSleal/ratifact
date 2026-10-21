@@ -33,7 +33,7 @@ def test_alta_detecta_repos_y_pruebas_por_repo(srv, multi, entorno):
     assert "in the root folder AND in each repo" in multi["salida"]      # Codex no sube más allá del repo git
     assert "- `backend/`: `./mvnw test`" in multi["salida"] and "- `frontend/`: `npm test`" in multi["salida"]
     config = json.loads(Path(entorno["env"]["MEMORIA_PROYECTOS_CONFIG"]).read_text())
-    assert config["fractall"]["pruebas"] == {"backend": "./mvnw test", "frontend": "npm test"}
+    assert config["fractall"]["tests"] == {"backend": "./mvnw test", "frontend": "npm test"}
     assert "repos: app, backend, frontend" in srv.list_projects()
 
 
