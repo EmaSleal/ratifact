@@ -1,5 +1,8 @@
 # Configuración personal (rutas absolutas de cada usuario): ver projects.example.json
 projects.json
+# Respaldos de configuración (contienen rutas personales)
+projects.json.bak-*
+*.bak-ratifact-*
 # Telemetría local
 logs/
 # Python
