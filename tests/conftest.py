@@ -75,11 +75,11 @@ def crear_repo(ruta: Path) -> Path:
 
 @pytest.fixture
 def proyecto(srv, entorno):
-    """Proyecto 'demo' registrado con registrar_proyecto (memoria en <base>/.memorias/demo)."""
+    """Proyecto 'demo' registrado con registrar_proyecto (memoria en <base>/.ratifact/demo)."""
     repo = crear_repo(entorno["base"] / "demo" / "codigo")
     salida = srv.register_project(name="demo", path=str(repo))
     assert not salida.startswith("ERROR"), salida
-    return {"nombre": "demo", "repo": repo, "mem": entorno["base"] / ".memorias" / "demo"}
+    return {"nombre": "demo", "repo": repo, "mem": entorno["base"] / ".ratifact" / "demo"}
 
 
 def log_git(repo: Path) -> list[str]:

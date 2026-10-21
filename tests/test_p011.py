@@ -115,6 +115,8 @@ def test_vista_normaliza_reemplazada_por_guardado_sin_normalizar(srv, proyecto):
 
 def test_cerrar_pendiente_guarda_id_decision_normalizado(srv, proyecto):
     srv.add_pending(project="demo", topic="Motor", context="c")
+    for t in ("A", "B", "C"):      # decision_id debe existir (P-012)
+        srv.propose_decision(project="demo", title=t, decision="d", rationale="j")
 
     salida = srv.close_pending(project="demo", id="P-1", resolution="Godot", decision_id="adr-3")
 

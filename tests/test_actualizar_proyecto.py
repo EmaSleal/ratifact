@@ -31,7 +31,7 @@ def test_actualizar_ruta_rechaza_memoria_adentro_adr010(srv, entorno):
     update_project usa la redacción de corrección, distinta de la de register_project (ver
     tests/test_proyectos_y_telemetria.py::test_memoria_dentro_del_repo_mensaje_de_alta_distinto_de_actualizar)."""
     repo = crear_repo(entorno["base"] / "interno2")
-    srv.register_project(name="interno2", path=str(repo))   # memoria en <base>/.memorias/interno2
+    srv.register_project(name="interno2", path=str(repo))   # memoria en <base>/.ratifact/interno2
     ruta_config = Path(entorno["env"]["MEMORIA_PROYECTOS_CONFIG"])
     antes = ruta_config.read_text()
 

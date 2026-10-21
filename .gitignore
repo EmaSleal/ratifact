@@ -9,3 +9,5 @@ __pycache__/
 .pytest_cache/
 # Estado local del agente
 .atl/
+# Paquete (uv build)
+dist/

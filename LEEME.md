@@ -1,6 +1,6 @@
 # memoria-proyectos (ratifact) — instalación
 
-Servidor MCP local: `servidor.py`. Proyectos registrados: `projects.json`.
+Servidor MCP local: comando `ratifact serve` (paquete instalable, sección 0; `servidor.py` es su envoltorio hasta 1.1). Proyectos registrados: `projects.json`.
 Desde la v1 (T-011) el contrato está en inglés: herramientas, parámetros, descripciones y respuestas
 (`docs/v1-english-naming.md`). Pasos para usuarios existentes después de actualizar: `docs/upgrade-v1.md`.
 
@@ -8,6 +8,21 @@ Variables de entorno: `RATIFACT_CONFIG` (projects.json), `RATIFACT_LOG` (telemet
 proyectos). Las anteriores `MEMORIA_PROYECTOS_*` siguen funcionando como respaldo hasta 1.1 (gana la nueva; el log del
 servidor avisa una vez por variable). Sin variable, la configuración es `~/.config/ratifact/projects.json` si existe, si
 no `~/.config/memoria-proyectos/projects.json` (no se mueve ni reescribe nada).
+
+## 0. Comando `ratifact` (instalación fija)
+Desde T-012 el repositorio es un paquete instalable (`pyproject.toml`, MIT). `uv tool install ~/Projects/.memoria-proyectos`
+instala una copia fija (no editable) y deja el ejecutable `~/.local/bin/ratifact`; después de cada integración en main:
+`uv tool install --reinstall ~/Projects/.memoria-proyectos` y reiniciar los clientes. Los clientes se configuran con
+`ratifact serve` (fragmentos exactos en `docs/upgrade-v1.md`, sección "Clients from the fixed installation"); las
+configuraciones de abajo con `servidor.py` siguen funcionando hasta 1.1.
+
+| Subcomando | Qué hace |
+|---|---|
+| `ratifact serve` | Servidor MCP por stdio (lo que lanzan los clientes). `servidor.py` es un envoltorio de esto hasta 1.1. |
+| `ratifact report [--days N] [--project P] [--log RUTA]` | Resumen del uso (sección 7). `analizar_uso.py` es un envoltorio hasta 1.1 (acepta `--dias`/`--proyecto`). |
+| `ratifact doctor` | Solo lectura: versión y de dónde corre (instalación fija o copia de trabajo, con aviso — P-017), configuración usada y grafía de sus claves, por proyecto código, memoria (ruta, esquema, `.memorias/` viejo o `.ratifact/` nuevo, estado git) e integraciones detectadas, log, variables `MEMORIA_PROYECTOS_*` y acciones pendientes. Sale con 0 si no hay nada pendiente, 1 si hay acciones. |
+| `ratifact upgrade` | Paso explícito de ADR-029 con todos los clientes cerrados. Sin opciones solo muestra el plan; `--apply` lo ejecuta: migra a v2 las memorias v1, mueve `<base>/.memorias/<p>` a `<base>/.ratifact/<p>` (las rutas propias nunca se mueven), escribe `~/.config/ratifact/projects.json` con claves en inglés y renombra el viejo a `projects.json.bak-v1`, regenera las vistas y copia el log viejo. Aborta si hay un servidor corriendo con esa configuración, un `.lock` tomado o una memoria con cambios sin commit; idempotente; si un paso falla, lo revierte. |
+| `ratifact --version` | Versión instalada. |
 
 ## 1. Claude Desktop
 Agregue esto a `~/.config/Claude/claude_desktop_config.json` (dentro de `"mcpServers"`) y reinicie la app:
@@ -45,7 +60,7 @@ péguelo tal cual en *Project instructions*. Empieza así:
 
 ## 4. Agregar otro proyecto
 En cualquier chat con el MCP conectado, pida: "registra el proyecto <nombre> con el código en <ruta>".
-`register_project` lo agrega a `projects.json`, crea su memoria (por defecto en `~/Projects/.memorias/<nombre>`,
+`register_project` lo agrega a `projects.json`, crea su memoria (por defecto en `~/Projects/.ratifact/<nombre>`,
 con repo git propio) y devuelve las instrucciones exactas para pegar en el proyecto de Claude y en CLAUDE.md/AGENTS.md.
 Para recuperar esas instrucciones de un proyecto existente: `project_instructions("<nombre>")`.
 Recomendado: marcar `register_project` como "requiere aprobación" igual que `accept_decision`.
@@ -74,7 +89,7 @@ editarlo a mano; reemplaza a la antigua `configurar_pruebas` (eliminada). Indiqu
   detectan en la carpeta del proyecto o en cualquiera de sus repos; engram no se detecta (solo guía condicional).
   Las activas aparecen en `get_context` (una línea + guía para planificar), en `create_task` (la línea) y
   en `update_task(..., "in_progress")` (guía para execute, verify y close); una apagada no aparece nunca.
-No cubre renombrar un proyecto ni mover la ubicación de su memoria (`.memorias/<nombre>` o la clave `"memoria"`):
+No cubre renombrar un proyecto ni mover la ubicación de su memoria (`.ratifact/<nombre>` o la clave `"memoria"`):
 para eso edite `projects.json` a mano y mueva la carpeta con `git mv`/`mv` según corresponda.
 
 ## 5. Tareas de código (Claude Desktop → Claude Code)
@@ -119,15 +134,20 @@ pendiente automáticamente.
 ## 6. Ubicación de la memoria
 Con la clave `"memoria"` en `projects.json`, la memoria vive fuera del repositorio del código (repo git propio) y no depende
 de la rama activa. Recomendado para todos los proyectos. Las herramientas siguen usando rutas `.project/...`.
-Las claves de cada proyecto en `projects.json` se leen en español (`ruta`, `memoria`, `escritura`, `pruebas`) o en
-inglés (`path`, `memory`, `writable`, `tests`); si están las dos, gana la inglesa. Al escribir se conserva la grafía que
-ya tiene la entrada. Renombrar las claves es un paso del instalador (ADR-029), nunca de la migración automática.
+Sin esa clave, la memoria es `<carpeta de proyectos>/.ratifact/<nombre>` (desde T-012); una que todavía vive en la
+ruta por defecto vieja `.memorias/<nombre>` se sigue encontrando ahí hasta que `ratifact upgrade --apply` la mueve.
+Las claves de cada proyecto en `projects.json` se leen en español (`ruta`, `memoria`, `escritura`, `pruebas`,
+`integraciones`) o en inglés (`path`, `memory`, `writable`, `tests`, `integrations`); si están las dos, gana la inglesa.
+Al escribir se conserva la grafía que ya tiene la entrada. Renombrar las claves y mover las memorias de `.memorias/` a
+`.ratifact/` es `ratifact upgrade --apply` (ADR-029, sección 0), nunca la migración automática.
 
 ## 7. Telemetría
-Cada llamada a una herramienta agrega una línea a `logs/uso.jsonl` (herramienta, proyecto, tamaños, duración, error; nunca
-el contenido). Resumen: `python3 ~/Projects/.memoria-proyectos/analizar_uso.py --dias 7` (opcional `--proyecto game`).
-El script lee el mismo log que escribe el servidor: `--log <ruta>` si se indica, si no `RATIFACT_LOG` (o
-`MEMORIA_PROYECTOS_LOG`), y si no `logs/uso.jsonl`. Las filas guardan el nombre inglés de la herramienta; las anteriores
+Cada llamada a una herramienta agrega una línea a `~/.local/state/ratifact/uso.jsonl` (`$XDG_STATE_HOME/ratifact/`; hasta
+T-012 era `<repo>/logs/uso.jsonl`, y `ratifact upgrade` lo copia si el nuevo no existe) con herramienta, proyecto,
+tamaños, duración y error; nunca el contenido. Resumen: `ratifact report --days 7` (opcional `--project game`; también
+`python3 ~/Projects/.memoria-proyectos/analizar_uso.py --dias 7` hasta 1.1).
+El informe lee el mismo log que escribe el servidor: `--log <ruta>` si se indica, si no `RATIFACT_LOG` (o
+`MEMORIA_PROYECTOS_LOG`), y si no `~/.local/state/ratifact/uso.jsonl`. Las filas guardan el nombre inglés de la herramienta; las anteriores
 a la v1 (nombre en español) se traducen al agregar, así el historial suma por herramienta. Si el archivo no existe, lo informa con su ruta y termina con error.
 `get_context` avisa cuando INDEX.md acumula 5 o más cambios sin regenerarse.
 Arranque compacto (ADR-026): `get_context` ya no incluye `OPEN.md`. Después de INDEX.md muestra
@@ -271,12 +291,18 @@ y `analizar_uso.py` reporta cuántas creaciones fueron duplicados detectados.
 
 ## 16. Code layout
 
-`servidor.py` es solo el punto de entrada (cabecera PEP 723, agrega su carpeta a `sys.path`, importa el paquete
-`ratifact/` y ejecuta `mcp.run()`); los clientes se siguen configurando con `servidor.py` como arriba. El código
+`servidor.py` es solo un envoltorio de `ratifact serve` hasta 1.1 (cabecera PEP 723, agrega su carpeta a `sys.path`,
+importa el paquete `ratifact/` y llama a `ratifact.cli`); el punto de entrada es el comando `ratifact` (sección 0). El código
 vive en `ratifact/` (ADR-020); ningún módulo supera 300 líneas y no hay importaciones circulares:
 
 | Módulo | Responsabilidad |
 |---|---|
+| `ratifact/cli.py` | Comando `ratifact` (`serve`, `report`, `doctor`, `upgrade`, `--version`); `servidor()` carga herramientas y prompts. |
+| `ratifact/rutas.py` | Rutas sin projects.json: configuración nueva/vieja, log por defecto (XDG), copia de trabajo o instalación fija y repositorio de origen. |
+| `ratifact/informe.py`, `ratifact/informe_memoria.py` | `ratifact report` (antes `analizar_uso.py`): agregados del log y los indicadores que salen de las memorias. |
+| `ratifact/instalacion.py` | Inventario de solo lectura para doctor/upgrade: projects.json y sus claves, memorias (ubicación, esquema, git), integraciones, servidores en marcha y `.lock` tomados. |
+| `ratifact/doctor.py` | `ratifact doctor`. |
+| `ratifact/upgrade.py`, `ratifact/upgrade_aplicar.py` | `ratifact upgrade`: plan (sin cambios) y ejecución por pasos con vuelta atrás. |
 | `ratifact/app.py` | Instancia FastMCP `mcp`, decoradores `herramienta`/`herramienta_async`, telemetría (`LOG_USO`, `_registrar_uso`) y `_ejecutar`. |
 | `ratifact/config.py` | Rutas y configuración: `CONFIG` (projects.json, claves en español o inglés: `_valor`, `_clave_escritura`), `BASE_PROYECTOS`, `ErrorMemoria`, `_proyectos`, `_raiz`, `_mem`, ayudantes de repositorios, `_ruta_segura`, `_zonas_escritura` y el alias de rutas v1 (`_traducir_alias`). |
 | `ratifact/vocabulario.py` | Vocabulario del esquema v2 y su equivalente v1: carpetas, vistas, claves, estados por tipo y `_normalizar_estado` (parámetros en español o inglés); mapas del contrato v0 → v1 (`HERRAMIENTAS_V0`, `PARAMETROS_V0`, `PROMPTS_V0`, `MODOS_V0`). |

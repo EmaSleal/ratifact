@@ -3,21 +3,15 @@
 # dependencies = ["mcp>=1.2,<2"]
 # ///
 """
-ratifact (memoria-proyectos) — servidor MCP local que convierte cada repositorio en la
-memoria persistente de su proyecto (acuerdos, pendientes, sesiones y documentos).
+Envoltorio deprecado de `ratifact serve` (se quita en 1.1): las configuraciones de clientes que lanzan
+`uv run --script servidor.py` siguen funcionando. Lo nuevo es instalar el paquete (`uv tool install <ruta del repo>`)
+y configurar los clientes con el comando `ratifact serve` (docs/upgrade-v1.md).
 
-Fuente de verdad: la carpeta .project/ dentro del repositorio del proyecto.
-- decisions/ADR-NNN.md, pending/P-NNN.md y tasks/T-NNN.md son los registros (un archivo cada uno; esquema v2).
-- DECISIONS.md y OPEN.md son VISTAS generadas a partir de esos registros; no se editan a mano.
-- Cada escritura hace un commit de git con solo los archivos tocados.
-
-Configuración: RATIFACT_CONFIG, o ~/.config/ratifact/projects.json si existe, o ~/.config/memoria-proyectos/projects.json
-(MEMORIA_PROYECTOS_CONFIG / _LOG / _BASE siguen funcionando como respaldo, con aviso, hasta 1.1)
-{
-  "game": {"ruta": "/home/usuario/Projects/game/prototipo-godot",
-           "memoria": "/home/usuario/Projects/game/.project",   # opcional; recomendado fuera del repo
-           "escritura": [".project", "docs"]}
-}
+ratifact (memoria-proyectos) — servidor MCP local que convierte cada repositorio en la memoria persistente de su
+proyecto. Fuente de verdad: la carpeta .project/ (memoria con repo git propio); DECISIONS.md y OPEN.md son vistas
+generadas. Configuración: RATIFACT_CONFIG, o ~/.config/ratifact/projects.json si existe, o
+~/.config/memoria-proyectos/projects.json (MEMORIA_PROYECTOS_CONFIG / _LOG / _BASE siguen funcionando, con aviso,
+hasta 1.1).
 """
 import sys
 from pathlib import Path
@@ -25,7 +19,7 @@ from pathlib import Path
 # El paquete ratifact/ vive junto a este archivo: se agrega su carpeta a sys.path para arrancar desde cualquier cwd.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from ratifact import app, config, esquema, plantillas, prompts, registros  # noqa: E402
+from ratifact import app, cli, config, esquema, plantillas, prompts, registros  # noqa: E402
 from ratifact.herramientas import (contexto_documentos, decisiones, pendientes_sesiones,  # noqa: E402
                                    proyectos, tareas, tareas_brief)
 
@@ -39,4 +33,4 @@ del _modulo
 mcp = app.mcp
 
 if __name__ == "__main__":
-    mcp.run()
+    cli.main(["serve"])

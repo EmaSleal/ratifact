@@ -3,12 +3,12 @@ from __future__ import annotations
 
 from ratifact import registros as _registros  # _ahora se busca en su módulo: las pruebas la reemplazan ahí
 from ratifact.app import _ejecutar, herramienta
-from ratifact.config import _mem
+from ratifact.config import ErrorMemoria, _mem
 from ratifact.esquema import _bloqueo
 from ratifact.registros import (_buscar_registro, _commit, _duplicado_reciente, _escribir_atomico, _escribir_registro,
                                 _hoy, _leer_registro, _mensaje_duplicado, _normalizar_id, _regenerar_vistas,
                                 _siguiente_id, _slug)
-from ratifact.vocabulario import PENDIENTES, SESIONES
+from ratifact.vocabulario import DECISIONES, PENDIENTES, SESIONES
 
 
 @herramienta
@@ -46,8 +46,17 @@ def close_pending(project: str, id: str, resolution: str, decision_id: str = "")
         with _bloqueo(proyecto):
             ruta = _buscar_registro(_mem(proyecto) / PENDIENTES, id)
             meta, cuerpo = _leer_registro(ruta)
+            if meta.get("status") == "closed":     # P-012: cerrar dos veces reescribía la resolución
+                raise ErrorMemoria(f"{meta['id']} is already closed since {meta.get('closed', '?')}; nothing was "
+                                   "changed.")
+            decision = _normalizar_id(id_decision) if id_decision.strip() else ""
+            if decision:
+                try:
+                    _buscar_registro(_mem(proyecto) / DECISIONES, decision)
+                except ErrorMemoria:
+                    raise ErrorMemoria(f"decision_id {decision} does not exist; nothing was changed.") from None
             meta.update(status="closed", closed=_hoy(),
-                        resolution=(resolucion + (f" ({_normalizar_id(id_decision)})" if id_decision else ""))[:200])
+                        resolution=(resolucion + (f" ({decision})" if decision else ""))[:200])
             _escribir_registro(ruta, meta, cuerpo + f"\n\n## Resolution ({_hoy()})\n{resolucion}\n")
             sha = _commit(proyecto, [ruta, *_regenerar_vistas(proyecto)], f"{meta['id']} closed")
             return f"{meta['id']} → closed · commit {sha}"

@@ -8,6 +8,7 @@ import sys
 from contextvars import ContextVar
 from pathlib import Path
 
+from ratifact import rutas
 from ratifact.vocabulario import CARPETAS_V1, VISTAS_V1
 
 
@@ -29,13 +30,29 @@ def _entorno(sufijo: str) -> str | None:
     return viejo or None
 
 
-def _config_por_defecto() -> Path:
-    """~/.config/ratifact/projects.json si existe; si no, el de siempre. No se mueve ni reescribe nada (ADR-029)."""
-    nueva = Path.home() / ".config" / "ratifact" / "projects.json"
-    return nueva if nueva.exists() else Path.home() / ".config" / "memoria-proyectos" / "projects.json"
+def _ruta_config() -> Path:
+    """RATIFACT_CONFIG (o MEMORIA_PROYECTOS_CONFIG); sin variable, ~/.config/ratifact/projects.json si existe, si no
+    ~/.config/memoria-proyectos/projects.json. Si la variable apunta a un projects.json que `ratifact upgrade` ya
+    renombró a .bak-v1 (ADR-029), se usa el nuevo con un aviso: las configuraciones de los clientes no se rompen."""
+    explicita = _entorno("CONFIG")
+    nueva = rutas.config_nueva()
+    if explicita:
+        ruta = Path(explicita).expanduser()
+        if not ruta.exists() and rutas.respaldo(ruta).exists() and nueva.exists():
+            if "CONFIG_RENOMBRADA" not in _AVISOS_ENTORNO:
+                _AVISOS_ENTORNO.add("CONFIG_RENOMBRADA")
+                print(f"ratifact: {ruta} was moved to {nueva} by `ratifact upgrade`; using it. Remove the CONFIG "
+                      "variable from the client configuration.", file=sys.stderr)
+            return nueva
+        return ruta
+    return nueva if nueva.exists() else rutas.config_vieja()
 
 
-CONFIG = Path(_entorno("CONFIG") or _config_por_defecto()).expanduser()
+def _base() -> Path:
+    return Path(_entorno("BASE") or Path.home() / "Projects").expanduser().resolve()
+
+
+CONFIG = _ruta_config()
 
 MEM = ".project"
 LIMITE_INDICE = 6000          # caracteres (~1.5k tokens)
@@ -52,15 +69,16 @@ CARPETAS_IGNORADAS = {".git", ".godot", "node_modules", "target", "build", "dist
 LIMITE_ARCHIVO_BUSQUEDA = 1_000_000   # bytes: archivos más grandes no se recorren en buscar
 
 
-# Raíz del repositorio de memoria-proyectos (donde están servidor.py, tarea.md y skills/).
-_DIR = Path(__file__).resolve().parents[1]
+# Repositorio de memoria-proyectos (donde están run-task.md y skills/): la copia de trabajo o, en una instalación fija,
+# el repositorio desde el que se instaló (rutas.origen).
+_DIR = rutas.origen() or Path(__file__).resolve().parents[1]
 
 
 class ErrorMemoria(Exception):
     pass
 
 
-BASE_PROYECTOS = Path(_entorno("BASE") or Path.home() / "Projects").expanduser().resolve()
+BASE_PROYECTOS = _base()
 
 
 # ───────────────────────── configuración y rutas ─────────────────────────
@@ -73,8 +91,9 @@ def _proyectos() -> dict:
 
 # Claves de cada proyecto en projects.json: se leen en español (v1) y en inglés (ADR-029); si están las dos, gana la
 # inglesa. Al escribir se conserva la grafía que ya usa la entrada. El renombrado del archivo es un paso del
-# instalador, nunca de la migración automática.
-CLAVES_CONFIG = {"ruta": "path", "memoria": "memory", "escritura": "writable", "pruebas": "tests"}
+# instalador (`ratifact upgrade`), nunca de la migración automática.
+CLAVES_CONFIG = {"ruta": "path", "memoria": "memory", "escritura": "writable", "pruebas": "tests",
+                 "integraciones": "integrations"}
 
 
 def _valor(p: dict, clave: str, defecto=None):
@@ -121,17 +140,26 @@ def _raiz(proyecto: str, verificar_existe: bool = True) -> Path:
     return raiz
 
 
+def _mem_por_defecto(proyecto: str, base: Path | None = None) -> Path:
+    """Memoria de un proyecto sin clave "memory"/"memoria" (ADR-029): <base>/.ratifact/<nombre>; una que todavía vive
+    en la ruta por defecto vieja <base>/.memorias/<nombre> se sigue encontrando ahí hasta que `ratifact upgrade` la
+    mueve."""
+    base = base or BASE_PROYECTOS
+    nueva, vieja = base / ".ratifact" / proyecto, base / ".memorias" / proyecto
+    return vieja if vieja.exists() and not nueva.exists() else nueva
+
+
 def _mem(proyecto: str) -> Path:
     """Carpeta de memoria (ADR-010): repo git propio, SIEMPRE fuera del repositorio del código, para que ninguna
-    rama ni checkout la afecte. Clave "memoria" de projects.json; por defecto <carpeta de proyectos>/.memorias/<nombre>.
+    rama ni checkout la afecte. Clave "memoria" de projects.json; si no está, `_mem_por_defecto`.
     No exige que la ruta del código exista: solo se usa aquí para la comparación ADR-010, nunca para leerla."""
     p = _proyectos().get(proyecto) or {}
     mem = (Path(_valor(p, "memoria")).expanduser().resolve() if _valor(p, "memoria")
-           else BASE_PROYECTOS / ".memorias" / proyecto)
+           else _mem_por_defecto(proyecto))
     raiz = _raiz(proyecto, verificar_existe=False)
     if mem == raiz or raiz in mem.parents:
         raise ErrorMemoria(f"The memory of '{proyecto}' is inside the code repository ({mem}); ADR-010 forbids it. "
-                           f"Move it to {BASE_PROYECTOS / '.memorias' / proyecto} and update projects.json.")
+                           f"Move it to {BASE_PROYECTOS / '.ratifact' / proyecto} and update projects.json.")
     return mem
 
 

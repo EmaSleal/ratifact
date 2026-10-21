@@ -9,9 +9,9 @@ from ratifact.config import ErrorMemoria, _mem, _proyectos, _repos, _valor
 from ratifact.esquema import _bloqueo
 from ratifact.integraciones import registro as _integraciones
 from ratifact.registros import (_buscar_registro, _commit, _duplicado_reciente, _escribir_registro, _hoy,
-                                _ids_resuelve, _leer_registro, _mensaje_duplicado, _resumen_tareas, _siguiente_id,
-                                _slug, _texto_resuelve)
-from ratifact.vocabulario import ESTADOS, TAREAS, _normalizar_estado
+                                _ids_resuelve, _leer_registro, _mensaje_duplicado, _normalizar_id, _resumen_tareas,
+                                _siguiente_id, _slug, _texto_resuelve)
+from ratifact.vocabulario import DECISIONES, ESTADOS, TAREAS, _normalizar_estado
 
 
 # ───────────────────────── tareas para Claude Code ─────────────────────────
@@ -42,6 +42,22 @@ def _comando_pruebas(proyecto: str, repositorio: str = "") -> str:
 def _pendientes_abiertos(proyecto: str) -> dict[str, str]:
     """Id → tema de cada pendiente abierto, desde el catálogo (ADR-022)."""
     return {r.id: r.titulo for r in _registros_en(proyecto, "P") if r.estado == "open"}
+
+
+def _validar_decisiones(proyecto: str, decisiones: str) -> str:
+    """`decisions` de create_task (P-012): ids separados por comas, normalizados ("adr-3" → "ADR-003"); si alguno no
+    existe, ErrorMemoria que los nombra (y no se escribe nada)."""
+    ids = list(dict.fromkeys(_normalizar_id(i) for i in decisiones.split(",") if i.strip()))
+    faltan = []
+    for i in ids:
+        try:
+            _buscar_registro(_mem(proyecto) / DECISIONES, i)
+        except ErrorMemoria:
+            faltan.append(i)
+    if faltan:
+        verbo = "does" if len(faltan) == 1 else "do"
+        raise ErrorMemoria(f"Invalid `decisions`: {', '.join(faltan)} ({verbo} not exist); nothing was created.")
+    return ", ".join(ids)
 
 
 def _validar_resuelve(proyecto: str, resuelve: str) -> list[tuple[str, bool]]:
@@ -92,6 +108,7 @@ def create_task(project: str, title: str, goal: str, acceptance_criteria: str, d
             if dup:
                 return _mensaje_duplicado(dup["id"], f"Run it with: /run-task {dup['id']}") + nota
             ids = _validar_resuelve(proyecto, resuelve) if resuelve.strip() else []
+            decisiones_norm = _validar_decisiones(proyecto, decisiones) if decisiones.strip() else ""
             id_ = _siguiente_id(carpeta, "T")
             ruta = carpeta / f"{id_}-{_slug(titulo)}.md"
             meta = {"id": id_, "title": titulo, "status": "todo", "date": _hoy(),
@@ -107,7 +124,7 @@ def create_task(project: str, title: str, goal: str, acceptance_criteria: str, d
                 temas = _pendientes_abiertos(proyecto)
                 secciones += ["## Resolves", "\n".join(f"- {i}{' (partial)' if parcial else ''} · {temas[i]}"
                                                         for i, parcial in ids)]
-            for nombre, valor in (("Applicable decisions", decisiones), ("Files involved", archivos),
+            for nombre, valor in (("Applicable decisions", decisiones_norm), ("Files involved", archivos),
                                   ("Out of scope", fuera_de_alcance), ("Notes", notas)):
                 if valor:
                     secciones += [f"## {nombre}", valor]

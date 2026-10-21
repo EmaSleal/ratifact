@@ -53,15 +53,29 @@ def test_config_heredada_con_memoria_interna_avisa_como_migrar(srv, entorno):
     Path(entorno["env"]["MEMORIA_PROYECTOS_CONFIG"]).write_text(json.dumps(
         {"viejo": {"ruta": str(repo), "memoria": str(repo / ".project")}}))
     salida = srv.add_pending(project="viejo", topic="t", context="c")
-    assert salida.startswith("ERROR:") and ".memorias/viejo" in salida
+    assert salida.startswith("ERROR:") and ".ratifact/viejo" in salida
     assert "invalid configuration" in srv.list_projects()
 
 
-def test_sin_clave_memoria_usa_memorias_por_defecto(srv, entorno):
+def test_sin_clave_memoria_usa_ratifact_por_defecto(srv, entorno):
+    """T-012 (criterio 15): la ruta por defecto de una memoria nueva es <base>/.ratifact/<nombre>."""
     repo = crear_repo(entorno["base"] / "legado")
     Path(entorno["env"]["MEMORIA_PROYECTOS_CONFIG"]).write_text(json.dumps({"legado": {"ruta": str(repo)}}))
     srv.init_memory(project="legado")
-    assert (entorno["base"] / ".memorias" / "legado" / ".git").exists() and not (repo / ".project").exists()
+    assert (entorno["base"] / ".ratifact" / "legado" / ".git").exists() and not (repo / ".project").exists()
+    assert not (entorno["base"] / ".memorias" / "legado").exists()
+
+
+def test_sin_clave_memoria_la_vieja_en_memorias_se_sigue_encontrando(srv, entorno):
+    """Un proyecto sin ruta de memoria explícita cuya memoria ya existe en <base>/.memorias/<p> se sigue usando ahí
+    hasta que `ratifact upgrade` la mueve; no se crea otra en .ratifact/."""
+    repo = crear_repo(entorno["base"] / "legado")
+    Path(entorno["env"]["MEMORIA_PROYECTOS_CONFIG"]).write_text(json.dumps({"legado": {"ruta": str(repo)}}))
+    vieja = entorno["base"] / ".memorias" / "legado"
+    vieja.mkdir(parents=True)
+    srv.init_memory(project="legado")
+    assert "P-001 recorded" in srv.add_pending(project="legado", topic="t", context="c")
+    assert list((vieja / "pending").glob("P-001-*.md")) and not (entorno["base"] / ".ratifact" / "legado").exists()
 
 
 def test_inicializar_es_idempotente(srv, proyecto):

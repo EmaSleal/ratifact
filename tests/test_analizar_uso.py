@@ -1,5 +1,5 @@
 """analizar_uso.py lee el mismo log que escribe el servidor: --log, luego MEMORIA_PROYECTOS_LOG, luego
-<repo>/logs/uso.jsonl (igual que LOG_USO). Si el archivo no existe, lo dice y termina con estado distinto de cero."""
+$XDG_STATE_HOME/ratifact/uso.jsonl (igual que LOG_USO). Si el archivo no existe, lo dice y termina con estado distinto de cero."""
 import datetime as dt
 import json
 import sys
@@ -39,9 +39,15 @@ def test_log_tiene_prioridad_sobre_la_variable(entorno, monkeypatch, capsys):
     assert "últimos 3 días" in salida
 
 
-def test_ruta_por_defecto_sin_variable_ni_flag(monkeypatch):
+def test_ruta_por_defecto_sin_variable_ni_flag(monkeypatch, tmp_path):
+    """T-012: el log por defecto sale del repositorio a $XDG_STATE_HOME/ratifact/uso.jsonl (~/.local/state si no)."""
     monkeypatch.delenv("MEMORIA_PROYECTOS_LOG", raising=False)
-    assert analizar_uso.ruta_log(None) == RAIZ_REPO / "logs" / "uso.jsonl"
+    monkeypatch.delenv("RATIFACT_LOG", raising=False)
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "estado"))
+    assert analizar_uso.ruta_log(None) == tmp_path / "estado" / "ratifact" / "uso.jsonl"
+    monkeypatch.delenv("XDG_STATE_HOME")
+    assert analizar_uso.ruta_log(None) == Path.home() / ".local" / "state" / "ratifact" / "uso.jsonl"
+    assert RAIZ_REPO not in analizar_uso.ruta_log(None).parents
 
 
 def test_archivo_inexistente_avisa_y_sale_con_error(entorno, monkeypatch, capsys):
@@ -128,7 +134,7 @@ def _adr(carpeta: Path, id_: str, estado: str, fecha: dt.date, titulo: str) -> N
 
 def _memorias(entorno) -> dict:
     """Dos proyectos: 'demo' con memoria explícita y aún en schema v1 (T-010: analizar_uso lee las dos versiones) y
-    'otro' con la memoria por defecto (<base>/.memorias/otro), ya en v2."""
+    'otro' sin clave de memoria y todavía en la ruta por defecto vieja (<base>/.memorias/otro), ya en v2."""
     hoy = dt.date.today()
     mem_demo = entorno["tmp"] / "mem-demo"
     _adr(mem_demo / "decisiones", "ADR-001", "acordada", hoy, "Usar git")

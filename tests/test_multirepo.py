@@ -25,7 +25,7 @@ def multi(srv, entorno):
     crear_repo(raiz / "app")                                     # repo sin pruebas reconocibles
     (raiz / "docs").mkdir()
     salida = srv.register_project(name="fractall", path=str(raiz))
-    return {"raiz": raiz, "salida": salida, "mem": entorno["base"] / ".memorias" / "fractall"}
+    return {"raiz": raiz, "salida": salida, "mem": entorno["base"] / ".ratifact" / "fractall"}
 
 
 def test_alta_detecta_repos_y_pruebas_por_repo(srv, multi, entorno):

@@ -487,7 +487,7 @@
       "nombre": "read_task"
     },
     {
-      "descripcion": "Registers a project: adds it to projects.json, initializes its memory (its own git repo) and returns the\n    instructions to paste into Claude and into CLAUDE.md/AGENTS.md. `path`: the code folder (must exist inside the\n    projects folder). `memory`: optional; by default <projects folder>/.memorias/<name>, outside the code\n    repository. `tests`: command to run the tests; if omitted it is detected (Maven, Gradle, npm/pnpm/yarn, Godot,\n    pytest, cargo, go). Only with the user's confirmation.",
+      "descripcion": "Registers a project: adds it to projects.json, initializes its memory (its own git repo) and returns the\n    instructions to paste into Claude and into CLAUDE.md/AGENTS.md. `path`: the code folder (must exist inside the\n    projects folder). `memory`: optional; by default <projects folder>/.ratifact/<name>, outside the code\n    repository. `tests`: command to run the tests; if omitted it is detected (Maven, Gradle, npm/pnpm/yarn, Godot,\n    pytest, cargo, go). Only with the user's confirmation.",
       "esquema_entrada": {
         "properties": {
           "memory": {

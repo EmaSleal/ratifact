@@ -13,6 +13,7 @@ from mcp.server.fastmcp import FastMCP
 
 from ratifact.config import ALIAS_RUTA, ErrorMemoria, _entorno
 from ratifact.esquema import _asegurar_esquema
+from ratifact.rutas import log_por_defecto
 from ratifact.busqueda import SIN_COINCIDENCIAS
 from ratifact.registros import MARCA_DUPLICADO
 
@@ -32,11 +33,13 @@ mcp = FastMCP(
 
 
 # ───────────────────────── telemetría ─────────────────────────
-# Una línea JSON por llamada en logs/uso.jsonl (raíz del repositorio, junto a servidor.py). No guarda contenido: solo
-# herramienta, proyecto, tamaño de argumentos y respuesta, duración y si hubo error.
+# Una línea JSON por llamada en $XDG_STATE_HOME/ratifact/uso.jsonl (por defecto ~/.local/state/ratifact/uso.jsonl,
+# fuera del paquete; antes de T-012 era <repo>/logs/uso.jsonl y `ratifact upgrade` lo copia). No guarda contenido:
+# solo herramienta, proyecto, tamaño de argumentos y respuesta, duración y si hubo error.
 # RATIFACT_LOG (o el respaldo MEMORIA_PROYECTOS_LOG hasta 1.1). Las filas guardan el nombre inglés de la herramienta;
-# las claves de la fila (herramienta, proyecto, ruta, carpeta…) no cambian, así analizar_uso agrega todo el historial.
-LOG_USO = Path(_entorno("LOG") or Path(__file__).resolve().parents[1] / "logs" / "uso.jsonl")
+# las claves de la fila (herramienta, proyecto, ruta, carpeta…) no cambian, así `ratifact report` agrega todo el
+# historial.
+LOG_USO = Path(_entorno("LOG") or log_por_defecto())
 
 
 def _registrar_uso(nombre: str, kwargs: dict, respuesta, ms: float, alias: str | None = None) -> None:

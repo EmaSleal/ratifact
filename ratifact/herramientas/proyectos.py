@@ -139,7 +139,7 @@ def _validar_ruta_proyecto(ruta: str, mem: Path, alta: bool = False) -> Path:
     if mem == r or r in mem.parents:
         if alta:
             raise ErrorMemoria("The memory cannot live inside the code repository (ADR-010); "
-                               "omit `memory` to use .memorias/<name>.")
+                               "omit `memory` to use .ratifact/<name>.")
         raise ErrorMemoria("The memory cannot live inside the code repository (ADR-010); "
                            "choose another path (moving an existing project's memory is not supported here).")
     return r
@@ -149,7 +149,7 @@ def _validar_ruta_proyecto(ruta: str, mem: Path, alta: bool = False) -> Path:
 def register_project(name: str, path: str, memory: str = "", tests: str = "") -> str:
     """Registers a project: adds it to projects.json, initializes its memory (its own git repo) and returns the
     instructions to paste into Claude and into CLAUDE.md/AGENTS.md. `path`: the code folder (must exist inside the
-    projects folder). `memory`: optional; by default <projects folder>/.memorias/<name>, outside the code
+    projects folder). `memory`: optional; by default <projects folder>/.ratifact/<name>, outside the code
     repository. `tests`: command to run the tests; if omitted it is detected (Maven, Gradle, npm/pnpm/yarn, Godot,
     pytest, cargo, go). Only with the user's confirmation."""
     nombre, ruta, memoria, pruebas = name, path, memory, tests
@@ -160,7 +160,7 @@ def register_project(name: str, path: str, memory: str = "", tests: str = "") ->
         proyectos = _proyectos() if CONFIG.exists() else {}
         if nombre in proyectos:
             raise ErrorMemoria(f"'{nombre}' is already registered. Use project_instructions('{nombre}').")
-        m = Path(memoria).expanduser().resolve() if memoria else BASE_PROYECTOS / ".memorias" / nombre
+        m = Path(memoria).expanduser().resolve() if memoria else BASE_PROYECTOS / ".ratifact" / nombre
         if m != BASE_PROYECTOS and BASE_PROYECTOS not in m.parents:
             raise ErrorMemoria(f"The memory must be inside {BASE_PROYECTOS}.")
         r = _validar_ruta_proyecto(ruta, m, alta=True)
@@ -268,11 +268,12 @@ def update_project(name: str, path: str = "", tests: str = "", repo: str = "", r
                                    f"use update_project('{nombre}', redetect=True) to regenerate them.")
 
         if integraciones.strip():
-            nuevas, descripcion = _parsear_integraciones(integraciones, proyectos[nombre].get("integraciones"))
+            clave = _clave_escritura(proyectos[nombre], "integraciones")
+            nuevas, descripcion = _parsear_integraciones(integraciones, _valor(proyectos[nombre], "integraciones"))
             if nuevas:
-                proyectos[nombre]["integraciones"] = nuevas
+                proyectos[nombre][clave] = nuevas
             else:
-                proyectos[nombre].pop("integraciones", None)
+                proyectos[nombre].pop(clave, None)
             cambios.append(f"integrations: {descripcion}")
 
         _escribir_atomico(CONFIG, json.dumps(proyectos, indent=2, ensure_ascii=False) + "\n")

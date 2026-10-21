@@ -33,7 +33,7 @@ def test_alta_detecta_y_lo_muestra_en_instrucciones_y_tareas(srv, entorno):
     salida = srv.register_project(name="erp", path=str(repo))
     assert "Test command (from the repository root): `mvn test`" in salida
     srv.create_task(project="erp", title="Endpoint pedidos", goal="o", acceptance_criteria="c")
-    tarea = next((entorno["base"] / ".memorias" / "erp" / "tasks").glob("T-001*.md")).read_text()
+    tarea = next((entorno["base"] / ".ratifact" / "erp" / "tasks").glob("T-001*.md")).read_text()
     assert "## How to verify" in tarea and "`mvn test`" in tarea
 
 

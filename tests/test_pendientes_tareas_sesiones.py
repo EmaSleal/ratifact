@@ -6,6 +6,8 @@ def test_pendiente_abrir_y_cerrar(srv, proyecto):
     assert "P-001 recorded" in srv.add_pending(project="demo", topic="Parry", context="Sin decidir", owner="Emanuel")
     abiertas = (proyecto["mem"] / "OPEN.md").read_text()
     assert "P-001" in abiertas and "owner: Emanuel" in abiertas
+    for t in ("A", "B", "C"):      # decision_id debe existir (P-012)
+        srv.propose_decision(project="demo", title=t, decision="d", rationale="j")
     assert "P-001 → closed" in srv.close_pending(project="demo", id="P-001", resolution="Fuera del prototipo", decision_id="ADR-003")
     abiertas = (proyecto["mem"] / "OPEN.md").read_text()
     assert "- (none)" in abiertas.split("## Recently closed")[0] and "P-001 Parry (closed" in abiertas
@@ -20,6 +22,7 @@ def test_cerradas_recientes_se_limitan_y_no_inflan_el_contexto(srv, proyecto):
 
 
 def test_ciclo_de_una_tarea(srv, proyecto):
+    srv.propose_decision(project="demo", title="Godot", decision="d", rationale="j")     # `decisions` debe existir (P-012)
     salida = srv.create_task(project="demo", title="Ranuras de forma", goal="Dos ranuras",
                                  acceptance_criteria="- pruebas verdes", decisions="ADR-001", out_of_scope="Golem")
     assert "T-001 created" in salida and "/run-task T-001" in salida

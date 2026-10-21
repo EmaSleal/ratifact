@@ -35,9 +35,17 @@ def serializar(datos: dict) -> str:
     return json.dumps(datos, sort_keys=True, ensure_ascii=False, indent=2) + "\n"
 
 
+def _sin_sangria(datos: dict) -> dict:
+    """Descripciones con inspect.cleandoc: Python 3.13+ quita la sangría de los docstrings al compilar, así que el
+    texto crudo depende de la versión de Python que corre las pruebas (no del contrato)."""
+    import inspect
+    return {grupo: [{**e, "descripcion": inspect.cleandoc(e["descripcion"] or "")} for e in elementos]
+            for grupo, elementos in datos.items()}
+
+
 def test_contrato_de_herramientas_y_prompts_sin_cambios(srv):
-    actual = serializar(contrato(srv.mcp))
-    esperado = INSTANTANEA.read_text(encoding="utf-8")
+    actual = serializar(_sin_sangria(contrato(srv.mcp)))
+    esperado = serializar(_sin_sangria(json.loads(INSTANTANEA.read_text(encoding="utf-8"))))
     assert actual == esperado, "El contrato MCP cambió respecto de tests/contrato_herramientas.json"
 
 

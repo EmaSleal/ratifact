@@ -1,5 +1,5 @@
 """Estructura del paquete ratifact (ADR-020): servidor.py delgado, módulos acotados, sin importaciones circulares,
-rutas por defecto en la raíz del repositorio y aislamiento del entorno entre pruebas."""
+rutas por defecto fuera del paquete y aislamiento del entorno entre pruebas."""
 import json
 import os
 import subprocess
@@ -36,12 +36,14 @@ def test_cada_modulo_se_importa_solo(nombre, entorno):
     assert r.returncode == 0, r.stderr
 
 
-def test_rutas_por_defecto_en_la_raiz_del_repositorio(srv, monkeypatch):
-    """Sin MEMORIA_PROYECTOS_LOG, la telemetría va a <repo>/logs/uso.jsonl (no a ratifact/logs). No escribe nada."""
+def test_rutas_por_defecto_fuera_del_paquete(srv, monkeypatch, tmp_path):
+    """Sin MEMORIA_PROYECTOS_LOG, la telemetría va a $XDG_STATE_HOME/ratifact/uso.jsonl (T-012: nada depende de estar
+    dentro del repositorio); run-task.md y skills/ se buscan en el repositorio de origen. No escribe nada."""
     monkeypatch.delenv("MEMORIA_PROYECTOS_LOG")
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "estado"))
     srv = recargar_servidor()
     from ratifact import app, config
-    assert app.LOG_USO == RAIZ_REPO / "logs" / "uso.jsonl"
+    assert app.LOG_USO == tmp_path / "estado" / "ratifact" / "uso.jsonl"
     assert srv.LOG_USO == app.LOG_USO
     assert config._DIR == RAIZ_REPO
     assert (config._DIR / "skills" / "tarea" / "SKILL.md").is_file()
@@ -62,11 +64,11 @@ def test_cada_prueba_registra_bajo_su_propia_base(srv, entorno, nombre):
     assert not salida.startswith("ERROR"), salida
     proyectos = json.loads(config.CONFIG.read_text(encoding="utf-8"))
     assert list(proyectos) == [nombre]
-    assert Path(proyectos[nombre]["memoria"]) == base / ".memorias" / nombre
-    assert (base / ".memorias" / nombre / ".git").exists()
+    assert Path(proyectos[nombre]["memoria"]) == base / ".ratifact" / nombre
+    assert (base / ".ratifact" / nombre / ".git").exists()
     if nombre == "dos" and not _BASES_VISTAS:
         pytest.skip("la comparación necesita que 'uno' haya corrido antes en la misma sesión")
     for anterior in _BASES_VISTAS:
         assert anterior != base
-        assert not (anterior / ".memorias" / nombre).exists()
+        assert not (anterior / ".ratifact" / nombre).exists()
     _BASES_VISTAS.append(base)

@@ -156,3 +156,99 @@ Tool and parameter **names** have no Spanish aliases: a client with the old inst
 
 Parameters: see `docs/v1-english-naming.md` §4 and its addenda (e.g. `proyecto` → `project`, `cita_usuario` → `user_quote`,
 `resuelve` → `resolves`, `integraciones` → `integrations`, `redetectar` → `redetect`).
+
+## Clients from the fixed installation
+
+Applies to: T-012 (ADR-028 step 3, ADR-032). The repository is now an installable package with a `ratifact` command.
+Clients stop running the working copy (`uv run --script …/servidor.py`, P-017): they run a fixed copy installed with
+`uv tool install`, so editing or switching branches in the repository no longer changes the running server. The tool
+contract (28 tools) does not change. Until T-013 this setup is manual; `servidor.py` and `analizar_uso.py` keep working
+as thin wrappers until 1.1, so the current client configurations do not break in the meantime.
+
+### 1. Install the command
+
+```
+uv tool install ~/Projects/.memoria-proyectos
+ratifact --version          # ratifact 1.0.0rc1
+ratifact doctor             # read-only: what is installed, where, and what is pending
+```
+
+`uv tool install` puts the executable in `~/.local/bin/ratifact` (`uv tool dir --bin`). Desktop apps may not have
+`~/.local/bin` in their `PATH`, so the fragments below use the absolute path.
+
+Subcommands: `ratifact serve` (the MCP server over stdio — what clients launch), `ratifact report [--days N]
+[--project P] [--log PATH]` (usage summary; was `analizar_uso.py`), `ratifact doctor` (read-only diagnosis; exit code 1
+if there are pending actions), `ratifact upgrade` (shows the plan) / `ratifact upgrade --apply`.
+
+### 2. Close every client and run the upgrade
+
+```
+ratifact upgrade            # dry run: prints the plan, changes nothing
+ratifact upgrade --apply
+```
+
+With `--apply`, in this order and with backups (ADR-029): (1) memories still on schema v1 are migrated to v2 (tag
+`pre-v2`); (2) memories in the old default `~/Projects/.memorias/<project>` move to `~/Projects/.ratifact/<project>`
+(custom paths such as `game/.project` never move); (3) `~/.config/ratifact/projects.json` is written with English keys
+(`path`, `memory`, `writable`, `tests`, `integrations`) and the old file is renamed to `projects.json.bak-v1` (never
+deleted); (4) `DECISIONS.md`/`OPEN.md` are regenerated; (5) the old usage log `<repo>/logs/uso.jsonl` is copied to
+`~/.local/state/ratifact/uso.jsonl` if the new one does not exist yet. It aborts, naming the culprit, if a server is
+running with this configuration (`ratifact serve` / `servidor.py` processes, or a memory `.lock` held) or if a memory has
+uncommitted changes. If a step fails, it is reverted (if step 3 fails, the moved memories go back too) and the error is
+explained. A second `--apply` changes nothing and says so.
+
+A client still configured with `MEMORIA_PROYECTOS_CONFIG=…/projects.json` keeps working after the upgrade: when that
+file was renamed to `.bak-v1`, the server uses `~/.config/ratifact/projects.json` and logs a notice. Remove the variable
+when you switch the client to the fragments below.
+
+### 3. Point each client at `ratifact serve`
+
+No environment variables are needed: the configuration is `~/.config/ratifact/projects.json` and the log
+`~/.local/state/ratifact/uso.jsonl`. The MCP server key stays `memoria-proyectos`, so tool approvals keep their names.
+
+Claude Desktop — `~/.config/Claude/claude_desktop_config.json`, inside `"mcpServers"` (replace the old entry):
+
+```json
+"memoria-proyectos": {
+  "command": "/home/mano-pc/.local/bin/ratifact",
+  "args": ["serve"]
+}
+```
+
+Claude Code:
+
+```
+claude mcp remove memoria-proyectos --scope user
+claude mcp add memoria-proyectos --scope user -- /home/mano-pc/.local/bin/ratifact serve
+```
+
+Pi — `~/.pi/agent/mcp.json`, inside `"mcpServers"`:
+
+```json
+"memoria-proyectos": {
+  "command": "/home/mano-pc/.local/bin/ratifact",
+  "args": ["serve"]
+}
+```
+
+Codex — `~/.codex/config.toml` (replace the `command`/`args` lines and delete the
+`[mcp_servers.memoria-proyectos.env]` table; keep the per-tool `approval_mode` tables):
+
+```toml
+[mcp_servers.memoria-proyectos]
+command = "/home/mano-pc/.local/bin/ratifact"
+args = ["serve"]
+startup_timeout_sec = 30
+```
+
+Then restart every client and run `ratifact doctor`: it should end with `Pending actions: none`.
+
+### 4. After every merge into main
+
+The installed copy does not follow the repository. After each task is merged:
+
+```
+uv tool install --reinstall ~/Projects/.memoria-proyectos
+```
+
+and restart every client (Claude Desktop, Claude Code, Pi, Codex) so they launch the new copy.

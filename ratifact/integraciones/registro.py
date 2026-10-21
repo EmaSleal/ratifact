@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ratifact.config import ErrorMemoria, _proyectos, _raiz, _repos_de
+from ratifact.config import ErrorMemoria, _proyectos, _raiz, _repos_de, _valor
 from ratifact.integraciones import codegraph, engram, gentle_ai
 from ratifact.integraciones.base import FASES, Integracion
 
@@ -29,7 +29,7 @@ def _detectada(integ: Integracion, raiz: Path) -> bool:
 def _activas(proyecto: str) -> list[tuple[Integracion, bool]]:
     """(integración, detectada) de las que no están en 'off': las de proyecto solo si se detectan; las de
     usuario siempre (nunca se detectan: su guía es condicional)."""
-    config = _proyectos().get(proyecto, {}).get("integraciones") or {}
+    config = _valor(_proyectos().get(proyecto, {}), "integraciones") or {}    # "integrations" o "integraciones"
     if not isinstance(config, dict):
         config = {}
     raiz = _raiz(proyecto, verificar_existe=False)
