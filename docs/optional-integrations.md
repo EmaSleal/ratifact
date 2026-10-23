@@ -30,7 +30,7 @@ One module per integration in `ratifact/integraciones/` (English names after the
 
 Initial set:
 - **codegraph** (project) — `planificar`: if available, use it to fill `archivos` precisely. `ejecutar`: after reading the spec and before opening files, call `codegraph_context` with the objective + listed files. `verificar`: check callers of changed symbols to confirm the blast radius.
-- **gentle-ai** (project) — `ejecutar`: the orchestrator, sub-agents and skills may implement; the spec is the contract (moves today's SKILL.md line).
+- **gentle-ai** (project) — revised by T-014 (ADR-033, ADR-034). `execute`: a ratifact task is gentle-ai's **delegated-direct** route — never SDD, no SDD artifacts; one explore worker if understanding the task takes 4+ files, one writer for 2+ non-trivial files; the ratifact task is the **ODD** feature document, so no other ODD document is created. `verify`: verification in a clean worker; if **RDD** is on, the review of the finished change runs before `update_task(in_review)` and the result summarizes its receipt (depth, findings, corrections); if RDD is off, no review is started. ratifact neither enables nor blocks RDD. Prefix: `gentle-ai` (no longer `sdd-`).
 - **engram** (user) — `cerrar`: technical learnings may go to engram; decisions only through ratifact; on conflict the agreed decision wins (moves today's text in app.py, plantillas.py, SKILL.md).
 
 ## Injection points (ADR-025)
@@ -44,6 +44,14 @@ Guidance is never written into the task file (stale on reruns). Disabled integra
 
 ## Configuration
 `projects.json` per project: `"integraciones": {"codegraph": "off"}` (absent = auto). Set through `actualizar_proyecto(nombre, integraciones="codegraph=off,gentle-ai=auto")` — **new parameter**, must ship before the English contract freeze. Unknown integration names are rejected with the list of known ones.
+
+## Model routing (T-014, ADR-033 §2, ADR-035)
+Independent of any integration. The user sets a model per delegated role — `explore`, `write`, `verify`:
+- **Global:** `settings.json` next to the active `projects.json` (`CONFIG.parent`), `{"models": {"explore": "haiku", "write": "sonnet", "verify": "sonnet"}}`. Created by hand; read on every call. `projects.json` gets no new top-level keys (every top-level key there is a project).
+- **Per project:** `"models"` in the project's entry, set with `update_project(name, models="explore=haiku,write=sonnet")`; `inherit` removes a role's exception. Merged role by role: project wins, missing roles inherit the global value.
+- **Delivery:** `update_task(..., "in_progress")` appends a "Model routing" block when at least one role is set (with or without integrations): each role, its model and its origin (global/project). It is the user's explicit request to set that model when delegating the role — which is what gentle-ai requires before setting `model` on a generic delegation. A client that cannot choose a sub-agent's model ignores it; roles without a model inherit the session's model. No configuration → the response is byte-for-byte unchanged.
+- **Errors:** an invalid `settings.json` (bad JSON, unknown roles, empty values) is ignored with a warning in that block and never breaks a tool; `ratifact doctor` reports it without modifying it and shows each project's effective models.
+- **Reporting:** the task result's `Integrations used:` line reports workers and models (e.g. `gentle-ai (2 workers: explore/haiku, write/sonnet)`), plus one line summarizing the RDD receipt if a review ran.
 
 ## Installer (PyPI task)
 Reports detected integrations and how to disable one. Never asks interactively.

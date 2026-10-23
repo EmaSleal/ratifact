@@ -723,12 +723,17 @@
       "nombre": "update_index"
     },
     {
-      "descripcion": "Updates a project already registered in projects.json without editing it by hand. Give at least one of\n    `path`, `tests`, `repo`, `redetect=True` or `integrations`; with none, it returns an error and leaves the file\n    untouched.\n    `path`: new code folder, when it moved. Same checks as register_project (inside the projects folder, an\n    existing folder, and not containing the project's memory — ADR-010). If the project is multi-repo and the stored\n    `tests` keeps keys that are no longer repos under the new path, the change is applied anyway but the response\n    lists them and suggests `redetect=True`.\n    `tests`: command the coding agent uses to verify tasks (/run-task). In multi-repo projects, `repo` says which\n    repo it applies to.\n    `redetect`: True to detect the command again from the project files instead of giving it with `tests` (both at\n    once are incompatible). In a single-repo project it redetects the whole command; in a multi-repo one it\n    redetects all repos, or only `repo` if given.\n    `integrations`: turns optional integrations of the project on or off, e.g. \"codegraph=off,gentle-ai=auto\"\n    (values auto|off; default auto: used when detected). One turned off never appears in any response.",
+      "descripcion": "Updates a project already registered in projects.json without editing it by hand. Give at least one of\n`path`, `tests`, `repo`, `redetect=True`, `integrations` or `models`; with none, it returns an error and leaves the file\nuntouched.\n`path`: new code folder, when it moved. Same checks as register_project (inside the projects folder, an\nexisting folder, and not containing the project's memory — ADR-010). If the project is multi-repo and the stored\n`tests` keeps keys that are no longer repos under the new path, the change is applied anyway but the response\nlists them and suggests `redetect=True`.\n`tests`: command the coding agent uses to verify tasks (/run-task). In multi-repo projects, `repo` says which\nrepo it applies to.\n`redetect`: True to detect the command again from the project files instead of giving it with `tests` (both at\nonce are incompatible). In a single-repo project it redetects the whole command; in a multi-repo one it\nredetects all repos, or only `repo` if given.\n`integrations`: turns optional integrations of the project on or off, e.g. \"codegraph=off,gentle-ai=auto\"\n(values auto|off; default auto: used when detected). One turned off never appears in any response.\n`models`: the project's exceptions to the global models per role (settings.json next to projects.json), e.g.\n\"explore=haiku,write=sonnet\" (roles explore, write, verify; the value is the client's model name). \"inherit\"\nremoves the project's exception for that role, which then uses the global one (or the session's model).",
       "esquema_entrada": {
         "properties": {
           "integrations": {
             "default": "",
             "title": "Integrations",
+            "type": "string"
+          },
+          "models": {
+            "default": "",
+            "title": "Models",
             "type": "string"
           },
           "name": {
@@ -765,7 +770,7 @@
       "nombre": "update_project"
     },
     {
-      "descripcion": "Changes a task's status (todo, in_progress, in_review, failed, merged, discarded; the Spanish names pendiente,\n    en_curso, en_revision, fallida, integrada, descartada are still accepted until 1.1). Stored in English.\n    `result`: what was done, tests run and their summarized output, deviations from the spec.\n    'merged' and 'discarded' only with the user's explicit confirmation.\n    To ask for corrections after reviewing a task use `request_changes`, not this status change.\n    With 'in_progress', the response brings the guidance of active integrations (execute, verify, close), computed at\n    that moment; it is conditional: follow it only if you have those tools. It is not written into the task.\n    With 'merged', if the task declares `resolves`, the response reminds which pending items are still open (it\n    never closes or modifies any).",
+      "descripcion": "Changes a task's status (todo, in_progress, in_review, failed, merged, discarded; the Spanish names pendiente,\nen_curso, en_revision, fallida, integrada, descartada are still accepted until 1.1). Stored in English.\n`result`: what was done, tests run and their summarized output, deviations from the spec.\n'merged' and 'discarded' only with the user's explicit confirmation.\nTo ask for corrections after reviewing a task use `request_changes`, not this status change.\nWith 'in_progress', the response brings the guidance of active integrations (execute, verify, close), computed at\nthat moment; it is conditional: follow it only if you have those tools. It is not written into the task.\nIt also brings a \"Model routing\" block when the user configured models per role (explore, write, verify).\nWith 'merged', if the task declares `resolves`, the response reminds which pending items are still open (it\nnever closes or modifies any).",
       "esquema_entrada": {
         "properties": {
           "commit": {

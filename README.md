@@ -98,11 +98,33 @@ calls another MCP server.
 | Integration | Detected by | Role |
 |---|---|---|
 | codegraph | a `.codegraph/` folder in the project | code structure for planning and checking a task's scope |
-| gentle-ai | a `.atl/` folder in the project | orchestration (sub-agents, skills) to implement |
+| gentle-ai | a `.atl/` folder in the project | the task runs as its delegated-direct route (never SDD), is its ODD feature document, and RDD (if on) reviews it before `in_review` |
 | engram | never detected | its guidance is conditional ("if you have it") |
 
 The default is `auto` (used when detected). `ratifact install` reports what it detected per project and never asks.
 To turn one off: `update_project("my-app", integrations="codegraph=off")` (`=auto` turns it back on).
+
+## Model routing
+
+You choose which model each delegated role uses (`explore`, `write`, `verify`), independent of any integration. The
+global value lives in `settings.json`, next to the active `projects.json` (e.g. `~/.config/ratifact/settings.json`);
+you create it by hand (`ratifact install` never writes it):
+
+```json
+{"models": {"explore": "haiku", "write": "sonnet", "verify": "sonnet"}}
+```
+
+Per-project exceptions: `update_project("my-app", models="explore=haiku,write=sonnet")` stores `"models"` in that
+project's entry of `projects.json`; they win role by role and the other roles inherit the global value.
+`models="write=inherit"` removes the project's exception for that role. Unknown roles and empty values are rejected
+with the list of valid roles. Model names are free text for your client (aliases or full ids).
+
+When at least one role is set, `update_task(..., "in_progress")` adds a "Model routing" block (each role, its model
+and whether it comes from `global` or `project`): it is your explicit request to set that model when the agent
+delegates the role; a client that cannot choose a sub-agent's model ignores it, and roles without a model use the
+session's model. With no configuration the response is unchanged. An invalid `settings.json` never breaks a tool
+(it is ignored with a warning in that block); `ratifact doctor` reports it without changing it and shows each
+project's effective models (or `models: session default`).
 
 ## Upgrade from memoria-proyectos
 

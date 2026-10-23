@@ -46,7 +46,7 @@ def test_cada_descriptor_tiene_todos_los_campos(reg):
     assert _por_nombre(reg, "gentle-ai").alcance == "project"
     assert _por_nombre(reg, "engram").alcance == "user"
     assert set(_por_nombre(reg, "codegraph").guia) == {"plan", "execute", "verify"}
-    assert set(_por_nombre(reg, "gentle-ai").guia) == {"execute"}
+    assert set(_por_nombre(reg, "gentle-ai").guia) == {"execute", "verify"}
     assert set(_por_nombre(reg, "engram").guia) == {"close"}
 
 
@@ -58,7 +58,8 @@ def test_cada_fragmento_es_condicional_y_nombra_su_prefijo(reg):
         for fase, texto in i.guia.items():
             assert f"`{i.prefijo}" in texto, (i.nombre, fase)
             assert texto.startswith("if you have ") and "; otherwise" in texto, (i.nombre, fase)
-            assert len(texto) <= 260, (i.nombre, fase, len(texto))
+            # gentle-ai (T-014) lleva umbrales de delegación y RDD: tope más alto
+            assert len(texto) <= (360 if i.nombre == "gentle-ai" else 260), (i.nombre, fase, len(texto))
 
 
 # ───────────────────────── criterio 2: detección en disco ─────────────────────────

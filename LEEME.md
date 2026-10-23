@@ -81,7 +81,7 @@ Recomendado: marcar `register_project` como "requiere aprobación" igual que `ac
 
 ### Actualizar un proyecto ya registrado
 
-`update_project(name, path="", tests="", repo="", redetect=False, integrations="")` corrige projects.json sin
+`update_project(name, path="", tests="", repo="", redetect=False, integrations="", models="")` corrige projects.json sin
 editarlo a mano; reemplaza a la antigua `configurar_pruebas` (eliminada). Indique al menos uno de estos campos
 (sin ninguno, la herramienta falla y no toca el archivo):
 - `path`: nueva carpeta del código, cuando el proyecto se movió. Mismas validaciones que `register_project`
@@ -103,6 +103,28 @@ editarlo a mano; reemplaza a la antigua `configurar_pruebas` (eliminada). Indiqu
   detectan en la carpeta del proyecto o en cualquiera de sus repos; engram no se detecta (solo guía condicional).
   Las activas aparecen en `get_context` (una línea + guía para planificar), en `create_task` (la línea) y
   en `update_task(..., "in_progress")` (guía para execute, verify y close); una apagada no aparece nunca.
+- `models`: excepciones del proyecto a los modelos por rol, p. ej. `"explore=haiku,write=sonnet"` (roles
+  `explore`, `write`, `verify`; el valor es el nombre de modelo del cliente, texto libre). `inherit` en un rol quita
+  la excepción de ese rol, que vuelve a usar el global. Un rol desconocido o un valor vacío se rechazan listando los
+  roles válidos. Se guarda en la entrada del proyecto en `projects.json` bajo `"models"`.
+
+### Modelos por rol (`settings.json`)
+
+El valor global de los modelos por rol vive en `settings.json`, en la misma carpeta que el `projects.json` activo
+(p. ej. `~/.config/ratifact/settings.json`). Lo crea el usuario a mano (`ratifact install` no lo escribe):
+
+```json
+{"models": {"explore": "haiku", "write": "sonnet", "verify": "sonnet"}}
+```
+
+Se lee en cada llamada. Las excepciones de un proyecto (`update_project(..., models=...)`) ganan rol por rol; los
+roles que el proyecto no define se heredan del global. Si hay al menos un rol configurado,
+`update_task(..., "in_progress")` agrega un bloque "Model routing" con cada rol, su modelo y su origen
+(global/project): es la petición explícita del usuario de fijar ese modelo al delegar el rol a un sub-agente; un
+cliente que no permite elegir el modelo de sub-agentes lo ignora, y los roles sin modelo usan el de la sesión. Sin
+configuración la respuesta no cambia. Un `settings.json` inválido no rompe ninguna herramienta (se ignora con un
+aviso en ese bloque) y `ratifact doctor` lo reporta sin modificarlo; doctor muestra además los modelos efectivos de
+cada proyecto (o `models: session default`).
 No cubre renombrar un proyecto ni mover la ubicación de su memoria (`.ratifact/<nombre>` o la clave `"memoria"`):
 para eso edite `projects.json` a mano y mueva la carpeta con `git mv`/`mv` según corresponda.
 

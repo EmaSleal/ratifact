@@ -92,6 +92,10 @@ def test_mapeo_de_nombres_completo_y_solo_dos_herramientas_nuevas():
     assert {PROMPTS_V0[p["nombre"]] for p in viejo["prompts"]} == {p["nombre"] for p in nuevo["prompts"]}
 
 
+# Parámetros nuevos agregados después de la instantánea v0 (ya en inglés, sin nombre v0 que traducir).
+POSTERIORES_A_V0 = {"actualizar_proyecto": {"models"}}      # T-014
+
+
 def test_ningun_nombre_ni_parametro_en_espanol_queda_expuesto():
     from ratifact.vocabulario import HERRAMIENTAS_V0, PARAMETROS_V0
     viejo, nuevo = _cargar(INSTANTANEA_V0), _cargar(INSTANTANEA)
@@ -101,6 +105,7 @@ def test_ningun_nombre_ni_parametro_en_espanol_queda_expuesto():
         nueva = por_nombre[HERRAMIENTAS_V0[h["nombre"]]]
         params = set(nueva["esquema_entrada"]["properties"])
         esperados = {PARAMETROS_V0.get(p, p) for p in h["esquema_entrada"]["properties"]}
+        esperados |= POSTERIORES_A_V0.get(h["nombre"], set())
         assert params == esperados, (h["nombre"], params, esperados)
         assert not params & (set(PARAMETROS_V0) - set(PARAMETROS_V0.values())), h["nombre"]
     for p in nuevo["prompts"]:

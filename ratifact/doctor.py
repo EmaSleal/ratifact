@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 from typing import Callable
 
-from ratifact import __version__, rutas
+from ratifact import __version__, modelos, rutas
 from ratifact import config as _cfg
 from ratifact.config import _ruta_config
 from ratifact.esquema import VERSION_ESQUEMA
@@ -76,7 +76,13 @@ def _proyectos(plan, acciones: list[str]) -> list[str]:
             esquema = f"schema v{p.version}"
         lineas += [f"  {p.nombre}", f"    code: {codigo}",
                    f"    memory: {p.mem} · {esquema} · {p.ubicacion} · git: {p.git}",
-                   f"    integrations: {', '.join(p.integraciones) or 'none detected'}"]
+                   f"    integrations: {', '.join(p.integraciones) or 'none detected'}",
+                   f"    models: {modelos.describir(p.entrada, inst.config)}"]
+        if modelos.CLAVE in p.entrada:
+            try:
+                modelos._validar(p.entrada[modelos.CLAVE], "projects.json")
+            except _cfg.ErrorMemoria as e:
+                acciones.append(f"{p.nombre}: {e} Fix it with update_project(models=...)")
         if not (p.codigo and p.codigo.is_dir()):
             acciones.append(f"{p.nombre}: the code folder does not exist; fix it with update_project")
         if p.existe and not p.limpio:
@@ -84,6 +90,21 @@ def _proyectos(plan, acciones: list[str]) -> list[str]:
         if p.codigo and (p.mem == p.codigo or p.codigo in p.mem.parents):
             acciones.append(f"{p.nombre}: the memory is inside the code repository (ADR-010)")
     return lineas
+
+
+def _settings(config: Path, acciones: list[str]) -> list[str]:
+    """settings.json (modelos globales por rol, ADR-035): JSON inválido o roles desconocidos son un problema; nunca
+    se modifica."""
+    ruta = modelos.ruta_settings(config)
+    if not ruta.is_file():
+        return [f"Settings: {ruta} (not created; models: session default)"]
+    try:
+        globales = modelos.leer_global(config)
+    except _cfg.ErrorMemoria as e:
+        acciones.append(f"settings.json: {e} Fix it by hand (ratifact never rewrites it)")
+        return [f"Settings: {ruta} (INVALID)"]
+    return [f"Settings: {ruta} · global models: "
+            + (", ".join(f"{r}={m}" for r, m in globales.items()) or "none")]
 
 
 def _servidores(plan, procesos: list[Proceso]) -> list[str]:
@@ -133,8 +154,9 @@ def informe(procesos: Callable[[], list[Proceso]] = procesos_servidor, paquete: 
     except _cfg.ErrorMemoria as e:
         sugerencia = mensaje_sugerencia(sugerencias_config(procesos(), rutas.origen(paquete)))
         acciones.append(str(e) + (f" Hint: {sugerencia}." if sugerencia else ""))
-        return lineas + _log(log_viejo) + _entorno(acciones) + _clientes(acciones, paquete), acciones
-    lineas += (_proyectos(plan, acciones) + _log(log_viejo) + _entorno(acciones) + _servidores(plan, procesos())
+        return (lineas + _settings(_ruta_config(), acciones) + _log(log_viejo) + _entorno(acciones)
+                + _clientes(acciones, paquete), acciones)
+    lineas += (_settings(plan.inst.config, acciones) + _proyectos(plan, acciones) + _log(log_viejo) + _entorno(acciones) + _servidores(plan, procesos())
                + _clientes(acciones, paquete))
     if not plan.vacio:
         pasos = describir(plan)

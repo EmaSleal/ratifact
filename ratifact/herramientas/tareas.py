@@ -2,6 +2,7 @@
 (amend_task y read_task en tareas_brief)."""
 from __future__ import annotations
 
+from ratifact import modelos as _modelos
 from ratifact import registros as _registros  # _ahora se busca en su módulo: las pruebas la reemplazan ahí
 from ratifact.app import _ejecutar, herramienta
 from ratifact.catalogo import _registros_en
@@ -164,6 +165,7 @@ def update_task(project: str, id: str, status: str, result: str = "", commit: st
     To ask for corrections after reviewing a task use `request_changes`, not this status change.
     With 'in_progress', the response brings the guidance of active integrations (execute, verify, close), computed at
     that moment; it is conditional: follow it only if you have those tools. It is not written into the task.
+    It also brings a "Model routing" block when the user configured models per role (explore, write, verify).
     With 'merged', if the task declares `resolves`, the response reminds which pending items are still open (it
     never closes or modifies any)."""
     proyecto, estado, resultado = project, status, result
@@ -185,7 +187,10 @@ def update_task(project: str, id: str, status: str, result: str = "", commit: st
                 cuerpo = _anexar_resultado(cuerpo, f"### {_hoy()} · {nuevo}\n{resultado.strip()}")
             _escribir_registro(ruta, meta, cuerpo)
             sha = _commit(proyecto, [ruta], f"{meta['id']} → {nuevo}")
-            guia = _integraciones._guia_en_curso(proyecto) if nuevo == "in_progress" else ""
+            guia = ""
+            if nuevo == "in_progress":
+                partes = (_integraciones._guia_en_curso(proyecto), _modelos.bloque(_proyectos().get(proyecto, {})))
+                guia = "\n\n".join(p for p in partes if p)
             if nuevo == "merged":
                 guia = _recordatorio_resuelve(proyecto, meta.get("resolves", ""))
             return f"{meta['id']} → {nuevo} · commit {sha}" + (f"\n\n{guia}" if guia else "")

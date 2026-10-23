@@ -11,6 +11,7 @@ from ratifact.app import _ejecutar, herramienta
 from ratifact.config import (BASE_PROYECTOS, CONFIG, MEM, ErrorMemoria, _clave_escritura, _es_repo, _mem,
                              _pista_nombre, _proyectos, _raiz, _repos, _repos_de, _sugerencia_nombre, _valor)
 from ratifact.esquema import ARCHIVO_ESQUEMA, IDIOMA_NUEVAS, _bloqueo, _escribir_esquema
+from ratifact import modelos as _modelos
 from ratifact.integraciones.registro import _parsear_integraciones
 from ratifact.plantillas import PLANTILLA_AGENTES, PLANTILLA_INSTRUCCIONES
 from ratifact.registros import _commit, _escribir_atomico, _regenerar_vistas
@@ -184,9 +185,9 @@ def register_project(name: str, path: str, memory: str = "", tests: str = "") ->
 
 @herramienta
 def update_project(name: str, path: str = "", tests: str = "", repo: str = "", redetect: bool = False,
-                   integrations: str = "") -> str:
+                   integrations: str = "", models: str = "") -> str:
     """Updates a project already registered in projects.json without editing it by hand. Give at least one of
-    `path`, `tests`, `repo`, `redetect=True` or `integrations`; with none, it returns an error and leaves the file
+    `path`, `tests`, `repo`, `redetect=True`, `integrations` or `models`; with none, it returns an error and leaves the file
     untouched.
     `path`: new code folder, when it moved. Same checks as register_project (inside the projects folder, an
     existing folder, and not containing the project's memory — ADR-010). If the project is multi-repo and the stored
@@ -198,17 +199,22 @@ def update_project(name: str, path: str = "", tests: str = "", repo: str = "", r
     once are incompatible). In a single-repo project it redetects the whole command; in a multi-repo one it
     redetects all repos, or only `repo` if given.
     `integrations`: turns optional integrations of the project on or off, e.g. "codegraph=off,gentle-ai=auto"
-    (values auto|off; default auto: used when detected). One turned off never appears in any response."""
+    (values auto|off; default auto: used when detected). One turned off never appears in any response.
+    `models`: the project's exceptions to the global models per role (settings.json next to projects.json), e.g.
+    "explore=haiku,write=sonnet" (roles explore, write, verify; the value is the client's model name). "inherit"
+    removes the project's exception for that role, which then uses the global one (or the session's model)."""
     nombre, ruta, pruebas, repositorio, redetectar, integraciones = name, path, tests, repo, redetect, integrations
+    modelos = models
 
     def f():
         proyectos = _proyectos()
         if nombre not in proyectos:
             raise ErrorMemoria(f"Project '{nombre}' is not registered."
                                f"{_pista_nombre(_sugerencia_nombre(nombre, proyectos), proyectos)}")
-        if not (ruta.strip() or pruebas.strip() or repositorio.strip() or redetectar or integraciones.strip()):
-            raise ErrorMemoria("Nothing to update: give `path`, `tests`, `repo`, `redetect=True` or "
-                               "`integrations`.")
+        if not (ruta.strip() or pruebas.strip() or repositorio.strip() or redetectar or integraciones.strip()
+                or modelos.strip()):
+            raise ErrorMemoria("Nothing to update: give `path`, `tests`, `repo`, `redetect=True`, "
+                               "`integrations` or `models`.")
         if redetectar and pruebas.strip():
             raise ErrorMemoria("`redetect` and `tests` are incompatible: asking to redetect the command and giving "
                                "it at the same time makes no sense; use one of them.")
@@ -266,6 +272,14 @@ def update_project(name: str, path: str = "", tests: str = "", repo: str = "", r
             else:
                 proyectos[nombre].pop(clave, None)
             cambios.append(f"integrations: {descripcion}")
+
+        if modelos.strip():
+            nuevos, descripcion = _modelos.parsear(modelos, proyectos[nombre].get(_modelos.CLAVE))
+            if nuevos:
+                proyectos[nombre][_modelos.CLAVE] = nuevos
+            else:
+                proyectos[nombre].pop(_modelos.CLAVE, None)
+            cambios.append(f"models: {descripcion}")
 
         _escribir_atomico(CONFIG, json.dumps(proyectos, indent=2, ensure_ascii=False) + "\n")
         mensaje = f"'{nombre}' updated:\n" + "\n".join(f"- {c}" for c in cambios)
