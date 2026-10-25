@@ -81,7 +81,7 @@ Recomendado: marcar `register_project` como "requiere aprobación" igual que `ac
 
 ### Actualizar un proyecto ya registrado
 
-`update_project(name, path="", tests="", repo="", redetect=False, integrations="", models="")` corrige projects.json sin
+`update_project(name, path="", tests="", repo="", redetect=False, integrations="", models="", delegation="")` corrige projects.json sin
 editarlo a mano; reemplaza a la antigua `configurar_pruebas` (eliminada). Indique al menos uno de estos campos
 (sin ninguno, la herramienta falla y no toca el archivo):
 - `path`: nueva carpeta del código, cuando el proyecto se movió. Mismas validaciones que `register_project`
@@ -127,6 +127,33 @@ aviso en ese bloque) y `ratifact doctor` lo reporta sin modificarlo; doctor mues
 cada proyecto (o `models: session default`).
 No cubre renombrar un proyecto ni mover la ubicación de su memoria (`.ratifact/<nombre>` o la clave `"memoria"`):
 para eso edite `projects.json` a mano y mueva la carpeta con `git mv`/`mv` según corresponda.
+
+### Política de delegación (ADR-036)
+
+Si una tarea se delega lo decide ratifact al planificar, no el agente que la ejecuta. `"delegation": "required" |
+"suggested" | "off"` va en `settings.json` junto a `"models"` (global; por defecto `required`). Excepción por proyecto:
+`update_project(name, delegation="off")` (`inherit` la quita; un valor desconocido se rechaza con la lista de válidos).
+Excepción por tarea, fijada en la planificación: `create_task(..., delegation="off")` o
+`amend_task(..., delegation="required")` (solo en todo o changes_requested), guardada como `delegation:` en el
+frontmatter. Precedencia: tarea > proyecto > global > `required`. Criterio para `off`: la tarea toca seguridad, es
+transversal o depende de diagnosticar una causa que la especificación aún no conoce.
+
+- `required`: `update_task(..., "in_progress")` devuelve un bloque "Delegation" imperativo: la sesión principal
+  orquesta y no escribe el código; exploración en un trabajador explore, implementación en trabajadores write,
+  verificación en un trabajador verify que no vio la implementación, cada uno con el modelo de su rol (o el de la
+  sesión); los encargos llevan la especificación completa; el orquestador revisa el diff completo antes de
+  in_review; si un escritor falla la verificación dos veces, el orquestador toma la implementación y lo declara como
+  `escalated: write`.
+- `suggested`: el bloque es una sugerencia. `off`: no hay bloque de delegación.
+- El resultado lleva una línea propia, separada de `Integrations used:` (que solo nombra integraciones, nunca roles):
+  `Workers: explore/haiku×1, write/sonnet×2, verify/sonnet×1` (más `escalated: write` si corresponde) o
+  `Workers: none — reason: <motivo>`. Con `required`, `update_task(..., "in_review")` sin una línea Workers válida
+  cambia el estado igual pero responde con un aviso.
+- Auditoría: al pasar a in_progress se graba en el frontmatter `routing: explore=<m>,write=<m>,verify=<m> ·
+  delegation=<política>` (`session` si el rol no tiene modelo; se sobrescribe en cada reejecución). `ratifact report`
+  mide el cumplimiento por proyecto (tareas required con trabajadores reales, escalamientos) y compara tareas
+  delegadas y no delegadas en revisiones y en duración in_progress → in_review; las tareas sin `routing:` se cuentan
+  aparte. `ratifact doctor` muestra la política efectiva de cada proyecto (p. ej. `delegation=required (global)`).
 
 ## 5. Tareas de código (Claude Desktop → Claude Code)
 Flujo: en Claude Desktop se acuerda un cambio y se registra con `create_task` → queda `.project/tasks/T-NNN.md` →

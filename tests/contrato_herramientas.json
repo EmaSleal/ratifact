@@ -90,12 +90,17 @@
       "nombre": "add_pending"
     },
     {
-      "descripcion": "Extends a task that has not run yet (status todo) or was sent back (changes_requested) with additional\n    acceptance criteria and/or notes. Any other status is rejected (after a review, use request_changes).\n    Appends a dated \"### Amendment N\" block (sub-labels \"Additional criteria\" / \"Notes\") to the task's \"Amendments\"\n    section; the original criteria stay untouched. One commit per amendment; give at least one of the two fields.\n    Idempotent (ADR-019): an identical amendment recorded in the last minutes is not written again.",
+      "descripcion": "Extends a task that has not run yet (status todo) or was sent back (changes_requested) with additional\nacceptance criteria and/or notes. Any other status is rejected (after a review, use request_changes).\nAppends a dated \"### Amendment N\" block (sub-labels \"Additional criteria\" / \"Notes\") to the task's \"Amendments\"\nsection; the original criteria stay untouched. One commit per amendment; give at least one of the three fields.\n`delegation`: sets the task's exception to the delegation policy (ADR-036), \"required\" or \"off\", in its\nfrontmatter (empty = unchanged); it adds no Amendment block by itself.\nIdempotent (ADR-019): an identical amendment recorded in the last minutes is not written again.",
       "esquema_entrada": {
         "properties": {
           "additional_criteria": {
             "default": "",
             "title": "Additional Criteria",
+            "type": "string"
+          },
+          "delegation": {
+            "default": "",
+            "title": "Delegation",
             "type": "string"
           },
           "id": {
@@ -186,7 +191,7 @@
       "nombre": "create_document"
     },
     {
-      "descripcion": "Creates a work specification for the coding agent in .project/tasks/T-NNN.md (status 'todo').\n    In multi-repo projects, `repo` (required) is the folder where the work happens; in single-repo projects it is\n    ignored (the response says so).\n    It must be self-contained: the coding agent runs it without this chat. `acceptance_criteria`: a verifiable list\n    (tests that must pass, observable behavior). `decisions`: applicable ADR ids. `files`: paths likely to be\n    touched. The user runs it with /run-task T-NNN.\n    `resolves`: pending items the task resolves, comma-separated, each optionally with \"(partial)\" (e.g.\n    \"P-036, P-037 (partial)\"); they must exist and be open. Stored in the task (\"Resolves\" section); when the task is\n    merged, update_task reminds which ones are still open. It never closes pending items.\n    The response adds the line of detected integrations (not written into the task).\n    Idempotent (ADR-019): if a task with this title (ignoring case and spaces) was created in the last minutes AND is\n    STILL 'todo', nothing new is created and the existing id is returned (with the /run-task command to repeat to\n    the user). If that task already changed status (e.g. in_progress: it is running), a human or the coding agent\n    already intervened, so a new task is recorded.",
+      "descripcion": "Creates a work specification for the coding agent in .project/tasks/T-NNN.md (status 'todo').\nIn multi-repo projects, `repo` (required) is the folder where the work happens; in single-repo projects it is\nignored (the response says so).\nIt must be self-contained: the coding agent runs it without this chat. `acceptance_criteria`: a verifiable list\n(tests that must pass, observable behavior). `decisions`: applicable ADR ids. `files`: paths likely to be\ntouched. The user runs it with /run-task T-NNN.\n`resolves`: pending items the task resolves, comma-separated, each optionally with \"(partial)\" (e.g.\n\"P-036, P-037 (partial)\"); they must exist and be open. Stored in the task (\"Resolves\" section); when the task is\nmerged, update_task reminds which ones are still open. It never closes pending items.\n`delegation`: the task's exception to the delegation policy, decided while planning (ADR-036): \"required\" or\n\"off\" (empty = inherit from the project/global policy). Use \"off\" when the task touches security, is\ncross-cutting, or depends on diagnosing a cause the spec does not know yet. Stored in the task's frontmatter.\nThe response adds the line of detected integrations (not written into the task).\nIdempotent (ADR-019): if a task with this title (ignoring case and spaces) was created in the last minutes AND is\nSTILL 'todo', nothing new is created and the existing id is returned (with the /run-task command to repeat to\nthe user). If that task already changed status (e.g. in_progress: it is running), a human or the coding agent\nalready intervened, so a new task is recorded.",
       "esquema_entrada": {
         "properties": {
           "acceptance_criteria": {
@@ -196,6 +201,11 @@
           "decisions": {
             "default": "",
             "title": "Decisions",
+            "type": "string"
+          },
+          "delegation": {
+            "default": "",
+            "title": "Delegation",
             "type": "string"
           },
           "files": {
@@ -723,9 +733,14 @@
       "nombre": "update_index"
     },
     {
-      "descripcion": "Updates a project already registered in projects.json without editing it by hand. Give at least one of\n`path`, `tests`, `repo`, `redetect=True`, `integrations` or `models`; with none, it returns an error and leaves the file\nuntouched.\n`path`: new code folder, when it moved. Same checks as register_project (inside the projects folder, an\nexisting folder, and not containing the project's memory — ADR-010). If the project is multi-repo and the stored\n`tests` keeps keys that are no longer repos under the new path, the change is applied anyway but the response\nlists them and suggests `redetect=True`.\n`tests`: command the coding agent uses to verify tasks (/run-task). In multi-repo projects, `repo` says which\nrepo it applies to.\n`redetect`: True to detect the command again from the project files instead of giving it with `tests` (both at\nonce are incompatible). In a single-repo project it redetects the whole command; in a multi-repo one it\nredetects all repos, or only `repo` if given.\n`integrations`: turns optional integrations of the project on or off, e.g. \"codegraph=off,gentle-ai=auto\"\n(values auto|off; default auto: used when detected). One turned off never appears in any response.\n`models`: the project's exceptions to the global models per role (settings.json next to projects.json), e.g.\n\"explore=haiku,write=sonnet\" (roles explore, write, verify; the value is the client's model name). \"inherit\"\nremoves the project's exception for that role, which then uses the global one (or the session's model).",
+      "descripcion": "Updates a project already registered in projects.json without editing it by hand. Give at least one of\n`path`, `tests`, `repo`, `redetect=True`, `integrations`, `models` or `delegation`; with none, it returns an error and leaves the file\nuntouched.\n`path`: new code folder, when it moved. Same checks as register_project (inside the projects folder, an\nexisting folder, and not containing the project's memory — ADR-010). If the project is multi-repo and the stored\n`tests` keeps keys that are no longer repos under the new path, the change is applied anyway but the response\nlists them and suggests `redetect=True`.\n`tests`: command the coding agent uses to verify tasks (/run-task). In multi-repo projects, `repo` says which\nrepo it applies to.\n`redetect`: True to detect the command again from the project files instead of giving it with `tests` (both at\nonce are incompatible). In a single-repo project it redetects the whole command; in a multi-repo one it\nredetects all repos, or only `repo` if given.\n`integrations`: turns optional integrations of the project on or off, e.g. \"codegraph=off,gentle-ai=auto\"\n(values auto|off; default auto: used when detected). One turned off never appears in any response.\n`models`: the project's exceptions to the global models per role (settings.json next to projects.json), e.g.\n\"explore=haiku,write=sonnet\" (roles explore, write, verify; the value is the client's model name). \"inherit\"\nremoves the project's exception for that role, which then uses the global one (or the session's model).\n`delegation`: the project's exception to the delegation policy (ADR-036): required | suggested | off; \"inherit\"\nremoves it (the global policy in settings.json applies, default required). A task can still override it.",
       "esquema_entrada": {
         "properties": {
+          "delegation": {
+            "default": "",
+            "title": "Delegation",
+            "type": "string"
+          },
           "integrations": {
             "default": "",
             "title": "Integrations",
@@ -770,7 +785,7 @@
       "nombre": "update_project"
     },
     {
-      "descripcion": "Changes a task's status (todo, in_progress, in_review, failed, merged, discarded; the Spanish names pendiente,\nen_curso, en_revision, fallida, integrada, descartada are still accepted until 1.1). Stored in English.\n`result`: what was done, tests run and their summarized output, deviations from the spec.\n'merged' and 'discarded' only with the user's explicit confirmation.\nTo ask for corrections after reviewing a task use `request_changes`, not this status change.\nWith 'in_progress', the response brings the guidance of active integrations (execute, verify, close), computed at\nthat moment; it is conditional: follow it only if you have those tools. It is not written into the task.\nIt also brings a \"Model routing\" block when the user configured models per role (explore, write, verify).\nWith 'merged', if the task declares `resolves`, the response reminds which pending items are still open (it\nnever closes or modifies any).",
+      "descripcion": "Changes a task's status (todo, in_progress, in_review, failed, merged, discarded; the Spanish names pendiente,\nen_curso, en_revision, fallida, integrada, descartada are still accepted until 1.1). Stored in English.\n`result`: what was done, tests run and their summarized output, deviations from the spec.\n'merged' and 'discarded' only with the user's explicit confirmation.\nTo ask for corrections after reviewing a task use `request_changes`, not this status change.\nWith 'in_progress', the response brings the guidance of active integrations (execute, verify, close), computed at\nthat moment; it is conditional: follow it only if you have those tools. It is not written into the task.\nIt also brings a \"Model routing\" block when the user configured models per role (explore, write, verify), and\nthe \"Delegation\" block of the effective policy (task > project > global, default required; ADR-036): with\nrequired it is an instruction, with suggested a suggestion, with off there is none. The effective models and\npolicy are recorded in the task's frontmatter as `routing:` (overwritten on re-runs).\nWith 'in_review', if the policy was required and `result` has no valid `Workers:` line, the response carries a\nwarning (the status changes anyway).\nWith 'merged', if the task declares `resolves`, the response reminds which pending items are still open (it\nnever closes or modifies any).",
       "esquema_entrada": {
         "properties": {
           "commit": {

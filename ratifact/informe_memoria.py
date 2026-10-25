@@ -9,6 +9,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import re
+import subprocess
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -160,3 +161,88 @@ def higiene_pendientes(proyecto: str | None) -> list[str]:
                                  for t, fecha in sorted(por_id[i], key=lambda r: _numero(r[0])))
                 lineas.append(f"      {i}: {refs}")
     return lineas
+
+
+
+def _transiciones(mem: Path) -> dict[str, list[tuple[dt.datetime, str]]]:
+    """Cambios de estado de cada tarea según el historial git de la memoria ("memoria: T-001 → in_progress"), en orden
+    cronológico. Solo lee; sin git devuelve {}."""
+    r = subprocess.run(["git", "-C", str(mem), "log", "--reverse", "--format=%cI%x09%s"], capture_output=True,
+                       text=True)
+    salida: dict[str, list[tuple[dt.datetime, str]]] = defaultdict(list)
+    for linea in r.stdout.splitlines() if r.returncode == 0 else []:
+        fecha, _, asunto = linea.partition("\t")
+        m = re.search(r"(T-\d+) → ([a-z_]+)$", asunto)
+        if m:
+            salida[_normalizar_id(m.group(1))].append((dt.datetime.fromisoformat(fecha), m.group(2)))
+    return salida
+
+
+def _duracion(transiciones: list[tuple[dt.datetime, str]]) -> dt.timedelta | None:
+    """Del último in_progress al primer in_review posterior."""
+    inicio = fin = None
+    for fecha, estado in transiciones:
+        if estado == "in_progress":
+            inicio, fin = fecha, None
+        elif estado == "in_review" and inicio and fin is None:
+            fin = fecha
+    return fin - inicio if inicio and fin else None
+
+
+def _promedio(valores: list[float]) -> str:
+    return f"{sum(valores) / len(valores):.1f}" if valores else "—"
+
+
+def indicador_delegacion(desde: dt.datetime, proyecto: str | None) -> list[str]:
+    """ADR-036 §7: cumplimiento de la política de delegación por proyecto, desde las tareas con `routing:` cambiadas
+    en el período (las anteriores a la política, sin `routing:`, se cuentan aparte), y comparación delegadas vs. no
+    delegadas en revisiones (changes_requested) y duración in_progress → in_review."""
+    from ratifact.delegacion import politica_de_routing, workers_del_resultado
+    config = ruta_config()
+    try:
+        proyectos = json.loads(config.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return [f"- sin configuración ({config})"]
+    lineas = []
+    for nombre, p in proyectos.items():
+        if proyecto and nombre != proyecto or not isinstance(p, dict):
+            continue
+        mem = _memoria(nombre, p)
+        tareas = []
+        for archivo in sorted(_carpeta(mem, "tasks").glob("T-*.md")):
+            meta, cuerpo = _registro(archivo, "tarea")
+            fecha = meta.get("updated") or meta.get("date", "")
+            try:
+                if dt.date.fromisoformat(fecha[:10]) < desde.date():
+                    continue
+            except ValueError:
+                continue
+            tareas.append((meta, cuerpo, archivo))
+        if not tareas:
+            continue
+        con = [(m, c, a) for m, c, a in tareas if m.get("routing")]
+        transiciones = _transiciones(mem) if con else {}
+        requeridas = cumplen = escaladas = 0
+        grupos = {"delegadas": ([], []), "no delegadas": ([], [])}
+        for meta, cuerpo, archivo in con:
+            resultado = cuerpo.split("\n## Result", 1)[-1]
+            trabajadores, _ = workers_del_resultado(resultado)
+            delegada = bool(trabajadores and trabajadores.total)
+            if politica_de_routing(meta["routing"]) == "required":
+                requeridas += 1
+                cumplen += delegada
+            escaladas += bool(trabajadores and trabajadores.escalados)
+            revisiones, horas = grupos["delegadas" if delegada else "no delegadas"]
+            revisiones.append(len(re.findall(r"^### (?:Review|Revisión) \d+ · ", cuerpo, re.M)))
+            id_ = _normalizar_id(meta.get("id") or re.match(r"T-\d+", archivo.name).group(0))
+            duracion = _duracion(transiciones.get(id_, []))
+            if duracion is not None:
+                horas.append(duracion.total_seconds() / 3600)
+        porcentaje = f"{cumplen / requeridas * 100:.0f} %" if requeridas else "—"
+        lineas.append(f"  {nombre}: {len(con)} tareas con routing · required {requeridas} · con trabajadores "
+                      f"{cumplen} · cumplimiento {porcentaje} · escalamientos {escaladas} · sin routing (anteriores "
+                      f"a la política): {len(tareas) - len(con)}")
+        for grupo, (revisiones, horas) in grupos.items():
+            lineas.append(f"    {grupo}: {len(revisiones)} tareas · revisiones (changes_requested) promedio "
+                          f"{_promedio(revisiones)} · in_progress → in_review promedio {_promedio(horas)} h")
+    return lineas or ["- ninguna tarea en el período"]

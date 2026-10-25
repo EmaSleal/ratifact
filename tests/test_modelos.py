@@ -31,7 +31,11 @@ def _bloque(salida: str) -> str:
 # ───────────────────────── criterio 4: sin configuración, nada cambia ─────────────────────────
 
 def test_sin_configuracion_la_respuesta_es_identica(srv, proyecto):
+    """Sin modelos configurados no hay bloque Model routing. Desde T-015 (ADR-036) la respuesta sí trae el bloque de
+    delegación required, porque es la política por defecto (test_delegacion lo fija); con delegation=off la respuesta
+    es la de T-014."""
     from ratifact.integraciones import registro
+    srv.update_project(name="demo", delegation="off")
     salida = _en_curso(srv)
     sha = re.match(r"T-001 → in_progress · commit (\S+)", salida).group(1)
     assert salida == f"T-001 → in_progress · commit {sha}\n\n{registro._guia_en_curso('demo')}"
@@ -188,9 +192,11 @@ def test_guia_gentle_ai_delegated_direct_odd_y_rdd(srv):
     todo = " ".join(i.guia.values()) + i.prefijo + i.rol
     assert "sdd-" not in todo and "sdd-" != i.prefijo
     ejecutar, verificar = i.guia["execute"], i.guia["verify"]
-    for texto in ("delegated-direct", "never SDD", "no SDD artifacts", "one explore worker", "4+ files",
-                  "one writer for 2+ non-trivial files", "feature document", "no other ODD document"):
+    for texto in ("delegated-direct", "never SDD", "no SDD artifacts", "Delegation block", "feature document",
+                  "no other ODD document"):
         assert texto in ejecutar, texto
+    for texto in ("4+ files", "2+ non-trivial files", "otherwise implement directly"):      # T-015 / ADR-036
+        assert texto not in ejecutar, texto
     for texto in ("clean worker", "if RDD is on", "before update_task(in_review)", "receipt", "depth", "findings",
                   "corrections", "if RDD is off, start no review"):
         assert texto in verificar, texto
@@ -203,4 +209,4 @@ def test_skill_pide_seguir_model_routing_e_informar_trabajadores(srv):
         ejecutar = skill.split("## 2. Execute")[1].split("## 3.")[0]
         cerrar = skill.split("## 4. Close")[1]
         assert '"Model routing"' in ejecutar
-        assert "workers" in cerrar and "explore/haiku, write/sonnet" in cerrar and "receipt" in cerrar
+        assert "Workers:" in cerrar and "explore/haiku×1, write/sonnet×2" in cerrar and "receipt" in cerrar

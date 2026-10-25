@@ -98,7 +98,7 @@ calls another MCP server.
 | Integration | Detected by | Role |
 |---|---|---|
 | codegraph | a `.codegraph/` folder in the project | code structure for planning and checking a task's scope |
-| gentle-ai | a `.atl/` folder in the project | the task runs as its delegated-direct route (never SDD), is its ODD feature document, and RDD (if on) reviews it before `in_review` |
+| gentle-ai | a `.atl/` folder in the project | the task runs as its delegated-direct route (never SDD), is its ODD feature document, and RDD (if on) reviews it before `in_review`; whether to delegate follows ratifact's delegation policy |
 | engram | never detected | its guidance is conditional ("if you have it") |
 
 The default is `auto` (used when detected). `ratifact install` reports what it detected per project and never asks.
@@ -125,6 +125,31 @@ delegates the role; a client that cannot choose a sub-agent's model ignores it, 
 session's model. With no configuration the response is unchanged. An invalid `settings.json` never breaks a tool
 (it is ignored with a warning in that block); `ratifact doctor` reports it without changing it and shows each
 project's effective models (or `models: session default`).
+
+## Delegation
+
+Delegation policy (ADR-036): ratifact, not the executing agent, decides whether a task is delegated.
+`"delegation": "required" | "suggested" | "off"` goes in `settings.json` next to `"models"` (global; default
+`required`); a project exception is set with `update_project("my-app", delegation="off")` (`inherit` removes it), and a
+task exception with `create_task(..., delegation="off")` or `amend_task(..., delegation="required")` while planning
+(stored as `delegation:` in the task's frontmatter). Precedence: task > project > global > `required`. Use `off` for a
+task that touches security, is cross-cutting, or depends on diagnosing a cause the spec does not know yet.
+
+- `required`: `update_task(..., "in_progress")` returns an imperative "Delegation" block — the main session
+  orchestrates and does not write the code; exploration in an explore worker, implementation in write workers,
+  verification in a verify worker that did not see the implementation, each with its role's model (or the session's);
+  briefs carry the full spec; the orchestrator reviews the complete diff before `in_review`; after two failed
+  verifications the orchestrator takes over and declares `escalated: write`.
+- `suggested`: the block is a suggestion. `off`: no delegation block.
+- The result carries its own line, separate from `Integrations used:` (which lists integrations only, never role
+  names): `Workers: explore/haiku×1, write/sonnet×2, verify/sonnet×1` (plus `escalated: write`), or
+  `Workers: none — reason: <why>`. With `required`, `update_task(..., "in_review")` without a valid `Workers:` line
+  still changes the status but answers with a warning.
+- Audit: `in_progress` records `routing: explore=<m>,write=<m>,verify=<m> · delegation=<policy>` in the task's
+  frontmatter (`session` for a role without a model; overwritten on re-runs). `ratifact report` measures compliance
+  per project (required tasks with real workers, escalations) and compares delegated and non-delegated tasks in
+  reviews and in_progress → in_review duration; tasks without `routing:` are counted apart. `ratifact doctor` shows
+  each project's effective policy (e.g. `delegation=required (global)`).
 
 ## Upgrade from memoria-proyectos
 

@@ -2,6 +2,7 @@
 (amend_task y read_task en tareas_brief)."""
 from __future__ import annotations
 
+from ratifact import delegacion as _delegacion
 from ratifact import modelos as _modelos
 from ratifact import registros as _registros  # _ahora se busca en su módulo: las pruebas la reemplazan ahí
 from ratifact.app import _ejecutar, herramienta
@@ -76,7 +77,8 @@ def _validar_resuelve(proyecto: str, resuelve: str) -> list[tuple[str, bool]]:
 
 @herramienta
 def create_task(project: str, title: str, goal: str, acceptance_criteria: str, decisions: str = "",
-                files: str = "", out_of_scope: str = "", notes: str = "", repo: str = "", resolves: str = "") -> str:
+                files: str = "", out_of_scope: str = "", notes: str = "", repo: str = "", resolves: str = "",
+                delegation: str = "") -> str:
     """Creates a work specification for the coding agent in .project/tasks/T-NNN.md (status 'todo').
     In multi-repo projects, `repo` (required) is the folder where the work happens; in single-repo projects it is
     ignored (the response says so).
@@ -86,6 +88,9 @@ def create_task(project: str, title: str, goal: str, acceptance_criteria: str, d
     `resolves`: pending items the task resolves, comma-separated, each optionally with "(partial)" (e.g.
     "P-036, P-037 (partial)"); they must exist and be open. Stored in the task ("Resolves" section); when the task is
     merged, update_task reminds which ones are still open. It never closes pending items.
+    `delegation`: the task's exception to the delegation policy, decided while planning (ADR-036): "required" or
+    "off" (empty = inherit from the project/global policy). Use "off" when the task touches security, is
+    cross-cutting, or depends on diagnosing a cause the spec does not know yet. Stored in the task's frontmatter.
     The response adds the line of detected integrations (not written into the task).
     Idempotent (ADR-019): if a task with this title (ignoring case and spaces) was created in the last minutes AND is
     STILL 'todo', nothing new is created and the existing id is returned (with the /run-task command to repeat to
@@ -96,6 +101,7 @@ def create_task(project: str, title: str, goal: str, acceptance_criteria: str, d
                                                                              repo, resolves)
 
     def f():
+        politica = _delegacion.validar_tarea(delegation)
         repos, repo = _repos(proyecto), repositorio
         if repos and repositorio not in repos:
             raise ErrorMemoria(f"Multi-repo project: give `repo` ({', '.join(repos)}).")
@@ -119,6 +125,8 @@ def create_task(project: str, title: str, goal: str, acceptance_criteria: str, d
                 meta["repo"] = repo
             if ids:
                 meta["resolves"] = _texto_resuelve(ids)
+            if politica:
+                meta[_delegacion.CLAVE] = politica
             secciones = [f"# {id_} — {titulo}", "## Goal", objetivo,
                          "## Acceptance criteria", criterios_aceptacion]
             if ids:
@@ -165,7 +173,12 @@ def update_task(project: str, id: str, status: str, result: str = "", commit: st
     To ask for corrections after reviewing a task use `request_changes`, not this status change.
     With 'in_progress', the response brings the guidance of active integrations (execute, verify, close), computed at
     that moment; it is conditional: follow it only if you have those tools. It is not written into the task.
-    It also brings a "Model routing" block when the user configured models per role (explore, write, verify).
+    It also brings a "Model routing" block when the user configured models per role (explore, write, verify), and
+    the "Delegation" block of the effective policy (task > project > global, default required; ADR-036): with
+    required it is an instruction, with suggested a suggestion, with off there is none. The effective models and
+    policy are recorded in the task's frontmatter as `routing:` (overwritten on re-runs).
+    With 'in_review', if the policy was required and `result` has no valid `Workers:` line, the response carries a
+    warning (the status changes anyway).
     With 'merged', if the task declares `resolves`, the response reminds which pending items are still open (it
     never closes or modifies any)."""
     proyecto, estado, resultado = project, status, result
@@ -183,14 +196,22 @@ def update_task(project: str, id: str, status: str, result: str = "", commit: st
             meta["status"], meta["updated"] = nuevo, _hoy()
             if commit:
                 meta["commit"] = commit
+            entrada = _proyectos().get(proyecto, {})
+            if nuevo == "in_progress":
+                meta["routing"] = _delegacion.routing(entrada, meta)
             if resultado:
                 cuerpo = _anexar_resultado(cuerpo, f"### {_hoy()} · {nuevo}\n{resultado.strip()}")
             _escribir_registro(ruta, meta, cuerpo)
             sha = _commit(proyecto, [ruta], f"{meta['id']} → {nuevo}")
             guia = ""
             if nuevo == "in_progress":
-                partes = (_integraciones._guia_en_curso(proyecto), _modelos.bloque(_proyectos().get(proyecto, {})))
+                partes = (_integraciones._guia_en_curso(proyecto), _modelos.bloque(entrada),
+                          _delegacion.bloque(entrada, meta))
                 guia = "\n\n".join(p for p in partes if p)
+            if nuevo == "in_review":
+                politica = (_delegacion.politica_de_routing(meta.get("routing", ""))
+                            or _delegacion.efectiva(entrada, meta)[0])
+                guia = _delegacion.aviso_in_review(politica, resultado)
             if nuevo == "merged":
                 guia = _recordatorio_resuelve(proyecto, meta.get("resolves", ""))
             return f"{meta['id']} → {nuevo} · commit {sha}" + (f"\n\n{guia}" if guia else "")

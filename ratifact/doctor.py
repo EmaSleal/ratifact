@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 from typing import Callable
 
-from ratifact import __version__, modelos, rutas
+from ratifact import __version__, delegacion, modelos, rutas
 from ratifact import config as _cfg
 from ratifact.config import _ruta_config
 from ratifact.esquema import VERSION_ESQUEMA
@@ -77,7 +77,12 @@ def _proyectos(plan, acciones: list[str]) -> list[str]:
         lineas += [f"  {p.nombre}", f"    code: {codigo}",
                    f"    memory: {p.mem} · {esquema} · {p.ubicacion} · git: {p.git}",
                    f"    integrations: {', '.join(p.integraciones) or 'none detected'}",
-                   f"    models: {modelos.describir(p.entrada, inst.config)}"]
+                   f"    models: {modelos.describir(p.entrada, inst.config)} · delegation="
+                   "{} ({})".format(*delegacion.efectiva(p.entrada, None, inst.config)[:2])]
+        valor = p.entrada.get(delegacion.CLAVE)
+        if valor is not None and valor not in delegacion.POLITICAS:
+            acciones.append(f"{p.nombre}: invalid `delegation` {valor!r} in projects.json (valid: "
+                            f"{', '.join(delegacion.POLITICAS)}); fix it with update_project(delegation=...)")
         if modelos.CLAVE in p.entrada:
             try:
                 modelos._validar(p.entrada[modelos.CLAVE], "projects.json")
@@ -103,8 +108,14 @@ def _settings(config: Path, acciones: list[str]) -> list[str]:
     except _cfg.ErrorMemoria as e:
         acciones.append(f"settings.json: {e} Fix it by hand (ratifact never rewrites it)")
         return [f"Settings: {ruta} (INVALID)"]
+    politica = modelos.leer_settings(config).get(delegacion.CLAVE)
+    if politica is not None and politica not in delegacion.POLITICAS:
+        acciones.append(f"settings.json: invalid `delegation` {politica!r} (valid: {', '.join(delegacion.POLITICAS)}). "
+                        "Fix it by hand (ratifact never rewrites it)")
+        return [f"Settings: {ruta} (INVALID)"]
     return [f"Settings: {ruta} · global models: "
-            + (", ".join(f"{r}={m}" for r, m in globales.items()) or "none")]
+            + (", ".join(f"{r}={m}" for r, m in globales.items()) or "none")
+            + f" · delegation: {politica or delegacion.DEFECTO + ' (default)'}"]
 
 
 def _servidores(plan, procesos: list[Proceso]) -> list[str]:

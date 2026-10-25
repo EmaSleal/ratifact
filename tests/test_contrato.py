@@ -93,7 +93,7 @@ def test_mapeo_de_nombres_completo_y_solo_dos_herramientas_nuevas():
 
 
 # Parámetros nuevos agregados después de la instantánea v0 (ya en inglés, sin nombre v0 que traducir).
-POSTERIORES_A_V0 = {"actualizar_proyecto": {"models"}}      # T-014
+POSTERIORES_A_V0 = {"actualizar_proyecto": {"models", "delegation"}, "registrar_tarea": {"delegation"}}  # T-014, T-015
 
 
 def test_ningun_nombre_ni_parametro_en_espanol_queda_expuesto():

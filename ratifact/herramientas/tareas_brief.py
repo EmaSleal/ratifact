@@ -9,6 +9,7 @@ from __future__ import annotations
 import datetime as _dt
 import re
 
+from ratifact import delegacion as _delegacion
 from ratifact import registros as _registros  # _ahora se busca en su módulo: las pruebas la reemplazan ahí
 from ratifact.app import _ejecutar, herramienta
 from ratifact.busqueda import _fin_frontmatter
@@ -68,16 +69,19 @@ def _insertar_enmienda(lineas: list[str], bloque: list[str]) -> list[str]:
 
 
 @herramienta
-def amend_task(project: str, id: str, additional_criteria: str = "", notes: str = "") -> str:
+def amend_task(project: str, id: str, additional_criteria: str = "", notes: str = "", delegation: str = "") -> str:
     """Extends a task that has not run yet (status todo) or was sent back (changes_requested) with additional
     acceptance criteria and/or notes. Any other status is rejected (after a review, use request_changes).
     Appends a dated "### Amendment N" block (sub-labels "Additional criteria" / "Notes") to the task's "Amendments"
-    section; the original criteria stay untouched. One commit per amendment; give at least one of the two fields.
+    section; the original criteria stay untouched. One commit per amendment; give at least one of the three fields.
+    `delegation`: sets the task's exception to the delegation policy (ADR-036), "required" or "off", in its
+    frontmatter (empty = unchanged); it adds no Amendment block by itself.
     Idempotent (ADR-019): an identical amendment recorded in the last minutes is not written again."""
     def f():
         texto = _texto_enmienda(additional_criteria, notes)
-        if not texto:
-            raise ErrorMemoria("Give at least one of `additional_criteria` or `notes`.")
+        politica = _delegacion.validar_tarea(delegation)
+        if not texto and not politica:
+            raise ErrorMemoria("Give at least one of `additional_criteria`, `notes` or `delegation`.")
         with _bloqueo(project):
             ruta = _buscar_registro(_mem(project) / TAREAS, id)
             meta, cuerpo = _leer_registro(ruta)
@@ -85,6 +89,16 @@ def amend_task(project: str, id: str, additional_criteria: str = "", notes: str 
             if estado not in ESTADOS_AMPLIABLES:
                 raise ErrorMemoria(f"{meta.get('id')} is '{estado}': amend_task only extends tasks in todo or "
                                    "changes_requested (after a review, use request_changes).")
+            if not texto:
+                if meta.get(_delegacion.CLAVE) == politica:
+                    return f"{meta['id']} already has delegation: {politica}; nothing was written."
+                meta[_delegacion.CLAVE], meta["updated"] = politica, _hoy()
+                _escribir_registro(ruta, meta, cuerpo)
+                sha = _commit(project, [ruta], f"{meta['id']} delegation {politica}")
+                return (f"{meta['id']} amended (delegation: {politica}) · commit {sha}\n"
+                        f"Run it with: /run-task {meta['id']}")
+            if politica:
+                meta[_delegacion.CLAVE] = politica
             lineas = cuerpo.strip().splitlines()
             previas = _enmiendas(lineas)
             ahora = _registros._ahora()

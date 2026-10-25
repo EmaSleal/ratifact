@@ -231,6 +231,8 @@ def test_en_curso_incluye_gentle_ai_detectada(srv, proyecto, reg):
 def test_otros_estados_no_cambian(srv, proyecto, estado, guardado):
     (proyecto["repo"] / ".codegraph").mkdir()
     srv.create_task(project="demo", title="Algo", goal="o", acceptance_criteria="c")
+    # T-015: in_review con delegación required y sin línea Workers agrega un aviso (no es guía de integraciones)
+    srv.update_project(name="demo", delegation="off")
     salida = srv.update_task(project="demo", id="T-001", status=estado)
     assert re.fullmatch(rf"T-001 → {guardado} · commit \S+", salida), salida
 

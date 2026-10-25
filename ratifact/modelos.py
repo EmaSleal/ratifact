@@ -40,9 +40,9 @@ def _validar(modelos, origen: str) -> dict[str, str]:
     return {r: m.strip() for r, m in modelos.items()}
 
 
-def leer_global(config: Path | None = None) -> dict[str, str]:
-    """Modelos globales de settings.json. Sin archivo o sin `models`: {}. JSON inválido o roles desconocidos:
-    ErrorMemoria con un mensaje claro (nunca se modifica el archivo)."""
+def leer_settings(config: Path | None = None) -> dict:
+    """Contenido de settings.json (modelos y política de delegación). Sin archivo: {}. JSON inválido o que no es un
+    objeto: ErrorMemoria con un mensaje claro (nunca se modifica el archivo)."""
     ruta = ruta_settings(config)
     if not ruta.is_file():
         return {}
@@ -52,7 +52,14 @@ def leer_global(config: Path | None = None) -> dict[str, str]:
         raise ErrorMemoria(f"{ruta} is not valid JSON ({e}).") from e
     if not isinstance(datos, dict):
         raise ErrorMemoria(f"{ruta} must be a JSON object like {{\"models\": {{\"explore\": \"haiku\"}}}}.")
-    return _validar(datos[CLAVE], str(ruta)) if CLAVE in datos else {}
+    return datos
+
+
+def leer_global(config: Path | None = None) -> dict[str, str]:
+    """Modelos globales de settings.json. Sin archivo o sin `models`: {}. JSON inválido o roles desconocidos:
+    ErrorMemoria con un mensaje claro (nunca se modifica el archivo)."""
+    datos = leer_settings(config)
+    return _validar(datos[CLAVE], str(ruta_settings(config))) if CLAVE in datos else {}
 
 
 def efectivos(entrada: dict, config: Path | None = None) -> tuple[dict[str, tuple[str, str]], list[str]]:

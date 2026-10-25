@@ -11,6 +11,7 @@ from ratifact.app import _ejecutar, herramienta
 from ratifact.config import (BASE_PROYECTOS, CONFIG, MEM, ErrorMemoria, _clave_escritura, _es_repo, _mem,
                              _pista_nombre, _proyectos, _raiz, _repos, _repos_de, _sugerencia_nombre, _valor)
 from ratifact.esquema import ARCHIVO_ESQUEMA, IDIOMA_NUEVAS, _bloqueo, _escribir_esquema
+from ratifact import delegacion as _delegacion
 from ratifact import modelos as _modelos
 from ratifact.integraciones.registro import _parsear_integraciones
 from ratifact.plantillas import PLANTILLA_AGENTES, PLANTILLA_INSTRUCCIONES
@@ -185,9 +186,9 @@ def register_project(name: str, path: str, memory: str = "", tests: str = "") ->
 
 @herramienta
 def update_project(name: str, path: str = "", tests: str = "", repo: str = "", redetect: bool = False,
-                   integrations: str = "", models: str = "") -> str:
+                   integrations: str = "", models: str = "", delegation: str = "") -> str:
     """Updates a project already registered in projects.json without editing it by hand. Give at least one of
-    `path`, `tests`, `repo`, `redetect=True`, `integrations` or `models`; with none, it returns an error and leaves the file
+    `path`, `tests`, `repo`, `redetect=True`, `integrations`, `models` or `delegation`; with none, it returns an error and leaves the file
     untouched.
     `path`: new code folder, when it moved. Same checks as register_project (inside the projects folder, an
     existing folder, and not containing the project's memory — ADR-010). If the project is multi-repo and the stored
@@ -202,7 +203,9 @@ def update_project(name: str, path: str = "", tests: str = "", repo: str = "", r
     (values auto|off; default auto: used when detected). One turned off never appears in any response.
     `models`: the project's exceptions to the global models per role (settings.json next to projects.json), e.g.
     "explore=haiku,write=sonnet" (roles explore, write, verify; the value is the client's model name). "inherit"
-    removes the project's exception for that role, which then uses the global one (or the session's model)."""
+    removes the project's exception for that role, which then uses the global one (or the session's model).
+    `delegation`: the project's exception to the delegation policy (ADR-036): required | suggested | off; "inherit"
+    removes it (the global policy in settings.json applies, default required). A task can still override it."""
     nombre, ruta, pruebas, repositorio, redetectar, integraciones = name, path, tests, repo, redetect, integrations
     modelos = models
 
@@ -212,9 +215,10 @@ def update_project(name: str, path: str = "", tests: str = "", repo: str = "", r
             raise ErrorMemoria(f"Project '{nombre}' is not registered."
                                f"{_pista_nombre(_sugerencia_nombre(nombre, proyectos), proyectos)}")
         if not (ruta.strip() or pruebas.strip() or repositorio.strip() or redetectar or integraciones.strip()
-                or modelos.strip()):
+                or modelos.strip() or delegation.strip()):
             raise ErrorMemoria("Nothing to update: give `path`, `tests`, `repo`, `redetect=True`, "
-                               "`integrations` or `models`.")
+                               "`integrations`, `models` or `delegation`.")
+        politica = _delegacion.validar_proyecto(delegation) if delegation.strip() else ""
         if redetectar and pruebas.strip():
             raise ErrorMemoria("`redetect` and `tests` are incompatible: asking to redetect the command and giving "
                                "it at the same time makes no sense; use one of them.")
@@ -280,6 +284,9 @@ def update_project(name: str, path: str = "", tests: str = "", repo: str = "", r
             else:
                 proyectos[nombre].pop(_modelos.CLAVE, None)
             cambios.append(f"models: {descripcion}")
+
+        if politica:
+            cambios.append(_delegacion.aplicar_proyecto(proyectos[nombre], politica))
 
         _escribir_atomico(CONFIG, json.dumps(proyectos, indent=2, ensure_ascii=False) + "\n")
         mensaje = f"'{nombre}' updated:\n" + "\n".join(f"- {c}" for c in cambios)

@@ -37,8 +37,8 @@ def entorno(tmp_path, monkeypatch):
 # Módulos de ratifact en orden de dependencias. app va antes que las herramientas: al recargarlo se crea un `mcp`
 # nuevo, y al recargar cada módulo de herramientas sus decoradores las registran en ese `mcp` (sin duplicados).
 MODULOS_RATIFACT = [
-    "ratifact.vocabulario", "ratifact.config", "ratifact.modelos", "ratifact.registros", "ratifact.catalogo",
-    "ratifact.busqueda", "ratifact.listado", "ratifact.migracion_v2", "ratifact.esquema", "ratifact.plantillas",
+    "ratifact.vocabulario", "ratifact.config", "ratifact.modelos", "ratifact.delegacion", "ratifact.registros",
+    "ratifact.catalogo", "ratifact.busqueda", "ratifact.listado", "ratifact.migracion_v2", "ratifact.esquema", "ratifact.plantillas",
     "ratifact.app",
     "ratifact.integraciones.base", "ratifact.integraciones.codegraph", "ratifact.integraciones.gentle_ai",
     "ratifact.integraciones.engram", "ratifact.integraciones.registro", "ratifact.integraciones",

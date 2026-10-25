@@ -30,7 +30,7 @@ One module per integration in `ratifact/integraciones/` (English names after the
 
 Initial set:
 - **codegraph** (project) — `planificar`: if available, use it to fill `archivos` precisely. `ejecutar`: after reading the spec and before opening files, call `codegraph_context` with the objective + listed files. `verificar`: check callers of changed symbols to confirm the blast radius.
-- **gentle-ai** (project) — revised by T-014 (ADR-033, ADR-034). `execute`: a ratifact task is gentle-ai's **delegated-direct** route — never SDD, no SDD artifacts; one explore worker if understanding the task takes 4+ files, one writer for 2+ non-trivial files; the ratifact task is the **ODD** feature document, so no other ODD document is created. `verify`: verification in a clean worker; if **RDD** is on, the review of the finished change runs before `update_task(in_review)` and the result summarizes its receipt (depth, findings, corrections); if RDD is off, no review is started. ratifact neither enables nor blocks RDD. Prefix: `gentle-ai` (no longer `sdd-`).
+- **gentle-ai** (project) — revised by T-014 (ADR-033, ADR-034). `execute`: a ratifact task is gentle-ai's **delegated-direct** route — never SDD, no SDD artifacts; whether to delegate is set by ratifact's delegation policy (T-015, ADR-036), not by gentle-ai thresholds — the old "4+ files" / "2+ non-trivial files" criterion and "otherwise implement directly" were removed; the ratifact task is the **ODD** feature document, so no other ODD document is created. `verify`: verification in a clean worker; if **RDD** is on, the review of the finished change runs before `update_task(in_review)` and the result summarizes its receipt (depth, findings, corrections); if RDD is off, no review is started. ratifact neither enables nor blocks RDD. Prefix: `gentle-ai` (no longer `sdd-`).
 - **engram** (user) — `cerrar`: technical learnings may go to engram; decisions only through ratifact; on conflict the agreed decision wins (moves today's text in app.py, plantillas.py, SKILL.md).
 
 ## Injection points (ADR-025)
@@ -51,7 +51,32 @@ Independent of any integration. The user sets a model per delegated role — `ex
 - **Per project:** `"models"` in the project's entry, set with `update_project(name, models="explore=haiku,write=sonnet")`; `inherit` removes a role's exception. Merged role by role: project wins, missing roles inherit the global value.
 - **Delivery:** `update_task(..., "in_progress")` appends a "Model routing" block when at least one role is set (with or without integrations): each role, its model and its origin (global/project). It is the user's explicit request to set that model when delegating the role — which is what gentle-ai requires before setting `model` on a generic delegation. A client that cannot choose a sub-agent's model ignores it; roles without a model inherit the session's model. No configuration → the response is byte-for-byte unchanged.
 - **Errors:** an invalid `settings.json` (bad JSON, unknown roles, empty values) is ignored with a warning in that block and never breaks a tool; `ratifact doctor` reports it without modifying it and shows each project's effective models.
-- **Reporting:** the task result's `Integrations used:` line reports workers and models (e.g. `gentle-ai (2 workers: explore/haiku, write/sonnet)`), plus one line summarizing the RDD receipt if a review ran.
+- **Reporting:** superseded by ADR-036 — workers and models go in the result's own `Workers:` line (see Delegation below); `Integrations used:` lists integrations only. One line summarizes the RDD receipt if a review ran.
+- The Model routing block is the same under every delegation policy.
+
+## Delegation (T-015, ADR-036)
+Delegation policy (ADR-036): ratifact, not the executing agent, decides whether a task is delegated.
+`"delegation": "required" | "suggested" | "off"` goes in `settings.json` next to `"models"` (global; default
+`required`); a project exception is set with `update_project("my-app", delegation="off")` (`inherit` removes it), and a
+task exception with `create_task(..., delegation="off")` or `amend_task(..., delegation="required")` while planning
+(stored as `delegation:` in the task's frontmatter). Precedence: task > project > global > `required`. Use `off` for a
+task that touches security, is cross-cutting, or depends on diagnosing a cause the spec does not know yet.
+
+- `required`: `update_task(..., "in_progress")` returns an imperative "Delegation" block — the main session
+  orchestrates and does not write the code; exploration in an explore worker, implementation in write workers,
+  verification in a verify worker that did not see the implementation, each with its role's model (or the session's);
+  briefs carry the full spec; the orchestrator reviews the complete diff before `in_review`; after two failed
+  verifications the orchestrator takes over and declares `escalated: write`.
+- `suggested`: the block is a suggestion. `off`: no delegation block.
+- The result carries its own line, separate from `Integrations used:` (which lists integrations only, never role
+  names): `Workers: explore/haiku×1, write/sonnet×2, verify/sonnet×1` (plus `escalated: write`), or
+  `Workers: none — reason: <why>`. With `required`, `update_task(..., "in_review")` without a valid `Workers:` line
+  still changes the status but answers with a warning.
+- Audit: `in_progress` records `routing: explore=<m>,write=<m>,verify=<m> · delegation=<policy>` in the task's
+  frontmatter (`session` for a role without a model; overwritten on re-runs). `ratifact report` measures compliance
+  per project (required tasks with real workers, escalations) and compares delegated and non-delegated tasks in
+  reviews and in_progress → in_review duration; tasks without `routing:` are counted apart. `ratifact doctor` shows
+  each project's effective policy (e.g. `delegation=required (global)`).
 
 ## Installer (PyPI task)
 Reports detected integrations and how to disable one. Never asks interactively.

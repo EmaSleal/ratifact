@@ -16,7 +16,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from ratifact.config import _entorno
-from ratifact.informe_memoria import higiene_pendientes, indicador_decisiones
+from ratifact.informe_memoria import higiene_pendientes, indicador_decisiones, indicador_delegacion
 from ratifact.rutas import log_por_defecto
 from ratifact.vocabulario import HERRAMIENTAS_V0
 
@@ -167,6 +167,9 @@ def main(argv: list[str] | None = None, a: argparse.Namespace | None = None) -> 
     alias = usos_alias(filas)
     print("- Rutas v1 traducidas (alias, se quita en 1.1): " + ("ninguna" if not alias else ""))
     for linea in alias:
+        print(linea)
+    print("\nDelegación (ADR-036): tareas con `routing:` cambiadas en el período")
+    for linea in indicador_delegacion(desde, a.proyecto):
         print(linea)
     print("\nPendientes abiertos referenciados por tareas integradas")
     for linea in higiene_pendientes(a.proyecto):
