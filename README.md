@@ -43,8 +43,8 @@ limits the run to one. A second `--apply` changes nothing and says so. Restart t
 `uvx ratifact …` works for one-off commands (`uvx ratifact doctor`), but clients need a fixed installation:
 `ratifact install` refuses to point them at the temporary copy that `uvx` runs.
 
-From a clone instead of PyPI: `uv tool install <path to the clone>` (after each update:
-`uv tool install --reinstall <path>` and restart the clients).
+From a clone instead of PyPI: `uv tool install <path to the clone>`. After each update follow the procedure in
+[Version drift](#version-drift): merge → `uv tool install --reinstall <path>` → restart the clients → `ratifact doctor`.
 
 ## First project
 
@@ -85,7 +85,7 @@ plan says to remove it by hand. The links point inside the installed package; if
 |---|---|
 | `ratifact serve` | The MCP server over stdio (what the clients launch). |
 | `ratifact install [--apply] [--client NAME]` | Configures the MCP clients and links /run-task (plan unless `--apply`). |
-| `ratifact doctor` | Read-only diagnosis: version and where it runs from, configuration, each project's code, memory, schema and git status, integrations, the state of each client (configured with ratifact / old configuration / not configured / not found) and the pending actions. Exit code 1 if something is pending. |
+| `ratifact doctor` | Read-only diagnosis: version and where it runs from, configuration, each project's code, memory, schema and git status, integrations, the state of each client (configured with ratifact / old configuration / not configured / not found), the build id, whether a local source is newer than the installation, the running `ratifact serve` processes that started before it (see [Version drift](#version-drift)) and the pending actions. Exit code 1 if something is pending. |
 | `ratifact upgrade [--apply]` | One-time upgrade from memoria-proyectos (below). |
 | `ratifact report [--days N] [--project P] [--log PATH]` | Usage summary from the local telemetry log (`~/.local/state/ratifact/uso.jsonl`: tool, size, duration and error of each call — never content). |
 | `ratifact --version` | Installed version. |
@@ -145,11 +145,45 @@ task that touches security, is cross-cutting, or depends on diagnosing a cause t
   names): `Workers: explore/haiku×1, write/sonnet×2, verify/sonnet×1` (plus `escalated: write`), or
   `Workers: none — reason: <why>`. With `required`, `update_task(..., "in_review")` without a valid `Workers:` line
   still changes the status but answers with a warning.
-- Audit: `in_progress` records `routing: explore=<m>,write=<m>,verify=<m> · delegation=<policy>` in the task's
-  frontmatter (`session` for a role without a model; overwritten on re-runs). `ratifact report` measures compliance
+- Audit: `in_progress` records `routing: explore=<m>,write=<m>,verify=<m> · delegation=<policy> · build=<build> ·
+  at=<ISO 8601 time, to the minute>` in the task's frontmatter (`session` for a role without a model; overwritten on
+  re-runs; `build=` and `at=` since T-016, ADR-037 — older tasks keep the shorter form and are still read). `ratifact
+  report` takes the period from `at=` when present (`updated` otherwise). `ratifact report` measures compliance
   per project (required tasks with real workers, escalations) and compares delegated and non-delegated tasks in
   reviews and in_progress → in_review duration; tasks without `routing:` are counted apart. `ratifact doctor` shows
   each project's effective policy (e.g. `delegation=required (global)`).
+
+## Version drift
+
+There are three copies of ratifact: the source (a clone), the installation (the uv tool directory, which the
+/run-task skills link to) and the running server (one `ratifact serve` per client, which keeps the code it started
+with). They drift apart when you merge without reinstalling, or reinstall without restarting a client (ADR-037).
+The procedure after every change is:
+
+```bash
+# 1. merge into main   2. reinstall
+uv tool install --reinstall <path to the clone>
+# 3. restart every client (Claude Desktop, Claude Code, Codex, Pi)   4. check
+ratifact doctor
+```
+
+What reveals a drift:
+
+- **Build id.** Each server computes `<version>+<7 hex>` at startup (content hash of its package, skills included,
+  bytecode excluded). `get_context` shows `ratifact <build>` on its first line and `routing:` records it per task.
+- **Stale server.** The server re-checks its own package files (stat only, cached 5 s). If they changed or vanished
+  since it started, `get_context` shows a ⚠ line below the build asking to restart that client, every other tool
+  prepends the same warning, and `update_task(..., "in_progress")` is refused without changing anything: restart the
+  client and repeat it (a task never starts with guidance that may be out of date).
+- **Source newer than the installation.** When uv installed ratifact from a local folder (its tool receipt), `doctor`
+  and `get_context` compare that folder's package with the installed one and ask to reinstall, with the command.
+  Installations from PyPI do not show it.
+- **`ratifact doctor`** also lists the running `ratifact serve` processes (PID, start time, parent process) and marks
+  the ones that started before the latest change to the installation. It only reads: it never signals or stops them
+  (Linux and macOS; elsewhere it says the list is unavailable).
+
+`ratifact install --apply` and `ratifact upgrade --apply` end by reminding you to restart the clients and run
+`ratifact doctor`. A server older than T-016 cannot diagnose itself; `doctor` still shows it.
 
 ## Upgrade from memoria-proyectos
 

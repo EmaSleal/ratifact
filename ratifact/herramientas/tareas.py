@@ -2,6 +2,7 @@
 (amend_task y read_task en tareas_brief)."""
 from __future__ import annotations
 
+from ratifact import build as _build
 from ratifact import delegacion as _delegacion
 from ratifact import modelos as _modelos
 from ratifact import registros as _registros  # _ahora se busca en su módulo: las pruebas la reemplazan ahí
@@ -176,7 +177,10 @@ def update_task(project: str, id: str, status: str, result: str = "", commit: st
     It also brings a "Model routing" block when the user configured models per role (explore, write, verify), and
     the "Delegation" block of the effective policy (task > project > global, default required; ADR-036): with
     required it is an instruction, with suggested a suggestion, with off there is none. The effective models and
-    policy are recorded in the task's frontmatter as `routing:` (overwritten on re-runs).
+    policy are recorded in the task's frontmatter as `routing:` (overwritten on re-runs), together with the server
+    build and the time of the transition (ADR-037).
+    If this server process is older than the installation on disk, 'in_progress' is refused without changing
+    anything (restart the client and repeat it); every other status works and carries a warning.
     With 'in_review', if the policy was required and `result` has no valid `Workers:` line, the response carries a
     warning (the status changes anyway).
     With 'merged', if the task declares `resolves`, the response reminds which pending items are still open (it
@@ -187,6 +191,8 @@ def update_task(project: str, id: str, status: str, result: str = "", commit: st
         nuevo = _normalizar_estado("tarea", estado)
         if nuevo == "changes_requested":
             raise ErrorMemoria("To send a task back use `request_changes` (it records the review in a fixed format).")
+        if nuevo == "in_progress" and _build.obsoleto():
+            return _build.error_in_progress()       # ADR-037 §2: nothing is read, written or committed
         with _bloqueo(proyecto):
             ruta = _buscar_registro(_mem(proyecto) / TAREAS, id)
             meta, cuerpo = _leer_registro(ruta)

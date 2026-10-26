@@ -195,9 +195,9 @@ def _promedio(valores: list[float]) -> str:
 
 def indicador_delegacion(desde: dt.datetime, proyecto: str | None) -> list[str]:
     """ADR-036 §7: cumplimiento de la política de delegación por proyecto, desde las tareas con `routing:` cambiadas
-    en el período (las anteriores a la política, sin `routing:`, se cuentan aparte), y comparación delegadas vs. no
+    en el período (por `at=` del routing cuando existe, ADR-037 §3; si no, por `updated`) (las anteriores a la política, sin `routing:`, se cuentan aparte), y comparación delegadas vs. no
     delegadas en revisiones (changes_requested) y duración in_progress → in_review."""
-    from ratifact.delegacion import politica_de_routing, workers_del_resultado
+    from ratifact.delegacion import at_de_routing, politica_de_routing, workers_del_resultado
     config = ruta_config()
     try:
         proyectos = json.loads(config.read_text(encoding="utf-8"))
@@ -211,9 +211,10 @@ def indicador_delegacion(desde: dt.datetime, proyecto: str | None) -> list[str]:
         tareas = []
         for archivo in sorted(_carpeta(mem, "tasks").glob("T-*.md")):
             meta, cuerpo = _registro(archivo, "tarea")
-            fecha = meta.get("updated") or meta.get("date", "")
+            at = at_de_routing(meta.get("routing", ""))      # ADR-037 §3: la hora de la ejecución, si se grabó
+            fecha = at.date().isoformat() if at else meta.get("updated") or meta.get("date", "")
             try:
-                if dt.date.fromisoformat(fecha[:10]) < desde.date():
+                if dt.date.fromisoformat(str(fecha)[:10]) < desde.date():
                     continue
             except ValueError:
                 continue

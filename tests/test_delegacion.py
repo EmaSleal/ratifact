@@ -177,13 +177,14 @@ def test_tarea_off_gana_al_global_required(srv, proyecto, entorno):
 def test_routing_se_graba_y_se_sobrescribe_en_reejecuciones(srv, proyecto, entorno):
     _settings(entorno, {"models": {"explore": "haiku", "write": "sonnet", "verify": "sonnet"}})
     _en_curso(srv)
-    assert _meta(proyecto["mem"])["routing"] == "explore=haiku,write=sonnet,verify=sonnet · delegation=required"
+    assert _meta(proyecto["mem"])["routing"].startswith("explore=haiku,write=sonnet,verify=sonnet · delegation=required · ")
     texto = _tarea(proyecto["mem"]).read_text()
     assert "Delegation (" not in texto and "Model routing" not in texto          # la guía no se escribe
     srv.update_task(project="demo", id="T-001", status="failed", result="falló")
     _settings(entorno, {"delegation": "suggested"})
     srv.update_task(project="demo", id="T-001", status="in_progress")
-    assert _meta(proyecto["mem"])["routing"] == "explore=session,write=session,verify=session · delegation=suggested"
+    assert _meta(proyecto["mem"])["routing"].startswith("explore=session,write=session,verify=session · "
+                                                        "delegation=suggested · build=")
     assert _tarea(proyecto["mem"]).read_text().count("routing:") == 1
 
 

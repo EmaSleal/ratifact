@@ -142,7 +142,7 @@ def test_apply_configura_todo_y_el_segundo_no_cambia_nada(maquina, paquete, caps
     assert not (home / ".agents/skills/tarea").is_symlink()
     assert "Claude Desktop" in salida and "requires approval" in salida      # what cannot be migrated
     assert f"remove {home / '.agents/skills/tarea'}" in salida
-    assert "Restart the clients" in salida
+    assert "Restart the clients" in salida and "verify with `ratifact doctor`" in salida      # T-016 (ADR-037 §6)
     for ruta in (maquina["desktop"], maquina["pi"], maquina["codex"], maquina["ajustes"], maquina["claude_json"]):
         assert list(ruta.parent.glob(ruta.name + ".bak-ratifact-*")), ruta
 

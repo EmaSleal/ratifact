@@ -15,7 +15,8 @@ no `~/.config/memoria-proyectos/projects.json` (no se mueve ni reescribe nada).
 Desde T-012 el repositorio es un paquete instalable (`pyproject.toml`, MIT). `uv tool install ratifact` (desde PyPI) o
 `uv tool install ~/Projects/.memoria-proyectos` (desde la copia local) instala una copia fija (no editable) y deja el
 ejecutable `~/.local/bin/ratifact`; después de cada integración en main: `uv tool install --reinstall
-~/Projects/.memoria-proyectos` y reiniciar los clientes. Los clientes se configuran con `ratifact install --apply`
+~/Projects/.memoria-proyectos`, reiniciar los clientes y verificar con `ratifact doctor` (procedimiento completo en
+"Desfase de versiones", más abajo). Los clientes se configuran con `ratifact install --apply`
 (T-013, sección 1); las configuraciones viejas con `servidor.py` siguen funcionando hasta 1.1.
 
 | Subcomando | Qué hace |
@@ -23,7 +24,7 @@ ejecutable `~/.local/bin/ratifact`; después de cada integración en main: `uv t
 | `ratifact serve` | Servidor MCP por stdio (lo que lanzan los clientes). `servidor.py` es un envoltorio de esto hasta 1.1. |
 | `ratifact install [--apply] [--client NOMBRE]` | Configura los clientes MCP que encuentra (Claude Desktop, Claude Code, Pi, Codex) y enlaza `/run-task` (sección 1). Sin `--apply` solo muestra el plan. |
 | `ratifact report [--days N] [--project P] [--log RUTA]` | Resumen del uso (sección 7). `analizar_uso.py` es un envoltorio hasta 1.1 (acepta `--dias`/`--proyecto`). |
-| `ratifact doctor` | Solo lectura: versión y de dónde corre (instalación fija o copia de trabajo, con aviso — P-017), configuración usada y grafía de sus claves, por proyecto código, memoria (ruta, esquema, `.memorias/` viejo o `.ratifact/` nuevo, estado git) e integraciones detectadas, log, variables `MEMORIA_PROYECTOS_*` y acciones pendientes, y el estado de cada cliente (configurado con ratifact / configuración vieja / sin configurar / no encontrado). Sale con 0 si no hay nada pendiente, 1 si hay acciones. Si no existe la configuración por defecto pero hay servidores corriendo con `RATIFACT_CONFIG`/`MEMORIA_PROYECTOS_CONFIG` o un `projects.json` junto al repositorio de origen, sugiere el comando exacto (`RATIFACT_CONFIG=<ruta> ratifact upgrade`). |
+| `ratifact doctor` | Solo lectura: versión y de dónde corre (instalación fija o copia de trabajo, con aviso — P-017), configuración usada y grafía de sus claves, por proyecto código, memoria (ruta, esquema, `.memorias/` viejo o `.ratifact/` nuevo, estado git) e integraciones detectadas, log, variables `MEMORIA_PROYECTOS_*` y acciones pendientes, el estado de cada cliente (configurado con ratifact / configuración vieja / sin configurar / no encontrado), el build, si la fuente local es más nueva que la instalación y los procesos `ratifact serve` vivos, marcando los anteriores a la instalación (ADR-037). Sale con 0 si no hay nada pendiente, 1 si hay acciones. Si no existe la configuración por defecto pero hay servidores corriendo con `RATIFACT_CONFIG`/`MEMORIA_PROYECTOS_CONFIG` o un `projects.json` junto al repositorio de origen, sugiere el comando exacto (`RATIFACT_CONFIG=<ruta> ratifact upgrade`). |
 | `ratifact upgrade` | Paso explícito de ADR-029 con todos los clientes cerrados. Sin opciones solo muestra el plan; `--apply` lo ejecuta: migra a v2 las memorias v1, mueve `<base>/.memorias/<p>` a `<base>/.ratifact/<p>` (las rutas propias nunca se mueven), escribe `~/.config/ratifact/projects.json` con claves en inglés y renombra el viejo a `projects.json.bak-v1`, regenera las vistas y copia el log viejo. Aborta si hay un servidor corriendo con esa configuración, un `.lock` tomado o una memoria con cambios sin commit (cabecera "Aborted — nothing was changed:", el plan y los motivos; código de salida 1); idempotente; si un paso falla, lo revierte. |
 | `ratifact --version` | Versión instalada. |
 
@@ -150,10 +151,35 @@ transversal o depende de diagnosticar una causa que la especificación aún no c
   `Workers: none — reason: <motivo>`. Con `required`, `update_task(..., "in_review")` sin una línea Workers válida
   cambia el estado igual pero responde con un aviso.
 - Auditoría: al pasar a in_progress se graba en el frontmatter `routing: explore=<m>,write=<m>,verify=<m> ·
-  delegation=<política>` (`session` si el rol no tiene modelo; se sobrescribe en cada reejecución). `ratifact report`
+  delegation=<política> · build=<build> · at=<hora ISO 8601, a minutos>` (`session` si el rol no tiene modelo; se
+  sobrescribe en cada reejecución; `build=` y `at=` desde T-016, ADR-037: las tareas anteriores conservan la forma corta
+  y se siguen leyendo). `ratifact report` toma el período de `at=` cuando existe (si no, de `updated`). `ratifact report`
   mide el cumplimiento por proyecto (tareas required con trabajadores reales, escalamientos) y compara tareas
   delegadas y no delegadas en revisiones y en duración in_progress → in_review; las tareas sin `routing:` se cuentan
   aparte. `ratifact doctor` muestra la política efectiva de cada proyecto (p. ej. `delegation=required (global)`).
+
+### Desfase de versiones (ADR-037)
+Hay tres copias de ratifact: la fuente (este repositorio), la instalación (directorio de uv tool, al que enlazan las
+skills /run-task) y el servidor en ejecución (un `ratifact serve` por cliente, que conserva el código con el que
+arrancó). Se desfasan al integrar sin reinstalar o al reinstalar sin reiniciar un cliente. Procedimiento tras cada
+cambio: integrar en main → `uv tool install --reinstall ~/Projects/.memoria-proyectos` → reiniciar todos los clientes
+(Claude Desktop, Claude Code, Codex, Pi) → `ratifact doctor`.
+
+- **Build:** cada servidor calcula al arrancar `<versión>+<7 hex>` (hash del contenido de su paquete, skills incluidas,
+  sin bytecode). `get_context` lo muestra en su primera línea (`ratifact <build>`) y `routing:` lo graba por tarea.
+- **Servidor obsoleto:** el servidor vuelve a mirar sus propios archivos (solo stat, caché de 5 s). Si cambiaron o
+  faltan desde que arrancó, `get_context` muestra debajo del build un aviso ⚠ para reiniciar ese cliente, las demás
+  herramientas anteponen el mismo aviso y `update_task(..., "in_progress")` se rechaza sin modificar nada: reiniciar
+  el cliente y repetir el paso.
+- **Fuente más nueva que la instalación:** si uv instaló ratifact desde una carpeta local (su recibo de instalación),
+  `doctor` y `get_context` comparan el paquete de esa carpeta con el instalado y piden reinstalar, con el comando. Las
+  instalaciones desde PyPI no muestran este aviso.
+- **`ratifact doctor`** lista además los procesos `ratifact serve` vivos (PID, hora de inicio y proceso padre) y marca
+  los que arrancaron antes de la última modificación de la instalación. Solo lee: no envía señales ni los termina
+  (Linux y macOS; en otros sistemas informa que el listado no está disponible).
+
+`ratifact install --apply` y `ratifact upgrade --apply` terminan recordando reiniciar los clientes y verificar con
+`ratifact doctor`. Un servidor anterior a T-016 no se autodiagnostica; `doctor` sí lo muestra.
 
 ## 5. Tareas de código (Claude Desktop → Claude Code)
 Flujo: en Claude Desktop se acuerda un cambio y se registra con `create_task` → queda `.project/tasks/T-NNN.md` →

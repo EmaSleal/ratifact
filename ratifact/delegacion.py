@@ -8,6 +8,7 @@ Aquí viven también el bloque "Delegation" de update_task(..., "in_progress"), 
 el parser único de la línea `Workers:` del resultado (lo usan la validación blanda de in_review y `ratifact report`)."""
 from __future__ import annotations
 
+import datetime as _dt
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -92,17 +93,34 @@ def bloque(entrada: dict, tarea: dict | None = None) -> str:
 
 
 def routing(entrada: dict, tarea: dict | None = None) -> str:
-    """Valor del campo `routing:` del frontmatter (ADR-036 §6): modelos efectivos y política de esta ejecución."""
+    """Valor del campo `routing:` del frontmatter (ADR-036 §6): modelos efectivos y política de esta ejecución, más el
+    build del servidor y la hora de la transición (ADR-037 §3)."""
     efectivos, _ = modelos.efectivos(entrada)
     politica, _, _ = efectiva(entrada, tarea)
     roles = ",".join(f"{r}={efectivos[r][0] if r in efectivos else 'session'}" for r in modelos.ROLES)
-    return f"{roles} · delegation={politica}"
+    from ratifact import build
+    return f"{roles} · delegation={politica} · build={build.build_id()} · at={build.marca_tiempo()}"
 
 
 def politica_de_routing(texto: str) -> str | None:
     """"explore=haiku,… · delegation=required" → "required" (None si el campo no la trae)."""
     m = re.search(r"delegation=(\w+)", texto or "")
     return m.group(1) if m else None
+
+
+def build_de_routing(texto: str) -> str | None:
+    """`build=1.0.0+abc1234` del campo routing (ADR-037 §3); None en el formato anterior."""
+    m = re.search(r"build=(\S+)", texto or "")
+    return m.group(1) if m else None
+
+
+def at_de_routing(texto: str) -> _dt.datetime | None:
+    """`at=2026-10-25T18:40-06:00` del campo routing (ADR-037 §3); None si falta o no es una fecha válida."""
+    m = re.search(r"at=(\S+)", texto or "")
+    try:
+        return _dt.datetime.fromisoformat(m.group(1)) if m else None
+    except ValueError:
+        return None
 
 
 # ───────────────────────── parámetros de herramientas ─────────────────────────

@@ -68,7 +68,9 @@ def test_orden_de_las_partes_del_contexto(srv, proyecto, entorno):
     for i in range(srv.UMBRAL_INDICE):
         srv.add_pending(project="demo", topic=f"Otro {i}", context="c")
     shutil.rmtree(entorno["base"] / "demo")
-    partes = srv.get_context(project="demo").split(SEPARADOR)
+    cabecera, _, resto = srv.get_context(project="demo").partition("\n\n")
+    assert cabecera.startswith("ratifact ") and "\n" not in cabecera          # T-016: la línea del build va primero
+    partes = resto.split(SEPARADOR)
     assert partes[0].startswith("⚠ The registered path of 'demo' no longer exists")
     assert partes[1].startswith("# Demo\nEstado: fase A")
     assert partes[2].startswith("# Open items (6)\n- P-001 · Abierto")

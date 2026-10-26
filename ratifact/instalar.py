@@ -17,6 +17,7 @@ from typing import Callable
 from ratifact import clientes as cl
 from ratifact import instalar_extras as ex
 from ratifact import rutas
+from ratifact.build import RECORDATORIO
 from ratifact.archivos import ErrorInstalacion, escribir_validado, validar_json
 from ratifact.config import _ruta_config, _valor
 from ratifact.instalacion import Proceso, _integraciones, mensaje_sugerencia, procesos_servidor, sugerencias_config
@@ -244,5 +245,5 @@ def main(aplicar: bool = False, cliente: str | None = None, ejecutable=_BUSCAR, 
         print("Failed (left untouched):")
         print("\n".join(f"  - {f}" for f in fallos))
     print("\n".join(_final(plan)))
-    print("Restart the clients so they load the `ratifact` server.")
+    print(RECORDATORIO)
     return 1 if fallos else 0

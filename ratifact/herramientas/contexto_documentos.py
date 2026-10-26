@@ -6,6 +6,7 @@ import os
 import subprocess
 from pathlib import Path
 
+from ratifact import build as _build
 from ratifact.app import _ejecutar, herramienta
 from ratifact.busqueda import _resultados
 from ratifact.catalogo import _bloque_pendientes, _es_carpeta_de_registros, _linea, _registros_en, _resolver_id
@@ -66,6 +67,9 @@ def _aviso_indice(proyecto: str) -> str:
 def get_context(project: str) -> str:
     """Start of a chat: returns INDEX.md and the open items (one line each: id, topic, date; read the detail with
     read_document). Call it before answering.
+    The first line is `ratifact <build>` (version + content hash of the running server). Below it, a ⚠ line when
+    this server process is older than the installation on disk (restart the client) or when the local source it was
+    installed from is newer than the installation (reinstall).
     At the end, if optional integrations are active (codegraph, gentle-ai, engram…), one line listing them and their
     planning guidance; that guidance is conditional: follow it only if you have their tools."""
     proyecto = project
@@ -102,8 +106,20 @@ def get_context(project: str) -> str:
         integraciones = _integraciones._bloque_contexto(proyecto)
         if integraciones:
             partes.append(integraciones)
-        return "\n\n---\n\n".join(partes)
+        return _cabecera() + "\n\n" + "\n\n---\n\n".join(partes)
     return _ejecutar(f)
+
+
+def _cabecera() -> str:
+    """ADR-037 §2 and §4: `ratifact <build>` on the first line and, below it, the stale-server warning and the
+    local-source warning when they apply."""
+    lineas = [f"ratifact {_build.build_id()}"]
+    if _build.obsoleto():
+        lineas.append(_build.aviso_obsoleto())
+    fuente = _build.aviso_fuente()
+    if fuente:
+        lineas.append(fuente)
+    return "\n".join(lineas)
 
 
 def _archivos_proyecto(base: Path, usar_git: bool = True) -> list[Path]:

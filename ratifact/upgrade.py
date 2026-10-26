@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Callable
 
 from ratifact import rutas
+from ratifact.build import RECORDATORIO
 from ratifact import config as _cfg
 from ratifact.config import CLAVES_CONFIG
 from ratifact.esquema import VERSION_ESQUEMA, _inicializada
@@ -176,5 +177,5 @@ def main(aplicar: bool = False, procesos: Callable[[], list[Proceso]] = procesos
     print("Done:")
     for linea in resumen:
         print(f"  {linea}")
-    print("Restart the clients so they read the new configuration.")
+    print(RECORDATORIO)
     return 0

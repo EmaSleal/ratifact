@@ -91,6 +91,26 @@ def descripcion(fn) -> str:
     return inspect.cleandoc(fn.__doc__ or "")
 
 
+# Herramientas que muestran ellas mismas el aviso de servidor obsoleto (ADR-037 §2): get_context lo pone debajo de
+# la línea `ratifact <build>`.
+AVISO_PROPIO = {"get_context"}
+
+
+def _aviso_obsoleto(nombre: str, respuesta):
+    """ADR-037 §2: con el proceso obsoleto, toda respuesta lleva delante el aviso de reiniciar el cliente (salvo las
+    que lo muestran solas y el rechazo de in_progress, que ya lo explica). Se agrega después de la telemetría: la
+    fila registra la respuesta de la herramienta. Nunca rompe una herramienta."""
+    if nombre in AVISO_PROPIO or not isinstance(respuesta, str):
+        return respuesta
+    try:
+        from ratifact import build
+        if respuesta.startswith(build.MARCA_ERROR_OBSOLETO) or not build.obsoleto():
+            return respuesta
+        return f"{build.aviso_obsoleto()}\n\n{respuesta}"
+    except Exception:
+        return respuesta
+
+
 def herramienta(fn):
     """Registra la función como herramienta MCP y mide cada llamada."""
     firma = inspect.signature(fn)
@@ -108,7 +128,7 @@ def herramienta(fn):
                                (time.perf_counter() - inicio) * 1000, ALIAS_RUTA.get())
                 raise
             _registrar_uso(fn.__name__, argumentos, respuesta, (time.perf_counter() - inicio) * 1000, ALIAS_RUTA.get())
-            return respuesta
+            return _aviso_obsoleto(fn.__name__, respuesta)
         finally:
             ALIAS_RUTA.reset(token)
     return mcp.tool(description=descripcion(fn))(envoltura)
@@ -145,7 +165,7 @@ def herramienta_async(fn):
                            (time.perf_counter() - inicio) * 1000)
             raise
         _registrar_uso(fn.__name__, argumentos, respuesta, (time.perf_counter() - inicio) * 1000)
-        return respuesta
+        return _aviso_obsoleto(fn.__name__, respuesta)
     return mcp.tool(description=descripcion(fn))(envoltura)
 
 

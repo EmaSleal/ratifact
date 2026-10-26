@@ -6,10 +6,11 @@ salida 0 si no hay nada pendiente, 1 si hay acciones. No escribe nada."""
 from __future__ import annotations
 
 import os
+import subprocess
 from pathlib import Path
 from typing import Callable
 
-from ratifact import __version__, delegacion, modelos, rutas
+from ratifact import __version__, build, delegacion, modelos, rutas
 from ratifact import config as _cfg
 from ratifact.config import _ruta_config
 from ratifact.esquema import VERSION_ESQUEMA
@@ -30,6 +31,46 @@ def _donde(paquete: Path | None, acciones: list[str]) -> list[str]:
         return [f"Running from: working copy {paquete.parent} ⚠ (P-017: changes in the working tree reach the "
                 "clients immediately)"]
     return [f"Running from: fixed installation {paquete}" + (f" · installed from {origen}" if origen else "")]
+
+
+def _fuente(paquete: Path | None, acciones: list[str], recibo: Path | None = None) -> list[str]:
+    """ADR-037 §4 (D1): with an installation from a local folder (uv tool receipt), compare that folder's package with
+    the installed one. PyPI or unknown origin: nothing to compare."""
+    paquete = paquete or build.PAQUETE
+    if rutas.es_copia_de_trabajo(paquete):
+        return []
+    fuente = build.fuente_local(paquete, recibo)
+    if fuente is None:
+        return ["Source: not a local folder (or unknown): no source check"]
+    distinta = build.fuente_desfasada(paquete, fuente)
+    if distinta is None:
+        acciones.append(f"the local source {fuente} recorded by uv was not found: reinstall from where the code is now "
+                        "(`uv tool install --reinstall <folder>`)")
+        return [f"Source: {fuente} (NOT FOUND)"]
+    if distinta:
+        acciones.append(f"source newer than the installation: reinstall with `{build.comando_reinstalar(fuente)}`, "
+                        "then restart the clients")
+        return [f"Source: {fuente} · source newer than the installation: reinstall"]
+    return [f"Source: {fuente} · same as the installation"]
+
+
+def _vivos(paquete: Path | None, vivos: Callable[[], list[build.ProcesoVivo]] | None) -> list[str]:
+    """ADR-037 §5: running `ratifact serve` processes (PID, start time, parent process) and which ones started before
+    the latest modification of the installation. Read only: nothing is signalled or stopped."""
+    paquete = paquete or build.PAQUETE
+    try:
+        lista = vivos() if vivos else build.procesos_vivos(paquete)
+    except (OSError, subprocess.SubprocessError) as e:
+        return [f"Running `ratifact serve` processes: cannot be listed ({e})"]
+    instalada = build.modificacion_instalacion(paquete)
+    cuando = f" (installation modified {instalada:%Y-%m-%d %H:%M:%S})" if instalada else ""
+    if not lista:
+        return [f"Running `ratifact serve` processes: none{cuando}"]
+    lineas = [f"Running `ratifact serve` processes{cuando}:"]
+    for p in lista:
+        marca = " ⚠ started BEFORE the installation: restart its client" if p.anterior else ""
+        lineas.append(f"  PID {p.pid} · started {p.inicio:%Y-%m-%d %H:%M:%S} · parent {p.padre}{marca}")
+    return lineas
 
 
 def _config(acciones: list[str]) -> list[str]:
@@ -155,11 +196,13 @@ def _enlaces(encontrados: set[str], acciones: list[str], paquete: Path | None) -
 
 
 def informe(procesos: Callable[[], list[Proceso]] = procesos_servidor, paquete: Path | None = None,
-            log_viejo: Path | None = None) -> tuple[list[str], list[str]]:
+            log_viejo: Path | None = None, vivos: Callable[[], list[build.ProcesoVivo]] | None = None,
+            recibo: Path | None = None) -> tuple[list[str], list[str]]:
     """(líneas del informe, acciones pendientes)."""
     acciones: list[str] = []
-    lineas = [f"ratifact {__version__} (memory schema v{VERSION_ESQUEMA})", *_donde(paquete, acciones),
-              *_config(acciones)]
+    lineas = [f"ratifact {__version__} (memory schema v{VERSION_ESQUEMA}) · build "
+              f"{build.build_de(paquete or build.PAQUETE)}", *_donde(paquete, acciones),
+              *_fuente(paquete, acciones, recibo), *_vivos(paquete, vivos), *_config(acciones)]
     try:
         plan = planificar(procesos=lambda: [], log_viejo=log_viejo)
     except _cfg.ErrorMemoria as e:
@@ -177,8 +220,9 @@ def informe(procesos: Callable[[], list[Proceso]] = procesos_servidor, paquete: 
 
 
 def main(procesos: Callable[[], list[Proceso]] = procesos_servidor, paquete: Path | None = None,
-         log_viejo: Path | None = None) -> int:
-    lineas, acciones = informe(procesos, paquete, log_viejo)
+         log_viejo: Path | None = None, vivos: Callable[[], list[build.ProcesoVivo]] | None = None,
+         recibo: Path | None = None) -> int:
+    lineas, acciones = informe(procesos, paquete, log_viejo, vivos, recibo)
     print("\n".join(lineas))
     print("Pending actions:" + ("" if acciones else " none"))
     for a in acciones:

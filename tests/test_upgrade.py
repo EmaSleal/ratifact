@@ -141,6 +141,7 @@ def test_apply_migra_mueve_reescribe_y_copia(vieja, capsys):
     assert (vieja["config"].with_name("projects.json.bak-v1")).read_bytes() == vieja["original"]
     assert (vieja["home"] / ".local" / "state" / "ratifact" / "uso.jsonl").read_text() == vieja["log"].read_text()
     assert vieja["log"].exists() and "Done:" in salida
+    assert "Restart the clients" in salida and "verify with `ratifact doctor`" in salida      # T-016 (ADR-037 §6)
 
 
 def test_segundo_apply_no_cambia_nada_y_lo_dice(vieja, entorno, capsys):

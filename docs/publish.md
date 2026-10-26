@@ -57,6 +57,16 @@ uv tool install ratifact
 ratifact install              # plan
 ```
 
+## After every change (local installations)
+
+A running server keeps the code it started with, so every change goes through the same four steps (ADR-037):
+
+1. merge into `main`;
+2. reinstall: `uv tool install --reinstall <path to the clone>` (or `uv tool upgrade ratifact` from PyPI);
+3. restart every client (Claude Desktop, Claude Code, Codex, Pi);
+4. check with `ratifact doctor`: same build as `get_context`'s first line, no "source newer than the installation",
+   and no `ratifact serve` process marked as started before the installation.
+
 ## Next releases
 
 Bump `version` in `pyproject.toml` and `__version__` in `ratifact/__init__.py` (a test checks they match), merge into

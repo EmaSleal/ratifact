@@ -72,8 +72,10 @@ task that touches security, is cross-cutting, or depends on diagnosing a cause t
   names): `Workers: explore/haiku×1, write/sonnet×2, verify/sonnet×1` (plus `escalated: write`), or
   `Workers: none — reason: <why>`. With `required`, `update_task(..., "in_review")` without a valid `Workers:` line
   still changes the status but answers with a warning.
-- Audit: `in_progress` records `routing: explore=<m>,write=<m>,verify=<m> · delegation=<policy>` in the task's
-  frontmatter (`session` for a role without a model; overwritten on re-runs). `ratifact report` measures compliance
+- Audit: `in_progress` records `routing: explore=<m>,write=<m>,verify=<m> · delegation=<policy> · build=<build> ·
+  at=<ISO 8601 time, to the minute>` in the task's frontmatter (`session` for a role without a model; overwritten on
+  re-runs; `build=` and `at=` since T-016, ADR-037 — older tasks keep the shorter form and are still read). `ratifact
+  report` takes the period from `at=` when present (`updated` otherwise). `ratifact report` measures compliance
   per project (required tasks with real workers, escalations) and compares delegated and non-delegated tasks in
   reviews and in_progress → in_review duration; tasks without `routing:` are counted apart. `ratifact doctor` shows
   each project's effective policy (e.g. `delegation=required (global)`).
