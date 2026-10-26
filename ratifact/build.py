@@ -5,21 +5,19 @@ There are three copies of ratifact: the source (git repository), the installatio
 
 - D2 (installation newer than the process): at startup the server computes its build id `<version>+<7 hex>` (content
   hash of its own package, skills included, bytecode excluded) and a cheap fingerprint (relative path, size and mtime
-  of each file). `obsoleto()` takes the fingerprint again (stat only, cached a few seconds); if it changed or the
+  of each file). `obsoleto()` takes the fingerprint again (stat only, cached a few seconds); if it changed, the content
+  hash confirms it once per new fingerprint (a reinstall rewrites identical files); if the content differs or the
   directory is gone, the process runs code that is no longer on disk.
 - D1 (source newer than the installation): when uv installed the package from a local folder (its tool receipt),
   `fuente_desfasada()` compares the package folder in that source with the installed one.
 
-Nothing here writes, signals or restarts anything."""
+Nothing here writes, signals or restarts anything. The server registry and the list of running processes for doctor
+live in ratifact/procesos.py."""
 from __future__ import annotations
 
-import datetime as _dt
 import hashlib
 import os
-import re
-import subprocess
 import time
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
@@ -77,21 +75,41 @@ def build_de(raiz: Path, version: str = __version__) -> str:
 
 
 class Vigilante:
-    """Build id and fingerprint taken once (at startup), and the cached stale check of the same directory."""
+    """Build id and fingerprint taken once (at startup), and the cached stale check of the same directory.
+
+    Each check only stats the files. When the fingerprint differs from the reference one, the content hash is computed
+    once for that fingerprint: `uv tool install --reinstall` rewrites every file (new mtimes) even when nothing
+    changed, so only a different content makes the process stale. Same content → the new fingerprint becomes the
+    reference and later checks are stat only again."""
 
     def __init__(self, raiz: Path = PAQUETE, version: str = __version__, reloj: Callable[[], float] = time.monotonic,
                  ttl: float = TTL):
         self.raiz, self.reloj, self.ttl = raiz, reloj, ttl
-        self.build = build_de(raiz, version)
+        self.contenido = hash_contenido(raiz)
+        self.build = f"{version}+{self.contenido[:7]}"
         self.inicial = huella(raiz)
+        self._distintas: dict[Huella, bool] = {}     # fingerprint already hashed → stale?
         self._cache: tuple[float, bool] | None = None
+
+    def _confirmar(self, actual: Huella) -> bool:
+        if actual not in self._distintas:
+            self._distintas[actual] = hash_contenido(self.raiz) != self.contenido
+        obsoleto = self._distintas[actual]
+        if not obsoleto:
+            self.inicial, self._distintas = actual, {}
+        return obsoleto
 
     def obsoleto(self) -> bool:
         ahora = self.reloj()
         if self._cache is not None and ahora - self._cache[0] < self.ttl:
             return self._cache[1]
         actual = huella(self.raiz)
-        resultado = actual is None or actual != self.inicial
+        if actual is None:
+            resultado = True
+        elif actual == self.inicial:
+            resultado = False
+        else:
+            resultado = self._confirmar(actual)
         self._cache = (ahora, resultado)
         return resultado
 
@@ -116,7 +134,7 @@ def build_id() -> str:
 
 
 def obsoleto() -> bool:
-    """True if the package files this process loaded changed (or disappeared) since it started."""
+    """True if the content of the package files this process loaded changed (or they disappeared) since it started."""
     return _vigilante().obsoleto()
 
 
@@ -207,59 +225,3 @@ def aviso_fuente(paquete: Path | None = None) -> str:
         return ""
     return (f"⚠ The ratifact source ({fuente}) is newer than the installation: reinstall with "
             f"`{comando_reinstalar(fuente)}` and restart the clients.")
-
-
-# ───────────────────────── running processes (for doctor) ─────────────────────────
-
-@dataclass
-class ProcesoVivo:
-    pid: int
-    inicio: _dt.datetime
-    padre: str
-    anterior: bool = field(default=False)      # started before the latest modification of the installation
-
-
-_PS = ["ps", "-axo", "pid=,ppid=,lstart=,command="]
-_LINEA_PS = re.compile(r"^\s*(\d+)\s+(\d+)\s+(\w{3}\s+\w{3}\s+\d+\s+[\d:]{8}\s+\d{4})\s+(.*)$")
-
-
-def _correr_ps() -> str:
-    r = subprocess.run(_PS, capture_output=True, text=True, env={**os.environ, "LC_ALL": "C"}, timeout=10)
-    if r.returncode != 0:
-        raise OSError(r.stderr.strip() or f"ps exited with {r.returncode}")
-    return r.stdout
-
-
-def _es_serve(comando: str) -> bool:
-    partes = comando.split()
-    nombres = [Path(p).name for p in partes]
-    return "serve" in partes and any(n in ("ratifact", "ratifact.cli") for n in nombres)
-
-
-def modificacion_instalacion(paquete: Path = PAQUETE) -> _dt.datetime | None:
-    """Latest mtime among the installed package files (same filter as the build)."""
-    marcas = [mtime for _, _, mtime in (huella(paquete) or ())]
-    return _dt.datetime.fromtimestamp(max(marcas) / 1e9) if marcas else None
-
-
-def procesos_vivos(paquete: Path = PAQUETE, correr: Callable[[], str] = _correr_ps) -> list[ProcesoVivo]:
-    """Running `ratifact serve` processes with start time and parent process name, marking the ones that started
-    before the latest modification of the installation. Read only. Raises OSError if they cannot be listed."""
-    filas = {}
-    for linea in correr().splitlines():
-        m = _LINEA_PS.match(linea)
-        if m:
-            filas[int(m.group(1))] = (int(m.group(2)), m.group(3), m.group(4))
-    instalada = modificacion_instalacion(paquete)
-    salida = []
-    for pid, (ppid, lstart, comando) in sorted(filas.items()):
-        if pid == os.getpid() or not _es_serve(comando):
-            continue
-        try:
-            inicio = _dt.datetime.strptime(" ".join(lstart.split()), "%a %b %d %H:%M:%S %Y")
-        except ValueError:
-            continue
-        padre = Path(filas[ppid][2].split()[0]).name if ppid in filas and filas[ppid][2].split() else "?"
-        anterior = bool(instalada and inicio < instalada.replace(microsecond=0))
-        salida.append(ProcesoVivo(pid, inicio, padre, anterior))
-    return salida

@@ -10,7 +10,7 @@ import subprocess
 from pathlib import Path
 from typing import Callable
 
-from ratifact import __version__, build, delegacion, modelos, rutas
+from ratifact import __version__, build, delegacion, modelos, procesos, rutas
 from ratifact import config as _cfg
 from ratifact.config import _ruta_config
 from ratifact.esquema import VERSION_ESQUEMA
@@ -54,21 +54,27 @@ def _fuente(paquete: Path | None, acciones: list[str], recibo: Path | None = Non
     return [f"Source: {fuente} · same as the installation"]
 
 
-def _vivos(paquete: Path | None, vivos: Callable[[], list[build.ProcesoVivo]] | None) -> list[str]:
-    """ADR-037 §5: running `ratifact serve` processes (PID, start time, parent process) and which ones started before
-    the latest modification of the installation. Read only: nothing is signalled or stopped."""
+def _vivos(paquete: Path | None, vivos: Callable[[], list[procesos.ProcesoVivo]] | None) -> list[str]:
+    """ADR-037 §5 and ADR-038: running `ratifact serve` processes (PID, start time, parent process); one that started
+    before the latest modification of the installation is flagged only if its startup record shows different content.
+    Read only: nothing is written, signalled or stopped."""
     paquete = paquete or build.PAQUETE
     try:
-        lista = vivos() if vivos else build.procesos_vivos(paquete)
+        lista = vivos() if vivos else procesos.procesos_vivos(paquete)
     except (OSError, subprocess.SubprocessError) as e:
         return [f"Running `ratifact serve` processes: cannot be listed ({e})"]
-    instalada = build.modificacion_instalacion(paquete)
+    instalada = procesos.modificacion_instalacion(paquete)
     cuando = f" (installation modified {instalada:%Y-%m-%d %H:%M:%S})" if instalada else ""
     if not lista:
         return [f"Running `ratifact serve` processes: none{cuando}"]
     lineas = [f"Running `ratifact serve` processes{cuando}:"]
     for p in lista:
-        marca = " ⚠ started BEFORE the installation: restart its client" if p.anterior else ""
+        marca = {procesos.ANTERIOR: f" ⚠ started BEFORE the installation and runs different content (ratifact {p.build}): "
+                                 "restart its client",
+                 procesos.MISMO: f" · started before the reinstallation, same content (ratifact {p.build}): nothing to do",
+                 procesos.DESCONOCIDO: " · started before the reinstallation; the content may be identical (no record of "
+                                    "its startup build): get_context in that client gives the definitive answer"
+                 }.get(p.estado, "")
         lineas.append(f"  PID {p.pid} · started {p.inicio:%Y-%m-%d %H:%M:%S} · parent {p.padre}{marca}")
     return lineas
 
@@ -196,7 +202,7 @@ def _enlaces(encontrados: set[str], acciones: list[str], paquete: Path | None) -
 
 
 def informe(procesos: Callable[[], list[Proceso]] = procesos_servidor, paquete: Path | None = None,
-            log_viejo: Path | None = None, vivos: Callable[[], list[build.ProcesoVivo]] | None = None,
+            log_viejo: Path | None = None, vivos: Callable[[], list[procesos.ProcesoVivo]] | None = None,
             recibo: Path | None = None) -> tuple[list[str], list[str]]:
     """(líneas del informe, acciones pendientes)."""
     acciones: list[str] = []
@@ -220,7 +226,7 @@ def informe(procesos: Callable[[], list[Proceso]] = procesos_servidor, paquete: 
 
 
 def main(procesos: Callable[[], list[Proceso]] = procesos_servidor, paquete: Path | None = None,
-         log_viejo: Path | None = None, vivos: Callable[[], list[build.ProcesoVivo]] | None = None,
+         log_viejo: Path | None = None, vivos: Callable[[], list[procesos.ProcesoVivo]] | None = None,
          recibo: Path | None = None) -> int:
     lineas, acciones = informe(procesos, paquete, log_viejo, vivos, recibo)
     print("\n".join(lineas))

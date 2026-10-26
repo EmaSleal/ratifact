@@ -15,6 +15,8 @@ import pytest
 from test_upgrade import hogar  # noqa: F401  (fixture: temporary HOME for doctor)
 from test_delegacion import _en_curso, _meta, _tarea
 
+from ratifact import procesos
+
 PAQUETE = Path(__file__).resolve().parents[1] / "ratifact"
 SEPARADOR = "\n\n---\n\n"
 
@@ -89,6 +91,59 @@ def test_directorio_eliminado_esta_obsoleto(copia):
     v = build.Vigilante(copia, ttl=0)
     shutil.rmtree(copia)
     assert v.obsoleto() is True
+
+
+# ───────────────────────── review 1, criteria 16–17: content confirmation ─────────────────────────
+
+def _reescribir_igual(raiz: Path) -> None:
+    """What `uv tool install --reinstall` does without code changes: same bytes, new mtimes."""
+    for p in raiz.rglob("*"):
+        if p.is_file() and "__pycache__" not in p.parts:
+            datos = p.read_bytes()
+            p.write_bytes(datos)
+            st = p.stat()
+            os.utime(p, ns=(st.st_atime_ns, st.st_mtime_ns + 2_000_000_000))
+
+
+def _contar_hashes(monkeypatch) -> list:
+    from ratifact import build
+    llamadas, original = [], build.hash_contenido
+    monkeypatch.setattr(build, "hash_contenido", lambda raiz: llamadas.append(raiz) or original(raiz))
+    return llamadas
+
+
+def test_reinstalar_con_el_mismo_contenido_no_es_obsoleto(copia, monkeypatch):
+    from ratifact import build
+    ahora = [0.0]
+    v = build.Vigilante(copia, reloj=lambda: ahora[0], ttl=5)
+    hashes = _contar_hashes(monkeypatch)
+    _reescribir_igual(copia)
+    assert v.obsoleto() is False and len(hashes) == 1          # new fingerprint → one content hash
+    ahora[0] += 6                                              # cache expired
+    assert v.obsoleto() is False and len(hashes) == 1          # the new fingerprint is the reference: stat only
+
+
+def test_mtime_nuevo_y_contenido_distinto_es_obsoleto(copia, monkeypatch):
+    from ratifact import build
+    ahora = [0.0]
+    v = build.Vigilante(copia, reloj=lambda: ahora[0], ttl=5)
+    hashes = _contar_hashes(monkeypatch)
+    _reescribir_igual(copia)
+    (copia / "app.py").write_text((copia / "app.py").read_text() + "\n# otro\n")
+    assert v.obsoleto() is True and len(hashes) == 1
+    ahora[0] += 6
+    assert v.obsoleto() is True and len(hashes) == 1           # same fingerprint seen: not hashed again
+
+
+def test_borrar_y_recrear_con_el_mismo_contenido_no_es_obsoleto(copia, tmp_path):
+    from ratifact import build
+    v = build.Vigilante(copia, ttl=0)
+    respaldo = tmp_path / "respaldo"
+    shutil.copytree(copia, respaldo)
+    shutil.rmtree(copia)
+    assert v.obsoleto() is True                                # gone (criterion 2 unchanged)
+    shutil.copytree(respaldo, copia)
+    assert v.obsoleto() is False
 
 
 def test_costo_de_la_verificacion_sin_cache():
@@ -180,6 +235,22 @@ def test_sin_obsolescencia_ninguna_respuesta_lleva_el_aviso(srv, proyecto, monke
                srv.update_task(project="demo", id="T-001", status="in_review", result="x"),
                srv.get_context(project="demo")]
     assert not any("⚠ This ratifact server" in s for s in salidas)
+
+
+def test_extremo_a_extremo_con_obsolescencia_real(srv, proyecto, copia, monkeypatch):
+    """Criterion 18: the real check (not forced) on a copy of the package that is rewritten in place."""
+    from ratifact import build
+    monkeypatch.setattr(build, "_VIGILANTE", build.Vigilante(copia, ttl=0))
+    srv.create_task(project="demo", title="Uno", goal="o", acceptance_criteria="c")
+    srv.create_task(project="demo", title="Dos", goal="o", acceptance_criteria="c")
+    _reescribir_igual(copia)
+    salida = srv.update_task(project="demo", id="T-001", status="in_progress")
+    assert salida.startswith("T-001 → in_progress") and "⚠ This ratifact server" not in salida
+    assert "⚠ This ratifact server" not in srv.get_context(project="demo")
+    (copia / "app.py").write_text((copia / "app.py").read_text() + "\n# otro\n")
+    salida = srv.update_task(project="demo", id="T-002", status="in_progress")
+    assert salida.startswith(build.MARCA_ERROR_OBSOLETO) and _meta(proyecto["mem"], "T-002")["status"] == "todo"
+    assert srv.get_context(project="demo").split("\n")[1].startswith("⚠ This ratifact server")
 
 
 # ───────────────────────── criteria 7–8: routing and report ─────────────────────────
@@ -309,27 +380,63 @@ def _ps(*filas: str) -> str:
     return "\n".join(filas) + "\n"
 
 
-def test_procesos_anteriores_y_posteriores(tmp_path, copia):
-    from ratifact import build
-    for p in copia.rglob("*"):
+INSTALACION = dt.datetime(2026, 10, 25, 17, 51, 31)
+PS = _ps("  100     1 Sat Oct 24 18:53:54 2026 /opt/claude-code/bin/claude --resume x",
+         "  101   100 Sat Oct 24 18:53:54 2026 /tool/bin/python3 /home/u/.local/bin/ratifact serve",
+         "  102   100 Sat Oct 24 19:00:00 2026 /tool/bin/python3 /home/u/.local/bin/ratifact serve",
+         "  103   100 Sat Oct 24 19:10:00 2026 /tool/bin/python3 -m ratifact.cli serve",
+         "  104   100 Sat Oct 24 19:20:00 2026 /tool/bin/python3 /home/u/.local/bin/ratifact serve",
+         "  200     1 Sun Oct 25 17:53:00 2026 /usr/bin/claude-desktop",
+         "  201   200 Sun Oct 25 17:53:31 2026 /tool/bin/python3 /home/u/.local/bin/ratifact serve",
+         "  300     1 Sun Oct 25 17:00:00 2026 nvim ratifact/servidor.py serve-notes")
+
+
+def _instalada_a(raiz: Path, cuando: dt.datetime) -> None:
+    for p in raiz.rglob("*"):
         if p.is_file():
-            os.utime(p, (dt.datetime(2026, 10, 25, 17, 51, 31).timestamp(),) * 2)
-    salida = _ps("  100     1 Sat Oct 24 18:53:54 2026 /opt/claude-code/bin/claude --resume x",
-                 "  101   100 Sat Oct 24 18:53:54 2026 /tool/bin/python3 /home/u/.local/bin/ratifact serve",
-                 "  200     1 Sun Oct 25 17:53:00 2026 /usr/bin/claude-desktop",
-                 "  201   200 Sun Oct 25 17:53:31 2026 /tool/bin/python3 /home/u/.local/bin/ratifact serve",
-                 "  300     1 Sun Oct 25 17:00:00 2026 nvim ratifact/servidor.py serve-notes")
-    vivos = build.procesos_vivos(copia, correr=lambda: salida)
-    assert [(p.pid, p.padre, p.anterior) for p in vivos] == [(101, "claude", True), (201, "claude-desktop", False)]
-    assert vivos[0].inicio == dt.datetime(2026, 10, 24, 18, 53, 54)
+            os.utime(p, (cuando.timestamp(),) * 2)
 
 
-def test_doctor_lista_procesos_ninguno_y_error(hogar, copia):
-    from ratifact import build, doctor
-    vivo = build.ProcesoVivo(101, dt.datetime(2026, 10, 24, 18, 53, 54), "claude", True)
-    lineas, _ = doctor.informe(procesos=lambda: [], paquete=copia, vivos=lambda: [vivo])
+def _registro(carpeta: Path, pid: int, inicio: str, contenido: str) -> None:
+    import json
+    carpeta.mkdir(parents=True, exist_ok=True)
+    (carpeta / f"{pid}.json").write_text(json.dumps({"pid": pid, "build": f"1.0.0+{contenido[:7]}",
+                                                     "content": contenido, "started": inicio}))
+
+
+def test_procesos_anteriores_solo_si_el_contenido_difiere(tmp_path, copia):
+    """Criterion 19: started before the installation → stale only with a record of different content; same content →
+    nothing to do; no record or a reused PID → unknown; started after → not flagged."""
+    from ratifact import build
+    _instalada_a(copia, INSTALACION)
+    registros = tmp_path / "servers"
+    _registro(registros, 101, "2026-10-24T18:53:54", "f" * 64)                        # different content
+    _registro(registros, 102, "2026-10-24T19:00:01", build.hash_contenido(copia))      # same content
+    _registro(registros, 104, "2026-10-20T08:00:00", "f" * 64)                         # reused PID: start differs
+    vivos = procesos.procesos_vivos(copia, correr=lambda: PS, registros=registros)
+    assert [(p.pid, p.padre, p.estado, p.anterior) for p in vivos] == [
+        (101, "claude", "stale", True), (102, "claude", "same", False), (103, "claude", "unknown", False),
+        (104, "claude", "unknown", False), (201, "claude-desktop", "after", False)]
+    assert vivos[0].inicio == dt.datetime(2026, 10, 24, 18, 53, 54) and vivos[0].build == "1.0.0+fffffff"
+
+
+def test_doctor_muestra_los_tres_casos_ninguno_y_error(hogar, copia):
+    from ratifact import doctor
+    inicio = dt.datetime(2026, 10, 24, 18, 53, 54)
+    vivos = [procesos.ProcesoVivo(101, inicio, "claude", True, procesos.ANTERIOR, "1.0.0+fffffff"),
+             procesos.ProcesoVivo(102, inicio, "claude", False, procesos.MISMO, "1.0.0+abc1234"),
+             procesos.ProcesoVivo(103, inicio, "claude", False, procesos.DESCONOCIDO),
+             procesos.ProcesoVivo(201, inicio, "claude-desktop")]
+    lineas, acciones = doctor.informe(procesos=lambda: [], paquete=copia, vivos=lambda: vivos)
     texto = "\n".join(lineas)
-    assert "PID 101 · started 2026-10-24 18:53:54 · parent claude ⚠ started BEFORE the installation" in texto
+    assert ("PID 101 · started 2026-10-24 18:53:54 · parent claude ⚠ started BEFORE the installation and runs "
+            "different content (ratifact 1.0.0+fffffff): restart its client") in texto
+    assert "PID 102 · started 2026-10-24 18:53:54 · parent claude · started before the reinstallation, same content " \
+           "(ratifact 1.0.0+abc1234): nothing to do" in texto
+    linea = next(l for l in lineas if "PID 103" in l)
+    assert "the content may be identical" in linea and "get_context in that client gives the definitive answer" in linea
+    assert "⚠" not in linea
+    assert next(l for l in lineas if "PID 201" in l).endswith("parent claude-desktop")
     lineas, _ = doctor.informe(procesos=lambda: [], paquete=copia, vivos=lambda: [])
     assert any(l.startswith("Running `ratifact serve` processes: none") for l in lineas)
 
@@ -339,10 +446,52 @@ def test_doctor_lista_procesos_ninguno_y_error(hogar, copia):
     assert "Running `ratifact serve` processes: cannot be listed (ps not found)" in lineas
 
 
-def test_listado_real_solo_lectura_no_falla():
+def test_registro_se_escribe_limpia_muertos_y_se_borra(tmp_path, copia):
+    import json
     from ratifact import build
+    carpeta = tmp_path / "servers"
+    _registro(carpeta, 999_999_999, "2026-10-24T18:53:54", "f" * 64)                 # a PID that does not exist
+    v = build.Vigilante(copia)
+    ruta = procesos.registrar(v, carpeta)
+    datos = json.loads(ruta.read_text())
+    assert ruta.name == f"{os.getpid()}.json" and datos["build"] == v.build and datos["content"] == v.contenido
+    assert not (carpeta / "999999999.json").exists()
+    inicio = dt.datetime.fromisoformat(datos["started"])
+    assert procesos.leer_registro(os.getpid(), inicio, carpeta)["content"] == v.contenido
+    assert procesos.leer_registro(os.getpid(), inicio + dt.timedelta(minutes=1), carpeta) is None
+    procesos.desregistrar(ruta)
+    assert not ruta.exists()
+
+
+def test_registro_que_no_se_puede_escribir_no_rompe(tmp_path, copia):
+    from ratifact import build
+    archivo = tmp_path / "ocupado"
+    archivo.write_text("x")                                     # a file where the folder should be
+    assert procesos.registrar(build.Vigilante(copia), archivo / "servers") is None
+    assert procesos.leer_registro(1, dt.datetime.now(), archivo / "servers") is None
+
+
+def test_serve_registra_el_servidor_y_lo_borra_al_salir(hogar, monkeypatch):
+    import atexit
+    from ratifact import cli
+    salidas = []
+    monkeypatch.setattr(atexit, "register", lambda fn, *a: salidas.append((fn, a)))
+    vistos = []
+
+    class Falso:
+        def run(self):
+            vistos.append(sorted(p.name for p in procesos.carpeta_registro().glob("*.json")))
+    monkeypatch.setattr(cli, "servidor", lambda: Falso())
+    cli.main(["serve"])
+    assert vistos == [[f"{os.getpid()}.json"]]                  # written before serving
+    fn, args = salidas[-1]
+    fn(*args)
+    assert not list(procesos.carpeta_registro().glob("*.json"))     # removed on exit
+
+
+def test_listado_real_solo_lectura_no_falla():
     try:
-        vivos = build.procesos_vivos(PAQUETE)
+        vivos = procesos.procesos_vivos(PAQUETE)
     except OSError:
         pytest.skip("ps is not available")
     assert all(p.pid != os.getpid() for p in vivos)

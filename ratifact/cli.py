@@ -44,8 +44,10 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> None:
     a = _parser().parse_args(argv)
     if a.comando == "serve":
-        from ratifact import build
-        build.iniciar()     # ADR-037: build id and fingerprint of the code this process loads, taken at startup
+        import atexit
+        from ratifact import build, procesos
+        vigilante = build.iniciar()     # ADR-037: build id and fingerprint of the code this process loads
+        atexit.register(procesos.desregistrar, procesos.registrar(vigilante))     # ADR-038: for doctor
         servidor().run()
     elif a.comando == "report":
         from ratifact import informe

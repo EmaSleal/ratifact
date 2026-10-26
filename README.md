@@ -178,9 +178,14 @@ What reveals a drift:
 - **Source newer than the installation.** When uv installed ratifact from a local folder (its tool receipt), `doctor`
   and `get_context` compare that folder's package with the installed one and ask to reinstall, with the command.
   Installations from PyPI do not show it.
-- **`ratifact doctor`** also lists the running `ratifact serve` processes (PID, start time, parent process) and marks
-  the ones that started before the latest change to the installation. It only reads: it never signals or stops them
-  (Linux and macOS; elsewhere it says the list is unavailable).
+- **`ratifact doctor`** also lists the running `ratifact serve` processes (PID, start time, parent process). A reinstall
+  rewrites every file even when nothing changed, so a process that started before the installation is flagged only
+  when its content differs: each server records its startup build in `~/.local/state/ratifact/servers/<pid>.json`
+  (ADR-038; removed on exit, dead PIDs pruned at startup). Same content → "nothing to do"; no record (a server older
+  than this) → "the content may be identical", and `get_context` in that client gives the definitive answer. doctor
+  only reads: it never writes, signals or stops anything (Linux and macOS; elsewhere it says the list is unavailable).
+- The server's own check works the same way: a changed fingerprint is confirmed by the content hash once, so a
+  reinstall with identical code does not trigger the warning or the `in_progress` refusal.
 
 `ratifact install --apply` and `ratifact upgrade --apply` end by reminding you to restart the clients and run
 `ratifact doctor`. A server older than T-016 cannot diagnose itself; `doctor` still shows it.

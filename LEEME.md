@@ -174,9 +174,15 @@ cambio: integrar en main → `uv tool install --reinstall ~/Projects/.memoria-pr
 - **Fuente más nueva que la instalación:** si uv instaló ratifact desde una carpeta local (su recibo de instalación),
   `doctor` y `get_context` comparan el paquete de esa carpeta con el instalado y piden reinstalar, con el comando. Las
   instalaciones desde PyPI no muestran este aviso.
-- **`ratifact doctor`** lista además los procesos `ratifact serve` vivos (PID, hora de inicio y proceso padre) y marca
-  los que arrancaron antes de la última modificación de la instalación. Solo lee: no envía señales ni los termina
-  (Linux y macOS; en otros sistemas informa que el listado no está disponible).
+- **`ratifact doctor`** lista además los procesos `ratifact serve` vivos (PID, hora de inicio y proceso padre). Como la
+  reinstalación reescribe todos los archivos aunque no cambien, un proceso anterior a la instalación se marca solo si
+  su contenido difiere: cada servidor deja su build de arranque en `~/.local/state/ratifact/servers/<pid>.json`
+  (ADR-038; se borra al salir y los PID muertos se limpian al arrancar). Mismo contenido → "nada que hacer"; sin
+  registro (servidor anterior a esto) → "el contenido puede ser idéntico" y `get_context` en ese cliente da la
+  respuesta definitiva. doctor solo lee: no escribe, no envía señales ni termina procesos (Linux y macOS; en otros
+  sistemas informa que el listado no está disponible).
+- El autodiagnóstico del servidor funciona igual: una huella distinta se confirma una vez con el hash de contenido,
+  así que reinstalar con el mismo código no dispara el aviso ni el rechazo de `in_progress`.
 
 `ratifact install --apply` y `ratifact upgrade --apply` terminan recordando reiniciar los clientes y verificar con
 `ratifact doctor`. Un servidor anterior a T-016 no se autodiagnostica; `doctor` sí lo muestra.
