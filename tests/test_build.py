@@ -473,6 +473,9 @@ def test_limpieza_no_envia_senales(tmp_path, copia, monkeypatch):
     procesos.registrar(vigilante, carpeta)
     if Path("/proc/self").is_dir():
         assert llamadas == [] and not (carpeta / "999999999.json").exists()      # Linux: /proc, no signal
+    else:
+        assert all(a[1] == 0 for a in llamadas)                                   # other POSIX: signal 0 only
+    llamadas.clear()
     monkeypatch.setattr(procesos, "Path", lambda *a: tmp_path / "sin-proc" if a == ("/proc/self",) else Path(*a))
     monkeypatch.setattr(procesos.os, "name", "nt")
     _registro(carpeta, 999_999_998, "2026-10-24T18:53:54", "f" * 64)
