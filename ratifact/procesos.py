@@ -26,8 +26,15 @@ def carpeta_registro() -> Path:
 
 
 def _vivo(pid: int) -> bool:
+    """Whether a recorded PID still exists, without signalling it: /proc on Linux, signal 0 on other POSIX systems
+    (it delivers nothing). Elsewhere (Windows, where os.kill terminates the process) nothing is probed and the record
+    is kept."""
+    if Path("/proc/self").is_dir():
+        return Path(f"/proc/{pid}").exists()
+    if os.name != "posix":
+        return True
     try:
-        os.kill(pid, 0)          # signal 0 delivers nothing: it only asks whether the process exists
+        os.kill(pid, 0)
     except ProcessLookupError:
         return False
     except OSError:              # exists but belongs to someone else

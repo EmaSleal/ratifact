@@ -463,6 +463,23 @@ def test_registro_se_escribe_limpia_muertos_y_se_borra(tmp_path, copia):
     assert not ruta.exists()
 
 
+def test_limpieza_no_envia_senales(tmp_path, copia, monkeypatch):
+    """Review finding R4-win-kill-terminates: pruning never calls os.kill where it would terminate the process."""
+    from ratifact import build
+    llamadas = []
+    monkeypatch.setattr(procesos.os, "kill", lambda *a: llamadas.append(a))
+    carpeta, vigilante = tmp_path / "servers", build.Vigilante(copia)
+    _registro(carpeta, 999_999_999, "2026-10-24T18:53:54", "f" * 64)
+    procesos.registrar(vigilante, carpeta)
+    if Path("/proc/self").is_dir():
+        assert llamadas == [] and not (carpeta / "999999999.json").exists()      # Linux: /proc, no signal
+    monkeypatch.setattr(procesos, "Path", lambda *a: tmp_path / "sin-proc" if a == ("/proc/self",) else Path(*a))
+    monkeypatch.setattr(procesos.os, "name", "nt")
+    _registro(carpeta, 999_999_998, "2026-10-24T18:53:54", "f" * 64)
+    procesos.registrar(vigilante, carpeta)
+    assert llamadas == [] and (carpeta / "999999998.json").exists()              # Windows: nothing probed, kept
+
+
 def test_registro_que_no_se_puede_escribir_no_rompe(tmp_path, copia):
     from ratifact import build
     archivo = tmp_path / "ocupado"
