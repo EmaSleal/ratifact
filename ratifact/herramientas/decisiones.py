@@ -22,7 +22,7 @@ def propose_decision(project: str, title: str, decision: str, rationale: str,
                      alternatives: str = "", summary: str = "") -> str:
     """Creates an ADR. It is ALWAYS 'proposed'. To accept it, call accept_decision afterwards: that tool asks for
     the user's approval. `summary`: one line for the decisions view.
-    Idempotent (ADR-019): if an ADR with this title (ignoring case and spaces) was created in the last minutes AND
+    Idempotent: if an ADR with this title (ignoring case and spaces) was created in the last minutes AND
     is STILL 'proposed', nothing new is created and the existing id is returned. If that ADR already changed status
     (e.g. rejected: the user asked for another version), a human already intervened, so a new ADR is recorded."""
     proyecto, titulo, justificacion, alternativas, resumen = project, title, rationale, alternatives, summary
@@ -108,14 +108,14 @@ def accept_decisions(project: str, ids: list[str], user_quote: str) -> str:
 @herramienta
 def review_proposals(project: str, from_id: str = "", limit: int = 10, summary: bool = False) -> str:
     """Returns the decisions in 'proposed' status so the user can decide to accept, adjust or reject them.
-    Paginated: `limit` per page (max 25) starting at `from_id` (e.g. "ADR-020"). With `summary=True` it returns one
+    Paginated: `limit` per page (max 25) starting at `from_id` (e.g. "ADR-NNN"). With `summary=True` it returns one
     line per proposal (useful to see the overview before going into detail)."""
     proyecto, desde_id, cantidad, resumen = project, from_id, limit, summary
 
     def f():
         desde = _numero_id(desde_id) if desde_id else 0
         if desde is None:
-            raise ErrorMemoria(f"Invalid from_id: '{desde_id}' (use the form \"ADR-020\").")
+            raise ErrorMemoria(f"Invalid from_id: '{desde_id}' (use the form \"ADR-NNN\").")
         carpeta = _mem(proyecto) / DECISIONES
         archivos = sorted(carpeta.glob("ADR-*.md"), key=lambda a: _clave_id(a.name)) \
             if carpeta.exists() else []

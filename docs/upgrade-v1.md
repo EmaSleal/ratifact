@@ -1,6 +1,6 @@
 # Upgrading to v1 (English contract)
 
-Applies to: T-011 (ADR-028 step 2). The memory data was already migrated to schema v2 (T-010); this release renames
+Applies to: T-011 (step 2 of the v1 migration). The memory data was already migrated to schema v2 (T-010); this release renames
 the **tool contract**: tool names, parameters, descriptions and responses are now in English, and two tools were added
 (`amend_task`, `read_task`). Nothing in your memories or in `projects.json` is moved or rewritten.
 
@@ -148,8 +148,8 @@ Tool and parameter **names** have no Spanish aliases: a client with the old inst
 | `actualizar_tarea` | `update_task` |
 | `devolver_tarea` | `request_changes` |
 | `listar_tareas` | `list_tasks` |
-| — | `amend_task` (new, ADR-021) |
-| — | `read_task` (new, ADR-031) |
+| — | `amend_task` (new) |
+| — | `read_task` (new) |
 | prompt `inicio` | prompt `start` |
 | prompt `cierre` | prompt `close` |
 | `/tarea T-NNN` | `/run-task T-NNN` (`$run-task` in Codex) |
@@ -159,7 +159,7 @@ Parameters: see `docs/v1-english-naming.md` §4 and its addenda (e.g. `proyecto`
 
 ## Clients from the fixed installation
 
-Applies to: T-012 (ADR-028 step 3, ADR-032). The repository is now an installable package with a `ratifact` command.
+Applies to: T-012 (step 3 of the v1 migration). The repository is now an installable package with a `ratifact` command.
 Clients stop running the working copy (`uv run --script …/servidor.py`, P-017): they run a fixed copy installed with
 `uv tool install`, so editing or switching branches in the repository no longer changes the running server. The tool
 contract (28 tools) does not change. Until T-013 this setup is manual; `servidor.py` and `analizar_uso.py` keep working
@@ -187,7 +187,7 @@ ratifact upgrade            # dry run: prints the plan, changes nothing
 ratifact upgrade --apply
 ```
 
-With `--apply`, in this order and with backups (ADR-029): (1) memories still on schema v1 are migrated to v2 (tag
+With `--apply`, in this order and with backups: (1) memories still on schema v1 are migrated to v2 (tag
 `pre-v2`); (2) memories in the old default `~/Projects/.memorias/<project>` move to `~/Projects/.ratifact/<project>`
 (custom paths such as `game/.project` never move); (3) `~/.config/ratifact/projects.json` is written with English keys
 (`path`, `memory`, `writable`, `tests`, `integrations`) and the old file is renamed to `projects.json.bak-v1` (never
@@ -220,7 +220,7 @@ and restart every client (Claude Desktop, Claude Code, Pi, Codex) so they launch
 
 ## ratifact install (T-013)
 
-Applies to: T-013 (ADR-032, last step of v1). Installing and configuring ratifact no longer requires editing any file
+Applies to: T-013 (last step of v1). Installing and configuring ratifact no longer requires editing any file
 by hand.
 
 ```

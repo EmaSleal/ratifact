@@ -1,6 +1,6 @@
-# Optional integrations — design (ADR-024, ADR-025)
+# Optional integrations — design
 
-Status: agreed · 2026-10-17 · implemented by T-008, before the v1 rename (ADR-014).
+Status: agreed · 2026-10-17 · implemented by T-008, before the v1 rename.
 
 ## Goal
 ratifact adapts to the agent tooling the user already has (codegraph, engram, gentle-ai…) to get more out of it, without depending on it. With no integration installed, ratifact works exactly as today.
@@ -12,7 +12,7 @@ ratifact adapts to the agent tooling the user already has (codegraph, engram, ge
 4. **User decides.** Default `auto`. Per-project switch to turn one off.
 5. **Adding an integration = adding one file.** No tool-contract change.
 
-## Scopes (ADR-025)
+## Scopes
 - **Project-scoped** — detected by a signal in the project folder (multi-repo: in any repo folder). codegraph: `.codegraph/`. gentle-ai: `.atl/`.
 - **User-scoped** — not detected (no per-project signal; the client's MCPs are invisible to ratifact). Guidance-only, always conditional. engram.
 
@@ -30,10 +30,10 @@ One module per integration in `ratifact/integraciones/` (English names after the
 
 Initial set:
 - **codegraph** (project) — `planificar`: if available, use it to fill `archivos` precisely. `ejecutar`: after reading the spec and before opening files, call `codegraph_context` with the objective + listed files. `verificar`: check callers of changed symbols to confirm the blast radius.
-- **gentle-ai** (project) — revised by T-014 (ADR-033, ADR-034). `execute`: a ratifact task is gentle-ai's **delegated-direct** route — never SDD, no SDD artifacts; whether to delegate is set by ratifact's delegation policy (T-015, ADR-036), not by gentle-ai thresholds — the old "4+ files" / "2+ non-trivial files" criterion and "otherwise implement directly" were removed; the ratifact task is the **ODD** feature document, so no other ODD document is created. `verify`: verification in a clean worker; if **RDD** is on, the review of the finished change runs before `update_task(in_review)` and the result summarizes its receipt (depth, findings, corrections); if RDD is off, no review is started. ratifact neither enables nor blocks RDD. Prefix: `gentle-ai` (no longer `sdd-`).
+- **gentle-ai** (project) — revised by T-014. `execute`: a ratifact task is gentle-ai's **delegated-direct** route — never SDD, no SDD artifacts; whether to delegate is set by ratifact's delegation policy (T-015), not by gentle-ai thresholds — the old "4+ files" / "2+ non-trivial files" criterion and "otherwise implement directly" were removed; the ratifact task is the **ODD** feature document, so no other ODD document is created. `verify`: verification in a clean worker; if **RDD** is on, the review of the finished change runs before `update_task(in_review)` and the result summarizes its receipt (depth, findings, corrections); if RDD is off, no review is started. ratifact neither enables nor blocks RDD. Prefix: `gentle-ai` (no longer `sdd-`).
 - **engram** (user) — `cerrar`: technical learnings may go to engram; decisions only through ratifact; on conflict the agreed decision wins (moves today's text in app.py, plantillas.py, SKILL.md).
 
-## Injection points (ADR-025)
+## Injection points
 | When | What the agent receives | Cost |
 |---|---|---|
 | `obtener_contexto` (planning) | One line "Integraciones: codegraph (detectada), gentle-ai (detectada) · engram (si está disponible)" + one `planificar` line per integration | ~50 tokens/integration; startup stays < 2,000 |
@@ -45,17 +45,17 @@ Guidance is never written into the task file (stale on reruns). Disabled integra
 ## Configuration
 `projects.json` per project: `"integraciones": {"codegraph": "off"}` (absent = auto). Set through `actualizar_proyecto(nombre, integraciones="codegraph=off,gentle-ai=auto")` — **new parameter**, must ship before the English contract freeze. Unknown integration names are rejected with the list of known ones.
 
-## Model routing (T-014, ADR-033 §2, ADR-035)
+## Model routing (T-014)
 Independent of any integration. The user sets a model per delegated role — `explore`, `write`, `verify`:
 - **Global:** `settings.json` next to the active `projects.json` (`CONFIG.parent`), `{"models": {"explore": "haiku", "write": "sonnet", "verify": "sonnet"}}`. Created by hand; read on every call. `projects.json` gets no new top-level keys (every top-level key there is a project).
 - **Per project:** `"models"` in the project's entry, set with `update_project(name, models="explore=haiku,write=sonnet")`; `inherit` removes a role's exception. Merged role by role: project wins, missing roles inherit the global value.
 - **Delivery:** `update_task(..., "in_progress")` appends a "Model routing" block when at least one role is set (with or without integrations): each role, its model and its origin (global/project). It is the user's explicit request to set that model when delegating the role — which is what gentle-ai requires before setting `model` on a generic delegation. A client that cannot choose a sub-agent's model ignores it; roles without a model inherit the session's model. No configuration → the response is byte-for-byte unchanged.
 - **Errors:** an invalid `settings.json` (bad JSON, unknown roles, empty values) is ignored with a warning in that block and never breaks a tool; `ratifact doctor` reports it without modifying it and shows each project's effective models.
-- **Reporting:** superseded by ADR-036 — workers and models go in the result's own `Workers:` line (see Delegation below); `Integrations used:` lists integrations only. One line summarizes the RDD receipt if a review ran.
+- **Reporting:** superseded by the delegation policy below — workers and models go in the result's own `Workers:` line (see Delegation below); `Integrations used:` lists integrations only. One line summarizes the RDD receipt if a review ran.
 - The Model routing block is the same under every delegation policy.
 
-## Delegation (T-015, ADR-036)
-Delegation policy (ADR-036): ratifact, not the executing agent, decides whether a task is delegated.
+## Delegation (T-015)
+Delegation policy: ratifact, not the executing agent, decides whether a task is delegated.
 `"delegation": "required" | "suggested" | "off"` goes in `settings.json` next to `"models"` (global; default
 `required`); a project exception is set with `update_project("my-app", delegation="off")` (`inherit` removes it), and a
 task exception with `create_task(..., delegation="off")` or `amend_task(..., delegation="required")` while planning
@@ -72,28 +72,25 @@ task that touches security, is cross-cutting, or depends on diagnosing a cause t
   names): `Workers: explore/haiku×1, write/sonnet×2, verify/sonnet×1` (plus `escalated: write`), or
   `Workers: none — reason: <why>`. With `required`, `update_task(..., "in_review")` without a valid `Workers:` line
   still changes the status but answers with a warning.
-- Extended format (ADR-041, corrects ADR-036 §4–§5): `Workers: <role>/<model>×<n>, …[, rework: <role>×<n>, …][, escalated: <role>][ — note: <free text>]`.
-  `<role>/<model>×<n>` counts initial briefs only; `rework: <role>×<n>` counts re-sends of that role caused by
-  a defect detected by the verifier or by the orchestrator's diff review (the role must appear among the workers,
-  n ≥ 1); everything after ` — ` is a note the parser ignores. No parentheses: rework goes in `rework:`, comments in `— note:`. Example:
-  `Workers: explore/haiku×1, write/sonnet×1, verify/sonnet×1, rework: write×1 — note: resumed once for the verify fix`.
-- ADR-042 (corrects ADR-041 §1): rework counts re-sends caused by a defect found by the verifier or by the
-  orchestrator's diff review, e.g. `Workers: write/sonnet×1, rework: write×1 — note: diff review found a missing test`.
-  Initial briefs never count as rework, even with several workers of the same role in parallel: two parallel writers
-  are `Workers: write/sonnet×2`. The canonical separator stays ` — `, but ` - note:` / ` -- note:` and
-  `none - reason:` / `none -- reason:` are accepted (`Workers: write/sonnet×1 - note: x`); an ASCII hyphen anywhere
-  else (`Workers: write/sonnet×1 - resumed once`) is still invalid.
-  ADR-036 lines stay valid.
+- Extended format: `Workers: <role>/<model>×<n>, …[, rework: <role>×<n>, …][, escalated: <role>][ — note: <free text>]`.
+  `<role>/<model>×<n>` counts initial briefs only, even with several workers of the same role in parallel (two parallel
+  writers are `Workers: write/sonnet×2`); `rework: <role>×<n>` counts re-sends of that role caused by a defect found by
+  the verifier or by the orchestrator's diff review (the role must appear among the workers, n ≥ 1). A note starts at
+  ` — note:` (canonical) or at ` - note:` / ` -- note:`, and `none - reason:` / `none -- reason:` are accepted
+  (`Workers: write/sonnet×1 - note: x`); an ASCII hyphen anywhere else (`Workers: write/sonnet×1 - resumed once`)
+  separates nothing and is an invalid token. The parser ignores the note's text. No parentheses: rework goes in `rework:`, comments in `— note:`. Example:
+  `Workers: explore/haiku×1, write/sonnet×1, verify/sonnet×1, rework: write×1 — note: diff review found a missing test`.
+  Lines in the earlier format (without `rework:` or a note) stay valid.
 - Fixing a line without duplicating: if the warning says the line is invalid it proposes a corrected one when it can
   derive it; sending only that line with `update_task(..., "in_review")` replaces the `Workers:` line of the latest
   result block (or appends it there) instead of creating a new block.
 - Audit: `in_progress` records `routing: explore=<m>,write=<m>,verify=<m> · delegation=<policy> · build=<build> ·
   at=<ISO 8601 time, to the minute>` in the task's frontmatter (`session` for a role without a model; overwritten on
-  re-runs; `build=` and `at=` since T-016, ADR-037 — older tasks keep the shorter form and are still read). `ratifact
+  re-runs; `build=` and `at=` since T-016 — older tasks keep the shorter form and are still read). `ratifact
   report` takes the period from `at=` when present (`updated` otherwise). `ratifact report` measures compliance
   per project (required tasks with real workers, escalations) and compares delegated and non-delegated tasks in
   reviews and in_progress → in_review duration; tasks without `routing:` are counted apart.
-  Since ADR-041 routing ends with `· client=<name>/<version>`, taken from the MCP `clientInfo` of the initialize
+  Routing also ends with `· client=<name>/<version>`, taken from the MCP `clientInfo` of the initialize
   handshake (sanitized: no spaces, no `·`, no newlines, max 64 chars; `client=unknown` if unavailable), and every new
   `uso.jsonl` row has a `client` field. Values are recorded as received, without normalization (P-025). `ratifact
   report` also measures, among delegated tasks (last valid `Workers:` line of each), how many had rework, the total

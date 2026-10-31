@@ -36,7 +36,7 @@ def test_actualizar_ruta_rechaza_memoria_adentro_adr010(srv, entorno):
     antes = ruta_config.read_text()
 
     salida = srv.update_project(name="interno2", path=str(entorno["base"]))   # contendría la memoria
-    assert salida.startswith("ERROR:") and "ADR-010" in salida
+    assert salida.startswith("ERROR:") and "inside the code repository" in salida and "published with the code" in salida
     assert "choose another path" in salida and "not supported here" in salida
     assert "omit `memory`" not in salida
     assert ruta_config.read_text() == antes

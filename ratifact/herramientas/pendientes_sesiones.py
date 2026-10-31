@@ -13,7 +13,7 @@ from ratifact.vocabulario import DECISIONES, PENDIENTES, SESIONES
 
 @herramienta
 def add_pending(project: str, topic: str, context: str, owner: str = "") -> str:
-    """Records an open question or unresolved topic. Idempotent (ADR-019): if a pending item with this topic
+    """Records an open question or unresolved topic. Idempotent: if a pending item with this topic
     (ignoring case and spaces) was created in the last minutes AND is STILL 'open', nothing new is created and the
     existing id is returned. If that item was already closed, a human already intervened, so a new one is recorded."""
     proyecto, tema, contexto, dueno = project, topic, context, owner

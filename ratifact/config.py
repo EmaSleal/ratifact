@@ -153,7 +153,8 @@ def _mem(proyecto: str) -> Path:
            else _mem_por_defecto(proyecto))
     raiz = _raiz(proyecto, verificar_existe=False)
     if mem == raiz or raiz in mem.parents:
-        raise ErrorMemoria(f"The memory of '{proyecto}' is inside the code repository ({mem}); ADR-010 forbids it. "
+        raise ErrorMemoria(f"The memory of '{proyecto}' is inside the code repository ({mem}); "
+                           f"it would be committed and published with the code. "
                            f"Move it to {BASE_PROYECTOS / '.ratifact' / proyecto} and update projects.json.")
     return mem
 

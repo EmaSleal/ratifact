@@ -34,7 +34,7 @@ def test_memoria_dentro_del_repo_del_codigo_se_rechaza(srv, entorno):
     """ADR-010: un solo modo; la memoria nunca vive dentro del repositorio del código."""
     repo = crear_repo(entorno["base"] / "interno")
     salida = srv.register_project(name="interno", path=str(repo), memory=str(repo / ".project"))
-    assert "ADR-010" in salida and "interno" not in srv.list_projects()
+    assert "inside the code repository" in salida and "published with the code" in salida and "interno" not in srv.list_projects()
 
 
 def test_memoria_dentro_del_repo_mensaje_de_alta_distinto_de_actualizar(srv, entorno):
@@ -43,7 +43,7 @@ def test_memoria_dentro_del_repo_mensaje_de_alta_distinto_de_actualizar(srv, ent
     tests/test_actualizar_proyecto.py::test_actualizar_ruta_rechaza_memoria_adentro_adr010 para su mensaje)."""
     repo = crear_repo(entorno["base"] / "interno3")
     salida = srv.register_project(name="interno3", path=str(repo), memory=str(repo / ".project"))
-    assert "ADR-010" in salida
+    assert "inside the code repository" in salida and "published with the code" in salida
     assert "omit `memory`" in salida
     assert "not supported here" not in salida
 

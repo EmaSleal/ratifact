@@ -1,6 +1,6 @@
 # v1 in English — product name and naming glossary
 
-Status: draft for review · Applies: ADR-014 (structure in English), ADR-016 (stored content in English), ADR-015 (PyPI + GitHub)
+Status: draft for review · Applies: structure in English, stored content in English, PyPI + GitHub
 This document is the specification for the schema v1 → v2 migration and for renaming the server.
 
 ## 1. Product name
@@ -14,14 +14,14 @@ Requirements: free on PyPI (it becomes `uvx <name>`), no collision with an exist
 | **charterkeep** | keeps the project charter: decisions, open items, tasks | free | none found |
 
 Rejected (taken or colliding with existing MCP servers): accord-mcp, canon-mcp, project-lore, logbook-mcp, steward, project-memory, memoria-mcp, keystone-mcp, ledger names.
-Recommendation: **ratifact** — short, coined (searchable), and it names the core governance rule (ADR-011).
+Recommendation: **ratifact** — short, coined (searchable), and it names the core governance rule.
 
 Derived names (with `<name>` = chosen product name): PyPI package and CLI `<name>`; MCP server id `<name>`; env vars `<NAME>_CONFIG`, `<NAME>_LOG`, `<NAME>_BASE`; config dir `~/.config/<name>/` (projects.json); default memory root `<base>/.<name>/<project>` (today `<base>/.memorias/<project>`).
 
 ## 2. What does NOT change
 
 - **IDs**: `ADR-NNN`, `P-NNN`, `T-NNN` keep their prefixes and numbers. Existing content references them (e.g. "depends on P-003"); renaming IDs would break those references.
-- **Body text** of existing records (ADR-016: history untouched). Only frontmatter keys, state values and section headings are migrated (deterministic mapping, no model involved).
+- **Body text** of existing records (history untouched). Only frontmatter keys, state values and section headings are migrated (deterministic mapping, no model involved).
 - `.project/` virtual prefix, `INDEX.md`, `docs/`, git-per-memory, commit-per-write.
 - `user_quote` content: always verbatim, in the user's language.
 
@@ -35,7 +35,7 @@ Derived names (with `<name>` = chosen product name): PyPI package and CLI `<name
 | inicializar_memoria | init_memory | |
 | instrucciones_proyecto | project_instructions | |
 | configurar_pruebas | set_test_command | |
-| registrar_decision | propose_decision | name states that every decision is born *proposed* (ADR-011) |
+| registrar_decision | propose_decision | name states that every decision is born *proposed* |
 | confirmar_decision | accept_decision | |
 | confirmar_decisiones_lote | accept_decisions | batch, all-or-nothing |
 | revisar_propuestas | review_proposals | |
@@ -84,7 +84,7 @@ Section headings (migrated in existing records too; body untouched):
 
 ## 7. Configuration (projects.json)
 
-ruta → path · memoria → memory · escritura → writable · pruebas → tests · new: content_language (default `en`, ADR-016)
+ruta → path · memoria → memory · escritura → writable · pruebas → tests · new: content_language (default `en`)
 The migration rewrites projects.json keys in place (with a backup) and moves it to `~/.config/<name>/` only if the user agrees.
 
 ## 8. Migration v1 → v2 (per memory, automatic, one commit)
@@ -97,20 +97,20 @@ Outside the memory (user action, assisted by `project_instructions`): paste new 
 
 ## 9. Timing
 
-Implement after ADR-009 criterion 2 closes (~2026-10-17) so the stability window is not invalidated by the rename. Until then this document is the spec; review it and settle section 1 and the open choices below.
+Implement after the 14-day telemetry criterion (at least 300 calls, error rate below 1%) closes (~2026-10-17) so the stability window is not invalidated by the rename. Until then this document is the spec; review it and settle section 1 and the open choices below.
 
 ## Open choices
 - Product name (section 1).
 - `/run-task` vs another command name.
 - Default memory root `.<name>/` vs keeping `.memorias/` for existing users.
 
-## Resolved (2026-10-06, ADR-017)
+## Resolved (2026-10-06)
 - Product name: **ratifact** → package/CLI `ratifact`, env vars `RATIFACT_CONFIG` / `RATIFACT_LOG` / `RATIFACT_BASE`, config dir `~/.config/ratifact/`.
 - Command: **`/run-task`** (`$run-task` in Codex).
 - Default memory root: **`<base>/.ratifact/<project>`**; the v1 → v2 migration moves existing memories from `.memorias/` and updates projects.json.
-Status of this document: approved spec; implementation after ADR-009 criterion 2 (~2026-10-17).
+Status of this document: approved spec; implementation after the 14-day telemetry criterion (~2026-10-17).
 
-## Addendum (2026-10-17, ADR-021) — new tool in v1
+## Addendum (2026-10-17) — new tool in v1
 - `amend_task(project, id, additional_criteria="", notes="")`: appends acceptance criteria and/or notes to a task in `todo` or `changes_requested`; rejects any other status. Written as an "Amendment N" block (date) in the task, one commit per amendment; original criteria untouched. No Spanish predecessor: it is born in English with the rename. Tool count in v1: 27.
 - Task section headings add: Amendment N → (new), with sub-labels "Additional criteria" and "Notes".
 
@@ -125,16 +125,16 @@ Status of this document: approved spec; implementation after ADR-009 criterion 2
 - Startup output: "# Pendientes abiertos (N)" → "# Open items (N)"; "Detalle: leer_documento(...)" → "Detail: read_document(...)"; "Integraciones:" → "Integrations:".
 - Catalog record types: decision / pendiente / tarea → decision / pending / task.
 
-### Execution plan (ADR-028)
+### Execution plan
 1. **Data migration (schema v2).** Inside each memory, automatic on first access under the lock: folders, frontmatter keys, state values, section headings, views (DECISIONS.md, OPEN.md), schema.json v2 with `content_language` ("es" for migrated memories, "en" for new ones). Safety: memory git status must be clean, tag `pre-v2` before, one commit `memory: migrate schema v1 → v2`. Tool names/parameters stay Spanish; state parameters accept Spanish and English; outputs use English states.
 2. **Contract rename.** Tools, parameters, descriptions and responses in English (27 tools with amend_task), `/run-task`, RATIFACT_* env vars with MEMORIA_PROYECTOS_* fallback + deprecation notice until 1.1, P-016 follow-ups.
 3. **Packaging.** PyPI via uvx and installer.
 
-### Proposed (ADR-029, pending the user's confirmation)
+### Proposed (pending the user's confirmation)
 - The `.memorias/` → `.ratifact/` root move and the projects.json key rename (§7) leave the automatic migration and become an explicit installer/upgrade step run with all clients closed (projects.json backup; custom memory paths never move). From step 1 on, the code reads both Spanish and English projects.json keys.
 - `content_language` lives in each memory's schema.json instead of projects.json (§7).
 
-## Addendum (2026-10-20, ADR-031) — read_task in v1
+## Addendum (2026-10-20) — read_task in v1
 
 - `read_task(project, id)`: working brief of a task — frontmatter, full spec (Goal, Acceptance criteria, Resolves, Applicable decisions, Files involved, Out of scope, Notes, How to verify), every Amendment block, the status-relevant block in full (changes_requested → latest Review; in_review or failed → latest Result block) and a one-line index (heading · line range · size) of every other Result/Review block, readable with `read_document` and a range.
 - `/run-task` step 1 calls `read_task`; planner-side reviews use it too.

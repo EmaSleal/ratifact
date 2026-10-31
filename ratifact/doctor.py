@@ -87,7 +87,8 @@ def _vivos(paquete: Path | None, lista: list[procesos.ProcesoVivo] | None, error
         envoltorio = f" (wrapper {p.envoltorio.pid}, {p.envoltorio.padre})" if p.envoltorio else ""
         lineas.append(f"  PID {p.pid} · started {p.inicio:%Y-%m-%d %H:%M:%S} · parent {p.padre}{envoltorio}{marca}")
     if sin_registro:
-        lineas.append("Unregistered processes (possible server from before ADR-038, or wrapper); not counted as servers:")
+        lineas.append("Unregistered processes (possible server from before PID records, or wrapper); "
+                      "not counted as servers:")
         for p in sin_registro:
             lineas.append(f"  PID {p.pid} · started {p.inicio:%Y-%m-%d %H:%M:%S} · parent {p.padre}")
     return lineas
@@ -107,10 +108,10 @@ def _es_wsl() -> bool:
 def _plataforma() -> list[str]:
     """ADR-012: Windows is supported only through WSL. Informational only: it never adds a pending action."""
     if sys.platform == "win32":
-        return ["⚠ Native Windows is not a supported platform (ADR-012): install ratifact inside WSL2, with the "
+        return ["⚠ Native Windows is not a supported platform: install ratifact inside WSL2, with the "
                 "repositories on the WSL filesystem (not under /mnt/c). The rest of the diagnosis follows."]
     if _es_wsl():
-        return ["Running inside WSL (ADR-012): supported; keep the repositories on the WSL filesystem"]
+        return ["Running inside WSL: supported; keep the repositories on the WSL filesystem"]
     return []
 
 
@@ -159,7 +160,7 @@ def _proyectos(plan, acciones: list[str]) -> list[str]:
         lineas += [f"  {p.nombre}", f"    code: {codigo}"]
         if p.codigo and _es_wsl() and p.codigo.as_posix().startswith("/mnt/"):
             lineas.append("    ⚠ the repository is under /mnt/ (Windows filesystem seen from WSL): slow and with git "
-                          "differences (ADR-012); move it to the WSL filesystem")
+                          "differences; move it to the WSL filesystem")
         lineas += [
                    f"    memory: {p.mem} · {esquema} · {p.ubicacion} · git: {p.git}",
                    f"    integrations: {', '.join(p.integraciones) or 'none detected'}",
@@ -179,7 +180,8 @@ def _proyectos(plan, acciones: list[str]) -> list[str]:
         if p.existe and not p.limpio:
             acciones.append(f"{p.nombre}: memory {p.mem}: {p.git}")
         if p.codigo and (p.mem == p.codigo or p.codigo in p.mem.parents):
-            acciones.append(f"{p.nombre}: the memory is inside the code repository (ADR-010)")
+            acciones.append(f"{p.nombre}: the memory is inside the code repository "
+                            "(it would be committed and published with the code)")
     return lineas
 
 

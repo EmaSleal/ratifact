@@ -199,7 +199,7 @@ def _listar(proyecto: str, carpeta: str) -> str:
 @herramienta
 def read_document(project: str, path: str, from_line: int = 1, to_line: int = 0) -> str:
     """Reads a project text file, optionally a line range (1-based, inclusive).
-    Also accepts a memory record id ("T-24", "tasks/T-024.md", "ADR-020-slug.md"): if the path does not exist, it
+    Also accepts a memory record id ("T-24", "tasks/T-024.md", "ADR-NNN-slug.md"): if the path does not exist, it
     reads the real record and prepends the line "(→ .project/<folder>/<file>)". A path with a v1 folder
     (.project/tareas/…, .project/acuerdos.md…) is translated and flagged the same way.
     For a task, read_task returns a working brief (spec, amendments, the latest relevant block) instead."""

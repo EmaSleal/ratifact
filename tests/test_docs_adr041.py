@@ -24,6 +24,6 @@ def test_skill_y_run_task_identicos_y_documentan_el_formato():
 def test_docs_mencionan_formato_cliente_y_tasa_de_retrabajo():
     for doc in ("README.md", "LEEME.md", "docs/optional-integrations.md"):
         texto = _leer(RAIZ / doc)
-        for clave in ("rework:", "note:", "client=", "ADR-041"):
+        for clave in ("rework:", "note:", "· client=<"):
             assert clave in texto, (doc, clave)
         assert re.search(r"rework rate|tasa de retrabajo", texto), doc

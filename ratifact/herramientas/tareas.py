@@ -92,11 +92,11 @@ def create_task(project: str, title: str, goal: str, acceptance_criteria: str, d
     `resolves`: pending items the task resolves, comma-separated, each optionally with "(partial)" (e.g.
     "P-036, P-037 (partial)"); they must exist and be open. Stored in the task ("Resolves" section); when the task is
     merged, update_task reminds which ones are still open. It never closes pending items.
-    `delegation`: the task's exception to the delegation policy, decided while planning (ADR-036): "required" or
+    `delegation`: the task's exception to the delegation policy, decided while planning: "required" or
     "off" (empty = inherit from the project/global policy). Use "off" when the task touches security, is
     cross-cutting, or depends on diagnosing a cause the spec does not know yet. Stored in the task's frontmatter.
     The response adds the line of detected integrations (not written into the task).
-    Idempotent (ADR-019): if a task with this title (ignoring case and spaces) was created in the last minutes AND is
+    Idempotent: if a task with this title (ignoring case and spaces) was created in the last minutes AND is
     STILL 'todo', nothing new is created and the existing id is returned (with the /run-task command to repeat to
     the user). If that task already changed status (e.g. in_progress: it is running), a human or the coding agent
     already intervened, so a new task is recorded."""
@@ -178,16 +178,16 @@ def update_task(project: str, id: str, status: str, result: str = "", commit: st
     With 'in_progress', the response brings the guidance of active integrations (execute, verify, close), computed at
     that moment; it is conditional: follow it only if you have those tools. It is not written into the task.
     It also brings a "Model routing" block when the user configured models per role (explore, write, verify), and
-    the "Delegation" block of the effective policy (task > project > global, default required; ADR-036): with
+    the "Delegation" block of the effective policy (task > project > global, default required): with
     required it is an instruction, with suggested a suggestion, with off there is none. The effective models and
     policy are recorded in the task's frontmatter as `routing:` (overwritten on re-runs), together with the server
-    build and the time of the transition (ADR-037).
+    build and the time of the transition.
     If this server process is older than the installation on disk, 'in_progress' is refused without changing
     anything (restart the client and repeat it); every other status works and carries a warning.
     With 'in_review', if the policy was required and `result` has no valid `Workers:` line, the response carries a
     warning with a proposed corrected line when it can derive one (the status changes anyway). If the task is already
     in review and `result` is only a valid `Workers:` line, it replaces that line in the latest result block instead of
-    adding a block (ADR-041). The routing also records the MCP client (`client=`).
+    adding a block. The routing also records the MCP client (`client=`).
     With 'merged', if the task declares `resolves`, the response reminds which pending items are still open (it
     never closes or modifies any)."""
     proyecto, estado, resultado = project, status, result

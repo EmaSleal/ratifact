@@ -131,9 +131,11 @@ def _validar_ruta_proyecto(ruta: str, mem: Path, alta: bool = False) -> Path:
         raise ErrorMemoria(f"Folder {r} does not exist.")
     if mem == r or r in mem.parents:
         if alta:
-            raise ErrorMemoria("The memory cannot live inside the code repository (ADR-010); "
+            raise ErrorMemoria("The memory cannot live inside the code repository "
+                               "(it would be committed and published with the code); "
                                "omit `memory` to use .ratifact/<name>.")
-        raise ErrorMemoria("The memory cannot live inside the code repository (ADR-010); "
+        raise ErrorMemoria("The memory cannot live inside the code repository "
+                           "(it would be committed and published with the code); "
                            "choose another path (moving an existing project's memory is not supported here).")
     return r
 
@@ -191,9 +193,9 @@ def update_project(name: str, path: str = "", tests: str = "", repo: str = "", r
     `path`, `tests`, `repo`, `redetect=True`, `integrations`, `models` or `delegation`; with none, it returns an error and leaves the file
     untouched.
     `path`: new code folder, when it moved. Same checks as register_project (inside the projects folder, an
-    existing folder, and not containing the project's memory — ADR-010). If the project is multi-repo and the stored
-    `tests` keeps keys that are no longer repos under the new path, the change is applied anyway but the response
-    lists them and suggests `redetect=True`.
+    existing folder, and not containing the project's memory, which must live outside the code repository).
+    If the project is multi-repo and the stored `tests` keeps keys that are no longer repos under the new path, the
+    change is applied anyway but the response lists them and suggests `redetect=True`.
     `tests`: command the coding agent uses to verify tasks (/run-task). In multi-repo projects, `repo` says which
     repo it applies to.
     `redetect`: True to detect the command again from the project files instead of giving it with `tests` (both at
@@ -204,8 +206,9 @@ def update_project(name: str, path: str = "", tests: str = "", repo: str = "", r
     `models`: the project's exceptions to the global models per role (settings.json next to projects.json), e.g.
     "explore=haiku,write=sonnet" (roles explore, write, verify; the value is the client's model name). "inherit"
     removes the project's exception for that role, which then uses the global one (or the session's model).
-    `delegation`: the project's exception to the delegation policy (ADR-036): required | suggested | off; "inherit"
-    removes it (the global policy in settings.json applies, default required). A task can still override it."""
+    `delegation`: the project's exception to the delegation policy (decided while planning; task > project >
+    global): required | suggested | off; "inherit" removes it (the global policy in settings.json applies, default
+    required). A task can still override it."""
     nombre, ruta, pruebas, repositorio, redetectar, integraciones = name, path, tests, repo, redetect, integrations
     modelos = models
 

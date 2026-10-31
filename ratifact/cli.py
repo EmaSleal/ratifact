@@ -33,7 +33,7 @@ def _parser() -> argparse.ArgumentParser:
     ins.add_argument("--client", choices=list(NOMBRES), help="configure only this client")
     argumentos(sub.add_parser("report", help="usage summary from the telemetry log"))
     sub.add_parser("doctor", help="read-only diagnosis of the installation; exit 1 if there are pending actions")
-    up = sub.add_parser("upgrade", help="move memories to .ratifact/ and projects.json to English keys (ADR-029); "
+    up = sub.add_parser("upgrade", help="move memories to .ratifact/ and projects.json to English keys; "
                                         "shows the plan unless --apply")
     modo = up.add_mutually_exclusive_group()
     modo.add_argument("--apply", action="store_true", help="execute the plan (close every client first)")

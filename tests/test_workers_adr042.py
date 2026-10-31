@@ -63,15 +63,19 @@ DOCS = [RAIZ / "README.md", RAIZ / "LEEME.md", RAIZ / "docs/optional-integration
 @pytest.mark.parametrize("ruta", SKILLS + DOCS, ids=lambda p: p.name)
 def test_docs_definicion_ampliada_y_separador(ruta):
     t = ruta.read_text(encoding="utf-8")
-    assert "ADR-042" in t or ruta in SKILLS
+    assert " — note:" in t
     assert "diff review" in t or "revisión del diff" in t
     assert "write/sonnet×2" in t
     assert "- note:" in t and "- reason:" in t
 
 
 @pytest.mark.parametrize("ruta", DOCS, ids=lambda p: p.name)
-def test_docs_citan_adr042(ruta):
-    assert "ADR-042" in ruta.read_text(encoding="utf-8")
+def test_docs_explican_donde_empieza_la_nota(ruta):
+    """Un solo párrafo: la nota empieza en ` — note:` / ` - note:` / ` -- note:` y otro guion ASCII no separa nada."""
+    t = ruta.read_text(encoding="utf-8")
+    assert "` - note:` / ` -- note:`" in t
+    assert re.search(r"separates nothing|no separa nada", t)
+    assert "rework: write×1 — note: diff review found a missing test" in t
 
 
 def test_skill_ejemplo_de_rework_por_diff():

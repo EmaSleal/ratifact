@@ -24,8 +24,8 @@ ejecutable `~/.local/bin/ratifact`; después de cada integración en main: `uv t
 | `ratifact serve` | Servidor MCP por stdio (lo que lanzan los clientes). `servidor.py` es un envoltorio de esto hasta 1.1. |
 | `ratifact install [--apply] [--client NOMBRE]` | Configura los clientes MCP que encuentra (Claude Desktop, Claude Code, Pi, Codex) y enlaza `/run-task` (sección 1). Sin `--apply` solo muestra el plan. |
 | `ratifact report [--days N] [--project P] [--log RUTA]` | Resumen del uso (sección 7). `analizar_uso.py` es un envoltorio hasta 1.1 (acepta `--dias`/`--proyecto`). |
-| `ratifact doctor` | Solo lectura: versión y de dónde corre (instalación fija o copia de trabajo, con aviso — P-017), configuración usada y grafía de sus claves, por proyecto código, memoria (ruta, esquema, `.memorias/` viejo o `.ratifact/` nuevo, estado git) e integraciones detectadas, log, variables `MEMORIA_PROYECTOS_*` y acciones pendientes, el estado de cada cliente (configurado con ratifact / configuración vieja / sin configurar / no encontrado), el build, si la fuente local es más nueva que la instalación y los procesos `ratifact serve` vivos, marcando los anteriores a la instalación (ADR-037). Sale con 0 si no hay nada pendiente, 1 si hay acciones. Si no existe la configuración por defecto pero hay servidores corriendo con `RATIFACT_CONFIG`/`MEMORIA_PROYECTOS_CONFIG` o un `projects.json` junto al repositorio de origen, sugiere el comando exacto (`RATIFACT_CONFIG=<ruta> ratifact upgrade`). |
-| `ratifact upgrade` | Paso explícito de ADR-029 con todos los clientes cerrados. Sin opciones solo muestra el plan; `--apply` lo ejecuta: migra a v2 las memorias v1, mueve `<base>/.memorias/<p>` a `<base>/.ratifact/<p>` (las rutas propias nunca se mueven), escribe `~/.config/ratifact/projects.json` con claves en inglés y renombra el viejo a `projects.json.bak-v1`, regenera las vistas y copia el log viejo. Aborta si hay un servidor corriendo con esa configuración, un `.lock` tomado o una memoria con cambios sin commit (cabecera "Aborted — nothing was changed:", el plan y los motivos; código de salida 1); idempotente; si un paso falla, lo revierte. |
+| `ratifact doctor` | Solo lectura: versión y de dónde corre (instalación fija o copia de trabajo, con aviso — P-017), configuración usada y grafía de sus claves, por proyecto código, memoria (ruta, esquema, `.memorias/` viejo o `.ratifact/` nuevo, estado git) e integraciones detectadas, log, variables `MEMORIA_PROYECTOS_*` y acciones pendientes, el estado de cada cliente (configurado con ratifact / configuración vieja / sin configurar / no encontrado), el build, si la fuente local es más nueva que la instalación y los procesos `ratifact serve` vivos, marcando los anteriores a la instalación. Sale con 0 si no hay nada pendiente, 1 si hay acciones. Si no existe la configuración por defecto pero hay servidores corriendo con `RATIFACT_CONFIG`/`MEMORIA_PROYECTOS_CONFIG` o un `projects.json` junto al repositorio de origen, sugiere el comando exacto (`RATIFACT_CONFIG=<ruta> ratifact upgrade`). |
+| `ratifact upgrade` | Paso explícito, con todos los clientes cerrados. Sin opciones solo muestra el plan; `--apply` lo ejecuta: migra a v2 las memorias v1, mueve `<base>/.memorias/<p>` a `<base>/.ratifact/<p>` (las rutas propias nunca se mueven), escribe `~/.config/ratifact/projects.json` con claves en inglés y renombra el viejo a `projects.json.bak-v1`, regenera las vistas y copia el log viejo. Aborta si hay un servidor corriendo con esa configuración, un `.lock` tomado o una memoria con cambios sin commit (cabecera "Aborted — nothing was changed:", el plan y los motivos; código de salida 1); idempotente; si un paso falla, lo revierte. |
 | `ratifact --version` | Versión instalada. |
 
 ## 1. Clientes MCP: `ratifact install`
@@ -53,7 +53,7 @@ Además: reemplaza la entrada vieja `memoria-proyectos` (nunca quedan las dos), 
 aprobación por herramienta de Codex a la clave nueva, reescribe el bloque generado de `CLAUDE.md`/`AGENTS.md` de los
 proyectos registrados (solo ese texto exacto, con respaldo fuera del repositorio), enlaza `/run-task` (sección 12), crea
 `~/.config/ratifact/projects.json` vacío si no hay ninguna configuración, informa las integraciones detectadas por
-proyecto y cómo apagarlas (sin preguntar, ADR-025) y lista lo que no puede hacer solo (las aprobaciones de Claude
+proyecto y cómo apagarlas (las integraciones se detectan en disco y, por defecto, quedan en automático: nunca se pregunta) y lista lo que no puede hacer solo (las aprobaciones de Claude
 Desktop, sección 10). Reinicie los clientes después.
 
 ## Nota de versión
@@ -87,7 +87,7 @@ editarlo a mano; reemplaza a la antigua `configurar_pruebas` (eliminada). Indiqu
 (sin ninguno, la herramienta falla y no toca el archivo):
 - `path`: nueva carpeta del código, cuando el proyecto se movió. Mismas validaciones que `register_project`
   (debe quedar dentro de la carpeta de proyectos, ser una carpeta existente, y no contener la memoria del
-  proyecto — ADR-010; el mensaje de rechazo es distinto al del alta, porque aquí mover la memoria de un
+  proyecto, porque se commitearía y publicaría con el código; el mensaje de rechazo es distinto al del alta, porque aquí mover la memoria de un
   proyecto existente no está soportado). La respuesta indica la ruta vieja y la nueva. Si el proyecto es de
   varios repositorios y el comando de pruebas guardado queda con claves que ya no son repos bajo la ruta nueva, el
   cambio se aplica igual (no bloquea) pero la respuesta avisa cuáles quedaron huérfanas ("orphan tests") y sugiere
@@ -129,7 +129,7 @@ cada proyecto (o `models: session default`).
 No cubre renombrar un proyecto ni mover la ubicación de su memoria (`.ratifact/<nombre>` o la clave `"memoria"`):
 para eso edite `projects.json` a mano y mueva la carpeta con `git mv`/`mv` según corresponda.
 
-### Política de delegación (ADR-036)
+### Política de delegación
 
 Si una tarea se delega lo decide ratifact al planificar, no el agente que la ejecuta. `"delegation": "required" |
 "suggested" | "off"` va en `settings.json` junto a `"models"` (global; por defecto `required`). Excepción por proyecto:
@@ -150,28 +150,26 @@ transversal o depende de diagnosticar una causa que la especificación aún no c
   `Workers: explore/haiku×1, write/sonnet×2, verify/sonnet×1` (más `escalated: write` si corresponde) o
   `Workers: none — reason: <motivo>`. Con `required`, `update_task(..., "in_review")` sin una línea Workers válida
   cambia el estado igual pero responde con un aviso.
-- Formato ampliado (ADR-041, corrige ADR-036 §4–§5): `Workers: <rol>/<modelo>×<n>, …[, rework: <rol>×<n>, …][, escalated: <rol>][ — note: <texto libre>]`.
-  `<rol>/<modelo>×<n>` cuenta solo los encargos iniciales; `rework: <rol>×<n>` cuenta los reenvíos de ese rol causados por
-  un defecto detectado por el verificador o por la revisión del diff del orquestador (el rol debe figurar entre los trabajadores, n ≥ 1); todo lo que sigue a
-  ` — ` es una nota que el parser ignora. Sin paréntesis: el retrabajo va en `rework:`, los comentarios en `— note:`.
-  Ejemplo: `Workers: explore/haiku×1, write/sonnet×1, verify/sonnet×1, rework: write×1 — note: resumed once for the verify fix`.
-  Las líneas de ADR-036 siguen siendo válidas.
-- ADR-042 (corrige ADR-041 §1): `rework` cuenta los reenvíos causados por un defecto que encontró el verificador o la
-  revisión del diff del orquestador, p. ej. `Workers: write/sonnet×1, rework: write×1 — note: diff review found a missing test`.
-  Los encargos iniciales nunca cuentan como retrabajo, ni con varios trabajadores del mismo rol en paralelo: dos
-  escritores en paralelo son `Workers: write/sonnet×2`. El separador canónico sigue siendo ` — `, pero se aceptan
-  ` - note:` / ` -- note:` y `none - reason:` / `none -- reason:` (`Workers: write/sonnet×1 - note: x`); un guion ASCII
-  en cualquier otro lugar (`Workers: write/sonnet×1 - resumed once`) sigue siendo inválido.
+- Formato ampliado: `Workers: <rol>/<modelo>×<n>, …[, rework: <rol>×<n>, …][, escalated: <rol>][ — note: <texto libre>]`.
+  `<rol>/<modelo>×<n>` cuenta solo los encargos iniciales, incluso con varios trabajadores del mismo rol en paralelo (dos
+  escritores en paralelo son `Workers: write/sonnet×2`); `rework: <rol>×<n>` cuenta los reenvíos de ese rol causados por
+  un defecto que encontró el verificador o la revisión del diff del orquestador (el rol debe figurar entre los
+  trabajadores, n ≥ 1). La nota empieza en ` — note:` (canónico) o en ` - note:` / ` -- note:`, y se aceptan
+  `none - reason:` / `none -- reason:` (`Workers: write/sonnet×1 - note: x`); un guion ASCII en cualquier otro lugar
+  (`Workers: write/sonnet×1 - resumed once`) no separa nada y es un token inválido. El parser ignora el texto de la nota. Sin paréntesis: el retrabajo va en
+  `rework:`, los comentarios en `— note:`. Ejemplo:
+  `Workers: explore/haiku×1, write/sonnet×1, verify/sonnet×1, rework: write×1 — note: diff review found a missing test`.
+  Las líneas del formato anterior (sin `rework:` ni nota) siguen siendo válidas.
 - Corrección sin duplicar: si el aviso dice que la línea es inválida, propone una corregida cuando puede derivarla;
   enviar solo esa línea con `update_task(..., "in_review")` reemplaza la línea `Workers:` del último bloque de
   resultado (o la agrega ahí) en lugar de crear un bloque nuevo.
 - Auditoría: al pasar a in_progress se graba en el frontmatter `routing: explore=<m>,write=<m>,verify=<m> ·
   delegation=<política> · build=<build> · at=<hora ISO 8601, a minutos>` (`session` si el rol no tiene modelo; se
-  sobrescribe en cada reejecución; `build=` y `at=` desde T-016, ADR-037: las tareas anteriores conservan la forma corta
+  sobrescribe en cada reejecución; `build=` y `at=` desde T-016: las tareas anteriores conservan la forma corta
   y se siguen leyendo). `ratifact report` toma el período de `at=` cuando existe (si no, de `updated`). `ratifact report`
   mide el cumplimiento por proyecto (tareas required con trabajadores reales, escalamientos) y compara tareas
   delegadas y no delegadas en revisiones y en duración in_progress → in_review; las tareas sin `routing:` se cuentan
-  aparte. Desde ADR-041 el routing termina con `· client=<nombre>/<versión>`, tomado del `clientInfo` MCP de la
+  aparte. El routing también termina con `· client=<nombre>/<versión>`, tomado del `clientInfo` MCP de la
   inicialización (saneado: sin espacios, sin `·`, sin saltos de línea, máximo 64 caracteres; `client=unknown` si no
   hay dato) y cada registro nuevo de `uso.jsonl` lleva el campo `client`; se graba el valor recibido, sin normalizar
   (P-025). `ratifact report` mide además, entre las tareas delegadas (última línea `Workers:` válida de cada una),
@@ -179,7 +177,7 @@ transversal o depende de diagnosticar una causa que la especificación aún no c
   delegadas), y desglosa por cliente (`client=` del routing, `unknown` si falta) tareas, cumplimiento de la delegación
   y tasa de retrabajo. `ratifact doctor` muestra la política efectiva de cada proyecto (p. ej. `delegation=required (global)`).
 
-### Desfase de versiones (ADR-037)
+### Desfase de versiones
 Hay tres copias de ratifact: la fuente (este repositorio), la instalación (directorio de uv tool, al que enlazan las
 skills /run-task) y el servidor en ejecución (un `ratifact serve` por cliente, que conserva el código con el que
 arrancó). Se desfasan al integrar sin reinstalar o al reinstalar sin reiniciar un cliente. Procedimiento tras cada
@@ -198,14 +196,14 @@ cambio: integrar en main → `uv tool install --reinstall ~/Projects/.memoria-pr
 - **`ratifact doctor`** lista además los procesos `ratifact serve` vivos (PID, hora de inicio y proceso padre). Como la
   reinstalación reescribe todos los archivos aunque no cambien, un proceso anterior a la instalación se marca solo si
   su contenido difiere: cada servidor deja su build de arranque en `~/.local/state/ratifact/servers/<pid>.json`
-  (ADR-038; se borra al salir y los PID muertos se limpian al arrancar). Mismo contenido → "nada que hacer"; sin
+  (se borra al salir y los PID muertos se limpian al arrancar). Mismo contenido → "nada que hacer"; sin
   registro (servidor anterior a esto) → "el contenido puede ser idéntico" y `get_context` en ese cliente da la
   respuesta definitiva. doctor solo lee: no escribe, no envía señales ni termina procesos (Linux y macOS; en otros
   sistemas informa que el listado no está disponible).
   Solo cuenta como servidor el proceso con ese registro: el envoltorio con el que Claude Desktop en Linux lanza el
   MCP (su padre, que también muestra `ratifact serve` en la línea de comando, sin registro) se muestra dentro de la
   entrada de su servidor ("wrapper <pid>, <cliente>"), y cualquier otro proceso sin registro se lista aparte como
-  "Unregistered processes" y no cuenta. doctor también avisa si corre en Windows nativo (no soportado, ADR-012:
+  "Unregistered processes" y no cuenta. doctor también avisa si corre en Windows nativo (no soportado:
   instalar ratifact dentro de WSL2, con los repositorios en el sistema de archivos de WSL, no en `/mnt/c`), indica
   cuando corre dentro de WSL y advierte de un repositorio registrado bajo `/mnt/` (lento y con diferencias de git).
 - El autodiagnóstico del servidor funciona igual: una huella distinta se confirma una vez con el hash de contenido,
@@ -227,13 +225,13 @@ criterios verificables, ADR aplicables, archivos y fuera de alcance; el comando 
 ampliar una tarea que todavía no corrió; `list_tasks` y `read_task` para revisar; `request_changes` con findings y
 criterios adicionales para pedir correcciones; `merged`/`discarded` solo con confirmación del usuario.
 
-`amend_task(project, id, additional_criteria="", notes="")` (ADR-021): solo para tareas `todo` o `changes_requested`
+`amend_task(project, id, additional_criteria="", notes="")`: solo para tareas `todo` o `changes_requested`
 (otro estado → error que lo nombra). Agrega un bloque fechado "### Amendment N" (sub-etiquetas **Additional criteria** y
 **Notes**) en la sección "## Amendments" de la spec, antes de "How to verify"; los criterios originales no se tocan. Un
 commit por enmienda; al menos uno de los dos campos; una enmienda idéntica dentro de la ventana de idempotencia
-(ADR-019) no se escribe de nuevo.
+no se escribe de nuevo.
 
-`read_task(project, id)` (ADR-031): brief de trabajo de una tarea en lugar del archivo completo: frontmatter, spec
+`read_task(project, id)`: brief de trabajo de una tarea en lugar del archivo completo: frontmatter, spec
 completa (con las enmiendas), el bloque relevante según el estado (`changes_requested` → la última Review;
 `in_review`/`failed` → el último resultado; `in_progress` → la última Review si es el último bloque) y un índice de una
 línea (título · rango de líneas · tamaño) de los demás bloques Result/Review, legibles con `read_document` y ese rango.
@@ -244,7 +242,7 @@ tarea (con **Findings** y **Additional criteria**). `update_task` rechaza pasar 
 siempre `request_changes`. El parámetro `status` acepta también (hasta 1.1) los nombres en español de antes del esquema v2
 (`pendiente`, `en_curso`, `en_revision`, `fallida`, `integrada`, `descartada`); se guarda y se responde en inglés.
 
-Pendientes que resuelve una tarea (ADR-027): `create_task(..., resolves="P-036, P-037 (partial)")` — ids separados por
+Pendientes que resuelve una tarea: `create_task(..., resolves="P-036, P-037 (partial)")` — ids separados por
 coma, cada uno opcionalmente con `(parcial)` o `(partial)` (sin distinguir mayúsculas ni espacios; `p-36` vale como `P-036`). Cada id
 debe existir y estar abierto; si alguno no, la herramienta lo rechaza nombrando los inválidos y no escribe nada. Se guarda
 en el frontmatter (`resolves: P-036, P-037 (partial)`) y como sección "## Resolves" de la tarea; sin `resolves`, ni
@@ -261,7 +259,7 @@ ruta por defecto vieja `.memorias/<nombre>` se sigue encontrando ahí hasta que 
 Las claves de cada proyecto en `projects.json` se leen en español (`ruta`, `memoria`, `escritura`, `pruebas`,
 `integraciones`) o en inglés (`path`, `memory`, `writable`, `tests`, `integrations`); si están las dos, gana la inglesa.
 Al escribir se conserva la grafía que ya tiene la entrada. Renombrar las claves y mover las memorias de `.memorias/` a
-`.ratifact/` es `ratifact upgrade --apply` (ADR-029, sección 0), nunca la migración automática.
+`.ratifact/` es `ratifact upgrade --apply` (sección 0), nunca la migración automática.
 
 ## 7. Telemetría
 Cada llamada a una herramienta agrega una línea a `~/.local/state/ratifact/uso.jsonl` (`$XDG_STATE_HOME/ratifact/`; hasta
@@ -272,12 +270,12 @@ El informe lee el mismo log que escribe el servidor: `--log <ruta>` si se indica
 `MEMORIA_PROYECTOS_LOG`), y si no `~/.local/state/ratifact/uso.jsonl`. Las filas guardan el nombre inglés de la herramienta; las anteriores
 a la v1 (nombre en español) se traducen al agregar, así el historial suma por herramienta. Si el archivo no existe, lo informa con su ruta y termina con error.
 `get_context` avisa cuando INDEX.md acumula 5 o más cambios sin regenerarse.
-Arranque compacto (ADR-026): `get_context` ya no incluye `OPEN.md`. Después de INDEX.md muestra
+Arranque compacto: `get_context` ya no incluye `OPEN.md`. Después de INDEX.md muestra
 "# Open items (N)" con una línea por pendiente abierto (`- P-NNN · <tema> (<fecha>)`, en orden numérico, tema
 cortado a 100 caracteres, sin extracto ni dueño) y cierra con `Detail: read_document("<proyecto>", "P-NNN")`; sin
 pendientes abiertos, solo "# Open items (0)". "Recently closed" no sale en el arranque. `OPEN.md`
 sigue generándose en disco. Al final, la línea "Content language: <content_language> — …" pide escribir el contenido de
-los registros en ese idioma (ADR-016); las respuestas de las herramientas son siempre en inglés.
+los registros en ese idioma; las respuestas de las herramientas son siempre en inglés.
 El resumen de `analizar_uso.py` agrega el tamaño de `get_context` por proyecto (p50/máx en caracteres y ~tokens,
 con aviso si el p50 supera la referencia de 2.000 tokens = 8.000 caracteres) y la sección "Pendientes abiertos
 referenciados por tareas integradas": por proyecto, los declarados en `resolves` y los mencionados en el texto de la
@@ -312,7 +310,7 @@ para borrar archivos: nada se elimina, solo cambia de estado. En Claude Code no 
 ## 11. Pruebas
 Desde esta carpeta: `uv run --with pytest --with "mcp>=1.2,<2" pytest -q` (o `python3 -m pytest -q` con pytest y mcp instalados).
 Corren contra una carpeta temporal: no tocan `projects.json`, la telemetría ni los proyectos reales.
-`test_cobertura.py` falla si se agrega una herramienta sin pruebas (ADR-009, criterio 1).
+`test_cobertura.py` falla si se agrega una herramienta sin pruebas (el criterio 1 de estabilización: suite pytest en verde que cubra todas las herramientas).
 
 ## 12. /run-task global (una vez por equipo)
 `/run-task` es genérico: la fuente es `ratifact/skills/run-task/SKILL.md`, que viaja dentro del paquete instalado
@@ -332,9 +330,9 @@ Si usa gentle-shell independiente, enlace también `~/.gentle-shell/agent/prompt
 Cada memoria declara en `schema.json` el formato con que fue escrita y el idioma de su contenido:
 `{"version": 2, "content_language": "es"}`. Hoy es v2: carpetas `decisions/`, `pending/`, `sessions/`, `tasks/`;
 vistas `DECISIONS.md` y `OPEN.md`; claves, estados y títulos de sección en inglés (`docs/v1-english-naming.md` §5–§6).
-Las memorias nuevas nacen en v2 con `content_language` `"en"`; las migradas, con `"es"` (ADR-028).
+Las memorias nuevas nacen en v2 con `content_language` `"en"`; las migradas, con `"es"`.
 
-Migración automática (v1 → v2, ADR-028/029/030), en el **primer acceso** a cada memoria (cualquier herramienta con
+Migración automática (v1 → v2), en el **primer acceso** a cada memoria (cualquier herramienta con
 `project`, también las de solo lectura), bajo el bloqueo:
 
 - Precondiciones: la memoria es un repo git con al menos un commit y `git status` limpio (salvo `.lock`). Si no, la
@@ -349,7 +347,7 @@ Migración automática (v1 → v2, ADR-028/029/030), en el **primer acceso** a c
   error y la próxima llamada lo reintenta.
 - Vuelta atrás manual: `git -C <memoria> checkout pre-v2` (o `reset --hard pre-v2`) devuelve el árbol anterior.
 - Se mantiene `esquema.json` con `{"version": 2}` como centinela: un servidor anterior a v2 lee "v2" y se niega
-  ("usa el esquema v2 y este servidor solo conoce hasta v1"), sin tocar nada. Se quita en 1.1 (ADR-030).
+  ("usa el esquema v2 y este servidor solo conoce hasta v1"), sin tocar nada. Se quita en 1.1.
 - Despliegue: reinicie todos los clientes (Claude Desktop, Claude Code, Pi, Codex) antes de la primera llamada.
 - Rutas v1 (`.project/tareas/T-001.md`, `.project/acuerdos.md`…, que siguen apareciendo en INDEX.md, docs/ y chats
   viejos): se traduce solo el primer tramo después de `.project/` y la respuesta empieza con
@@ -385,7 +383,7 @@ de forma nativa, pero solo desde la raíz del repo git hacia abajo: en proyectos
 carpeta raíz (si abre Codex ahí) y en el `AGENTS.md` de cada repo. Si hay otra memoria de agente instalada (engram),
 el servidor declara en sus instrucciones MCP que ratifact es la fuente de verdad del proyecto.
 
-## 15. Idempotencia de creación (ADR-019)
+## 15. Idempotencia de creación
 
 `propose_decision`, `add_pending` y `create_task` son idempotentes: si ya existe un registro del
 mismo tipo (un ADR no compite con una tarea ni con un pendiente, aunque el texto del título coincida) con el
@@ -414,7 +412,7 @@ y `analizar_uso.py` reporta cuántas creaciones fueron duplicados detectados.
 
 `servidor.py` es solo un envoltorio de `ratifact serve` hasta 1.1 (cabecera PEP 723, agrega su carpeta a `sys.path`,
 importa el paquete `ratifact/` y llama a `ratifact.cli`); el punto de entrada es el comando `ratifact` (sección 0). El código
-vive en `ratifact/` (ADR-020); ningún módulo supera 300 líneas y no hay importaciones circulares:
+vive en `ratifact/`; ningún módulo supera 300 líneas y no hay importaciones circulares:
 
 | Módulo | Responsabilidad |
 |---|---|
@@ -433,18 +431,18 @@ vive en `ratifact/` (ADR-020); ningún módulo supera 300 líneas y no hay impor
 | `ratifact/vocabulario.py` | Vocabulario del esquema v2 y su equivalente v1: carpetas, vistas, claves, estados por tipo y `_normalizar_estado` (parámetros en español o inglés); mapas del contrato v0 → v1 (`HERRAMIENTAS_V0`, `PARAMETROS_V0`, `PROMPTS_V0`, `MODOS_V0`). |
 | `ratifact/esquema.py` | `VERSION_ESQUEMA`, `MIGRACIONES`, versión (`schema.json` / centinela `esquema.json`), resguardos de la migración (repo limpio, tag, commit, vuelta atrás), `_asegurar_esquema` (primer acceso) y `_bloqueo`. |
 | `ratifact/migracion_v2.py` | Migración v1 → v2: carpetas, frontmatter, títulos, etiquetas de revisión y el informe del commit. |
-| `ratifact/registros.py` | Frontmatter (lectura/escritura), `_escribir_atomico`, `_commit`, ids y slugs, idempotencia (ADR-019), `_regenerar_vistas`, `_resumen_tareas`, `_hoy`/`_ahora`. |
-| `ratifact/catalogo.py` | Catálogo de la memoria derivado en cada llamada (ADR-022): `_catalogo`, resolución de ids de `read_document` (`_resolver_id`), registros de `list_documents` y coincidencias por id/título de `search` (id exacto y hasta 5 títulos al inicio de palabra) y el bloque de pendientes abiertos de `get_context` (`_bloque_pendientes`, ADR-026). Sin índice, caché ni watcher. |
+| `ratifact/registros.py` | Frontmatter (lectura/escritura), `_escribir_atomico`, `_commit`, ids y slugs, idempotencia, `_regenerar_vistas`, `_resumen_tareas`, `_hoy`/`_ahora`. |
+| `ratifact/catalogo.py` | Catálogo de la memoria derivado en cada llamada: `_catalogo`, resolución de ids de `read_document` (`_resolver_id`), registros de `list_documents` y coincidencias por id/título de `search` (id exacto y hasta 5 títulos al inicio de palabra) y el bloque de pendientes abiertos de `get_context` (`_bloque_pendientes`). Sin índice, caché ni watcher. |
 | `ratifact/busqueda.py` | Respuesta de `search` con cuotas por sección: catálogo, luego memoria y código a partes iguales (lo que un lado no usa pasa al otro), y la línea final con lo omitido por sección. |
-| `ratifact/listado.py` | Listado con profundidad adaptativa de `list_documents` (ADR-023): `_listado` (presupuesto `LIMITE_LISTADO_ENTRADAS`/`LIMITE_LISTADO_CARACTERES` en config). |
+| `ratifact/listado.py` | Listado con profundidad adaptativa de `list_documents`: `_listado` (presupuesto `LIMITE_LISTADO_ENTRADAS`/`LIMITE_LISTADO_CARACTERES` en config). |
 | `ratifact/plantillas.py` | `PLANTILLA_INSTRUCCIONES`, `PLANTILLA_AGENTES` y `TEXTO_CIERRE`. |
 | `ratifact/prompts.py` | Prompts `start` y `close` (antes `inicio` y `cierre`). |
-| `ratifact/integraciones/` | Integraciones opcionales (ADR-024, ADR-025): `base.py` (descriptor `Integracion`, `FASES`), un módulo por integración (`codegraph.py`, `gentle_ai.py`, `engram.py`) y `registro.py` (`INTEGRACIONES`, detección en disco en cada llamada, guía para `get_context`/`create_task`/`update_task` y el parseo de `integraciones`). Agregar una = un módulo + registrarlo. Nunca llama a otros MCP. |
+| `ratifact/integraciones/` | Integraciones opcionales: `base.py` (descriptor `Integracion`, `FASES`), un módulo por integración (`codegraph.py`, `gentle_ai.py`, `engram.py`) y `registro.py` (`INTEGRACIONES`, detección en disco en cada llamada, guía para `get_context`/`create_task`/`update_task` y el parseo de `integraciones`). Agregar una = un módulo + registrarlo. Nunca llama a otros MCP. |
 | `ratifact/herramientas/contexto_documentos.py` | `list_projects`, `get_context`, `search`, `list_documents`, `read_document`, `create_document`, `update_document`, `update_index`. |
 | `ratifact/herramientas/decisiones.py` | `propose_decision`, `accept_decision`, `accept_decisions`, `review_proposals`, `decide_proposals`, `reject_decision`, `supersede_decision`. |
 | `ratifact/herramientas/pendientes_sesiones.py` | `add_pending`, `close_pending`, `log_session`. |
 | `ratifact/herramientas/tareas.py` | `create_task`, `update_task`, `request_changes`, `list_tasks` (y `_comando_pruebas`). |
-| `ratifact/herramientas/tareas_brief.py` | `amend_task` (ADR-021) y `read_task` (ADR-031). |
+| `ratifact/herramientas/tareas_brief.py` | `amend_task` y `read_task`. |
 | `ratifact/herramientas/proyectos.py` | `init_memory`, `project_instructions`, `register_project`, `update_project` y la detección del comando de pruebas. |
 
 `tests/contrato_herramientas.json` es la instantánea del contrato MCP (nombre, descripción y esquema de cada

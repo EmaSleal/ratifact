@@ -24,7 +24,7 @@ WSL = "5.15.153.1-microsoft-standard-WSL2"
 
 def test_windows_nativo_avisa_y_continua(paquete, vieja, monkeypatch):
     lineas, acciones = _doctor(paquete, monkeypatch, "win32")
-    assert "Native Windows is not a supported platform (ADR-012)" in lineas[1] and "WSL2" in lineas[1]
+    assert "Native Windows is not a supported platform" in lineas[1] and "WSL2" in lineas[1]
     assert "/mnt/c" in lineas[1]
     assert any(l.startswith("Projects folder:") for l in lineas)              # the diagnosis goes on
     assert not any("Windows" in a or "WSL" in a for a in acciones)             # not a pending action
@@ -37,7 +37,7 @@ def test_linux_sin_wsl_no_avisa(paquete, vieja, monkeypatch):
 
 def test_wsl_con_repositorio_en_home_solo_informa(paquete, vieja, monkeypatch):
     lineas, acciones = _doctor(paquete, monkeypatch, "linux", WSL)
-    assert sum("Running inside WSL (ADR-012)" in l for l in lineas) == 1
+    assert sum("Running inside WSL: supported" in l for l in lineas) == 1
     assert not any("/mnt/" in l for l in lineas)
 
 

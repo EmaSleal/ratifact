@@ -149,7 +149,7 @@ def main(argv: list[str] | None = None, a: argparse.Namespace | None = None) -> 
                   for f in por.get(nombre, [])]
     duplicados = sum(1 for f in creaciones if f.get("duplicado"))
     if creaciones:
-        print(f"- Creaciones idempotentes (ADR-019): {len(creaciones)} llamadas · duplicados detectados "
+        print(f"- Creaciones idempotentes: {len(creaciones)} llamadas · duplicados detectados "
               f"(reintento sin efecto): {duplicados}")
     internos = [f for f in filas if f["error"] and f.get("tipo_error") == "interno"]
     rechazos = [f for f in filas if f["error"] and f.get("tipo_error") != "interno"]
@@ -161,14 +161,14 @@ def main(argv: list[str] | None = None, a: argparse.Namespace | None = None) -> 
     # primer registro), no 14 días con uso; un día sin llamadas no rompe la ventana.
     corridos = (dt.datetime.now() - primera).days if primera else 0
     cumple = len(filas) >= 300 and tasa < 1 and a.dias >= 14 and corridos >= 14
-    print(f"- ADR-009 criterio 2 (≥300 llamadas, <1 % de fallas internas, 14 días corridos de telemetría): "
+    print(f"- Criterio de uso real de 1.0 (≥300 llamadas, <1 % de fallas internas, 14 días corridos de telemetría): "
           f"{len(filas)} llamadas · {corridos} días corridos desde el primer registro · {len(dias)} días con uso "
           f"→ {'CUMPLE' if cumple else 'aún no'}")
     alias = usos_alias(filas)
     print("- Rutas v1 traducidas (alias, se quita en 1.1): " + ("ninguna" if not alias else ""))
     for linea in alias:
         print(linea)
-    print("\nDelegación (ADR-036): tareas con `routing:` cambiadas en el período")
+    print("\nDelegación: tareas con `routing:` cambiadas en el período")
     for linea in indicador_delegacion(desde, a.proyecto):
         print(linea)
     print("\nPendientes abiertos referenciados por tareas integradas")

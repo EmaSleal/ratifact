@@ -270,7 +270,7 @@ def test_report_imprime_la_seccion(srv, proyecto, entorno, monkeypatch, capsys):
     log = _log_filas(entorno["tmp"] / "log" / "uso.jsonl", [{"herramienta": "search", "resp_chars": 10}])
     _correr(monkeypatch, "--log", str(log))
     salida = capsys.readouterr().out
-    seccion = salida.split("Delegación (ADR-036)")[1]
+    seccion = salida.split("Delegación: tareas con `routing:`")[1]
     assert "demo: 1 tareas con routing · required 1 · con trabajadores 0 · cumplimiento 0 %" in seccion
 
 

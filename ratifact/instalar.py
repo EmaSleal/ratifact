@@ -181,7 +181,7 @@ def _final(plan: Plan) -> list[str]:
     if plan.manuales:
         lineas.append("Manual steps (cannot be done automatically):")
         lineas += [f"  - {m}" for m in plan.manuales]
-    lineas.append("Integrations per project (detected, default auto; never asked — ADR-025):")
+    lineas.append("Integrations per project (detected, default auto; never asked):")
     lineas += [f"  {l}" for l in plan.integraciones] or ["  (no registered projects)"]
     lineas += ["  engram is never detected: its guidance is conditional (used only if you have it).",
                '  Turn one off with update_project("<project>", integrations="codegraph=off").']

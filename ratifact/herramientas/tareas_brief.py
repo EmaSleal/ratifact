@@ -74,9 +74,9 @@ def amend_task(project: str, id: str, additional_criteria: str = "", notes: str 
     acceptance criteria and/or notes. Any other status is rejected (after a review, use request_changes).
     Appends a dated "### Amendment N" block (sub-labels "Additional criteria" / "Notes") to the task's "Amendments"
     section; the original criteria stay untouched. One commit per amendment; give at least one of the three fields.
-    `delegation`: sets the task's exception to the delegation policy (ADR-036), "required" or "off", in its
-    frontmatter (empty = unchanged); it adds no Amendment block by itself.
-    Idempotent (ADR-019): an identical amendment recorded in the last minutes is not written again."""
+    `delegation`: sets the task's exception to the delegation policy (decided while planning), "required" or "off",
+    in its frontmatter (empty = unchanged); it adds no Amendment block by itself.
+    Idempotent: an identical amendment recorded in the last minutes is not written again."""
     def f():
         texto = _texto_enmienda(additional_criteria, notes)
         politica = _delegacion.validar_tarea(delegation)

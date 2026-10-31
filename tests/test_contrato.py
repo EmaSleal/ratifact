@@ -128,3 +128,32 @@ def test_ningun_nombre_ni_parametro_en_espanol_queda_expuesto():
         assert not params & (set(PARAMETROS_V0) - set(PARAMETROS_V0.values())), h["nombre"]
     for p in nuevo["prompts"]:
         assert [a["nombre"] for a in p["argumentos"]] == ["project"]
+
+
+# T-021 (ADR-043): las descripciones se reescribieron sin identificadores ADR; todo lo demás debe ser idéntico a main.
+# SHA-256 del contrato de main SIN descripciones, calculado con `sin_descripciones` y `serializar`:
+#   git show main:tests/contrato_herramientas.json | python -c "import json,sys,hashlib; \
+#     from tests.test_contrato import sin_descripciones, serializar; \
+#     print(hashlib.sha256(serializar(sin_descripciones(json.load(sys.stdin))).encode()).hexdigest())"
+# (no depende de git al correr la prueba).
+SHA256_CONTRATO_MAIN_SIN_DESCRIPCIONES = "28bc6f89fb6e1f199c68729b46306702b1715b0558160c5fc3319028a59826c1"
+
+
+def sin_descripciones(valor):
+    """Quita recursivamente `descripcion` (herramientas, prompts, argumentos) y `description` (esquema de entrada) cuyo
+    valor es texto; un parámetro llamado "description" (valor dict) se conserva."""
+    if isinstance(valor, dict):
+        return {k: sin_descripciones(v) for k, v in valor.items()
+                if not (k in ("descripcion", "description") and isinstance(v, str))}
+    if isinstance(valor, list):
+        return [sin_descripciones(v) for v in valor]
+    return valor
+
+
+def test_contrato_sin_descripciones_identico_a_main():
+    """T-021 criterio 15: nombres, parámetros, tipos y número de herramientas/prompts no cambian respecto de main."""
+    import hashlib
+    datos = json.loads(INSTANTANEA.read_text(encoding="utf-8"))
+    canonico = serializar(sin_descripciones(datos))
+    assert hashlib.sha256(canonico.encode("utf-8")).hexdigest() == SHA256_CONTRATO_MAIN_SIN_DESCRIPCIONES
+    assert len(datos["herramientas"]) == 28

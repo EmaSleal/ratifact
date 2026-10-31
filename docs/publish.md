@@ -1,6 +1,6 @@
 # Publishing ratifact (GitHub + PyPI)
 
-Steps for the maintainer (ADR-015: GitHub + PyPI, installed with `uv tool install ratifact` / `uvx ratifact`). Nothing
+Steps for the maintainer (GitHub + PyPI, installed with `uv tool install ratifact` / `uvx ratifact`). Nothing
 here has been done yet: the repository is not public and nothing was uploaded to PyPI.
 
 Repository: <https://github.com/EmaSleal/ratifact> (GitHub user `EmaSleal`; `[project.urls]` in `pyproject.toml`).
@@ -59,7 +59,7 @@ ratifact install              # plan
 
 ## After every change (local installations)
 
-A running server keeps the code it started with, so every change goes through the same four steps (ADR-037):
+A running server keeps the code it started with, so every change goes through the same four steps:
 
 1. merge into `main`;
 2. reinstall: `uv tool install --reinstall <path to the clone>` (or `uv tool upgrade ratifact` from PyPI);

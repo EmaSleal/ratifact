@@ -13,7 +13,7 @@ Code, Pi, Codex) reads and writes the same memory through 28 tools.
 - **Everything is plain files under git.** Views such as `DECISIONS.md` and `OPEN.md` are regenerated from the
   records; nothing is deleted, only changes status.
 
-Linux and macOS (Windows through WSL). Python 3.10 or newer. Spanish documentation: [LEEME.md](LEEME.md).
+Linux and macOS (Windows through WSL). Python 3.10 or newer. Spanish documentation: [LEEME.md](https://github.com/EmaSleal/ratifact/blob/main/LEEME.md).
 
 ## Install
 
@@ -128,7 +128,7 @@ project's effective models (or `models: session default`).
 
 ## Delegation
 
-Delegation policy (ADR-036): ratifact, not the executing agent, decides whether a task is delegated.
+Delegation policy: ratifact, not the executing agent, decides whether a task is delegated.
 `"delegation": "required" | "suggested" | "off"` goes in `settings.json` next to `"models"` (global; default
 `required`); a project exception is set with `update_project("my-app", delegation="off")` (`inherit` removes it), and a
 task exception with `create_task(..., delegation="off")` or `amend_task(..., delegation="required")` while planning
@@ -145,28 +145,25 @@ task that touches security, is cross-cutting, or depends on diagnosing a cause t
   names): `Workers: explore/haiku×1, write/sonnet×2, verify/sonnet×1` (plus `escalated: write`), or
   `Workers: none — reason: <why>`. With `required`, `update_task(..., "in_review")` without a valid `Workers:` line
   still changes the status but answers with a warning.
-- Extended format (ADR-041, corrects ADR-036 §4–§5): `Workers: <role>/<model>×<n>, …[, rework: <role>×<n>, …][, escalated: <role>][ — note: <free text>]`.
-  `<role>/<model>×<n>` counts initial briefs only; `rework: <role>×<n>` counts re-sends of that role caused by
-  a defect detected by the verifier or by the orchestrator's diff review (the role must appear among the workers,
-  n ≥ 1); everything after ` — ` is a note the parser ignores. No parentheses: rework goes in `rework:`, comments in `— note:`. Example:
-  `Workers: explore/haiku×1, write/sonnet×1, verify/sonnet×1, rework: write×1 — note: resumed once for the verify fix`.
-  ADR-036 lines stay valid.
-- ADR-042 (corrects ADR-041 §1): rework counts re-sends caused by a defect found by the verifier or by the
-  orchestrator's diff review, e.g. `Workers: write/sonnet×1, rework: write×1 — note: diff review found a missing test`.
-  Initial briefs never count as rework, even with several workers of the same role in parallel: two parallel writers
-  are `Workers: write/sonnet×2`. The canonical separator stays ` — `, but ` - note:` / ` -- note:` and
-  `none - reason:` / `none -- reason:` are accepted (`Workers: write/sonnet×1 - note: x`); an ASCII hyphen anywhere
-  else (`Workers: write/sonnet×1 - resumed once`) is still invalid.
+- Extended format: `Workers: <role>/<model>×<n>, …[, rework: <role>×<n>, …][, escalated: <role>][ — note: <free text>]`.
+  `<role>/<model>×<n>` counts initial briefs only, even with several workers of the same role in parallel (two parallel
+  writers are `Workers: write/sonnet×2`); `rework: <role>×<n>` counts re-sends of that role caused by a defect found by
+  the verifier or by the orchestrator's diff review (the role must appear among the workers, n ≥ 1). A note starts at
+  ` — note:` (canonical) or at ` - note:` / ` -- note:`, and `none - reason:` / `none -- reason:` are accepted
+  (`Workers: write/sonnet×1 - note: x`); an ASCII hyphen anywhere else (`Workers: write/sonnet×1 - resumed once`)
+  separates nothing and is an invalid token. The parser ignores the note's text. No parentheses: rework goes in `rework:`, comments in `— note:`. Example:
+  `Workers: explore/haiku×1, write/sonnet×1, verify/sonnet×1, rework: write×1 — note: diff review found a missing test`.
+  Lines in the earlier format (without `rework:` or a note) stay valid.
 - Fixing a line without duplicating: if the warning says the line is invalid it proposes a corrected one when it can
   derive it; sending only that line with `update_task(..., "in_review")` replaces the `Workers:` line of the latest
   result block (or appends it there) instead of creating a new block.
 - Audit: `in_progress` records `routing: explore=<m>,write=<m>,verify=<m> · delegation=<policy> · build=<build> ·
   at=<ISO 8601 time, to the minute>` in the task's frontmatter (`session` for a role without a model; overwritten on
-  re-runs; `build=` and `at=` since T-016, ADR-037 — older tasks keep the shorter form and are still read). `ratifact
+  re-runs; `build=` and `at=` since T-016 — older tasks keep the shorter form and are still read). `ratifact
   report` takes the period from `at=` when present (`updated` otherwise). `ratifact report` measures compliance
   per project (required tasks with real workers, escalations) and compares delegated and non-delegated tasks in
   reviews and in_progress → in_review duration; tasks without `routing:` are counted apart.
-  Since ADR-041 routing ends with `· client=<name>/<version>`, taken from the MCP `clientInfo` of the initialize
+  Routing also ends with `· client=<name>/<version>`, taken from the MCP `clientInfo` of the initialize
   handshake (sanitized: no spaces, no `·`, no newlines, max 64 chars; `client=unknown` if unavailable), and every new
   `uso.jsonl` row has a `client` field. Values are recorded as received, without normalization (P-025). `ratifact
   report` also measures, among delegated tasks (last valid `Workers:` line of each), how many had rework, the total
@@ -178,7 +175,7 @@ task that touches security, is cross-cutting, or depends on diagnosing a cause t
 
 There are three copies of ratifact: the source (a clone), the installation (the uv tool directory, which the
 /run-task skills link to) and the running server (one `ratifact serve` per client, which keeps the code it started
-with). They drift apart when you merge without reinstalling, or reinstall without restarting a client (ADR-037).
+with). They drift apart when you merge without reinstalling, or reinstall without restarting a client.
 The procedure after every change is:
 
 ```bash
@@ -202,13 +199,13 @@ What reveals a drift:
 - **`ratifact doctor`** also lists the running `ratifact serve` processes (PID, start time, parent process). A reinstall
   rewrites every file even when nothing changed, so a process that started before the installation is flagged only
   when its content differs: each server records its startup build in `~/.local/state/ratifact/servers/<pid>.json`
-  (ADR-038; removed on exit, dead PIDs pruned at startup). Same content → "nothing to do"; no record (a server older
+  (removed on exit, dead PIDs pruned at startup). Same content → "nothing to do"; no record (a server older
   than this) → "the content may be identical", and `get_context` in that client gives the definitive answer. doctor
   only reads: it never writes, signals or stops anything (Linux and macOS; elsewhere it says the list is unavailable).
   Only a process with that record counts as a server: the wrapper through which Claude Desktop on Linux launches the
   MCP (its parent, also `ratifact serve` on the command line, without a record) is shown inside its server's entry
   ("wrapper <pid>, <client>"), and any other process without a record is listed apart as "Unregistered processes" and
-  not counted. doctor also warns when it runs on native Windows (not supported, ADR-012: install ratifact inside WSL2,
+  not counted. doctor also warns when it runs on native Windows (not supported: install ratifact inside WSL2,
   with the repositories on the WSL filesystem, not under `/mnt/c`), notes when it runs inside WSL, and warns about a
   registered repository under `/mnt/` (slow, with git differences).
 - The server's own check works the same way: a changed fingerprint is confirmed by the content hash once, so a
@@ -237,7 +234,7 @@ keeps tool approvals per server name, so mark `propose_decision`, `add_pending`,
 `register_project`, `accept_decision` and `accept_decisions` as *requires approval* again. If the default
 configuration does not exist but a server still runs with `MEMORIA_PROYECTOS_CONFIG`, `doctor` and `upgrade` print
 the exact command (`RATIFACT_CONFIG=<path> ratifact upgrade`). The `MEMORIA_PROYECTOS_*` variables keep working with
-a deprecation notice until 1.1. Details: [docs/upgrade-v1.md](docs/upgrade-v1.md).
+a deprecation notice until 1.1. Details: [docs/upgrade-v1.md](https://github.com/EmaSleal/ratifact/blob/main/docs/upgrade-v1.md).
 
 ## Development
 
@@ -246,10 +243,10 @@ uv run --with pytest --with "mcp>=1.2,<2" pytest -q
 ```
 
 The tests run against temporary folders and a temporary HOME: they never touch your configuration, clients or
-projects. Publishing steps: [docs/publish.md](docs/publish.md).
+projects. Publishing steps: [docs/publish.md](https://github.com/EmaSleal/ratifact/blob/main/docs/publish.md).
 
 Source: <https://github.com/EmaSleal/ratifact>.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](https://github.com/EmaSleal/ratifact/blob/main/LICENSE).
