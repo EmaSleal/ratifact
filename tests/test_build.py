@@ -425,7 +425,7 @@ def test_doctor_muestra_los_tres_casos_ninguno_y_error(hogar, copia):
     inicio = dt.datetime(2026, 10, 24, 18, 53, 54)
     vivos = [procesos.ProcesoVivo(101, inicio, "claude", True, procesos.ANTERIOR, "1.0.0+fffffff"),
              procesos.ProcesoVivo(102, inicio, "claude", False, procesos.MISMO, "1.0.0+abc1234"),
-             procesos.ProcesoVivo(103, inicio, "claude", False, procesos.DESCONOCIDO),
+             procesos.ProcesoVivo(103, inicio, "claude", False, procesos.DESCONOCIDO, registrado=False),
              procesos.ProcesoVivo(201, inicio, "claude-desktop")]
     lineas, acciones = doctor.informe(procesos=lambda: [], paquete=copia, vivos=lambda: vivos)
     texto = "\n".join(lineas)
@@ -433,9 +433,10 @@ def test_doctor_muestra_los_tres_casos_ninguno_y_error(hogar, copia):
             "different content (ratifact 1.0.0+fffffff): restart its client") in texto
     assert "PID 102 · started 2026-10-24 18:53:54 · parent claude · started before the reinstallation, same content " \
            "(ratifact 1.0.0+abc1234): nothing to do" in texto
-    linea = next(l for l in lineas if "PID 103" in l)
-    assert "the content may be identical" in linea and "get_context in that client gives the definitive answer" in linea
-    assert "⚠" not in linea
+    linea = next(l for l in lineas if "PID 103" in l)      # no record: listed apart, not a server (T-020)
+    assert "the content may be identical" not in texto and "⚠" not in linea
+    assert lineas.index(linea) > next(i for i, l in enumerate(lineas) if l.startswith("Unregistered processes"))
+    assert any(l.startswith("Running `ratifact serve` servers: 3") for l in lineas)
     assert next(l for l in lineas if "PID 201" in l).endswith("parent claude-desktop")
     lineas, _ = doctor.informe(procesos=lambda: [], paquete=copia, vivos=lambda: [])
     assert any(l.startswith("Running `ratifact serve` processes: none") for l in lineas)

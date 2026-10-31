@@ -202,6 +202,12 @@ cambio: integrar en main → `uv tool install --reinstall ~/Projects/.memoria-pr
   registro (servidor anterior a esto) → "el contenido puede ser idéntico" y `get_context` en ese cliente da la
   respuesta definitiva. doctor solo lee: no escribe, no envía señales ni termina procesos (Linux y macOS; en otros
   sistemas informa que el listado no está disponible).
+  Solo cuenta como servidor el proceso con ese registro: el envoltorio con el que Claude Desktop en Linux lanza el
+  MCP (su padre, que también muestra `ratifact serve` en la línea de comando, sin registro) se muestra dentro de la
+  entrada de su servidor ("wrapper <pid>, <cliente>"), y cualquier otro proceso sin registro se lista aparte como
+  "Unregistered processes" y no cuenta. doctor también avisa si corre en Windows nativo (no soportado, ADR-012:
+  instalar ratifact dentro de WSL2, con los repositorios en el sistema de archivos de WSL, no en `/mnt/c`), indica
+  cuando corre dentro de WSL y advierte de un repositorio registrado bajo `/mnt/` (lento y con diferencias de git).
 - El autodiagnóstico del servidor funciona igual: una huella distinta se confirma una vez con el hash de contenido,
   así que reinstalar con el mismo código no dispara el aviso ni el rechazo de `in_progress`.
 

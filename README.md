@@ -205,6 +205,12 @@ What reveals a drift:
   (ADR-038; removed on exit, dead PIDs pruned at startup). Same content → "nothing to do"; no record (a server older
   than this) → "the content may be identical", and `get_context` in that client gives the definitive answer. doctor
   only reads: it never writes, signals or stops anything (Linux and macOS; elsewhere it says the list is unavailable).
+  Only a process with that record counts as a server: the wrapper through which Claude Desktop on Linux launches the
+  MCP (its parent, also `ratifact serve` on the command line, without a record) is shown inside its server's entry
+  ("wrapper <pid>, <client>"), and any other process without a record is listed apart as "Unregistered processes" and
+  not counted. doctor also warns when it runs on native Windows (not supported, ADR-012: install ratifact inside WSL2,
+  with the repositories on the WSL filesystem, not under `/mnt/c`), notes when it runs inside WSL, and warns about a
+  registered repository under `/mnt/` (slow, with git differences).
 - The server's own check works the same way: a changed fingerprint is confirmed by the content hash once, so a
   reinstall with identical code does not trigger the warning or the `in_progress` refusal.
 

@@ -95,6 +95,10 @@ class ProcesoVivo:
     anterior: bool = field(default=False)      # started before the latest modification AND runs different content
     estado: str = POSTERIOR                    # after | stale | same (same content) | unknown (no record)
     build: str = ""                            # from its record, when known
+    ppid: int = 0                              # parent PID (0 when unknown)
+    registrado: bool = True                    # has a valid PID record (ADR-038): only these are servers
+    envoltorio: "ProcesoVivo | None" = None    # unregistered `ratifact serve` parent of this server (Claude Desktop on Linux)
+    es_envoltorio: bool = False                # this unregistered process is the wrapper of a registered server
 
 
 _PS = ["ps", "-axo", "pid=,ppid=,lstart=,command="]
@@ -122,10 +126,12 @@ def modificacion_instalacion(paquete: Path = PAQUETE) -> _dt.datetime | None:
 
 def procesos_vivos(paquete: Path = PAQUETE, correr: Callable[[], str] = _correr_ps,
                    registros: Path | None = None) -> list[ProcesoVivo]:
-    """Running `ratifact serve` processes with start time and parent process name. One that started before the latest
-    modification of the installation is `stale` only if its record (ADR-038) shows different content from the
-    installed one, `same` if the content is identical, and `unknown` without a record. Read only. Raises OSError if
-    they cannot be listed."""
+    """Running `ratifact serve` processes with start time and parent process name. Only a process with a PID record
+    (ADR-038) is a server (`registrado`); one without it is either the wrapper of a registered server (its direct
+    parent, also `ratifact serve` on the command line: `es_envoltorio`, attached to the server as `envoltorio`) or an
+    unregistered process. A registered server that started before the latest modification of the installation is
+    `stale` only if its record shows different content from the installed one, `same` if the content is identical; an
+    unregistered one that started before it is `unknown`. Read only. Raises OSError if they cannot be listed."""
     actual = ""
     filas = {}
     for linea in correr().splitlines():
@@ -142,9 +148,10 @@ def procesos_vivos(paquete: Path = PAQUETE, correr: Callable[[], str] = _correr_
         except ValueError:
             continue
         padre = Path(filas[ppid][2].split()[0]).name if ppid in filas and filas[ppid][2].split() else "?"
-        proceso = ProcesoVivo(pid, inicio, padre)
+        proceso = ProcesoVivo(pid, inicio, padre, ppid=ppid)
+        registro = leer_registro(pid, inicio, registros)
+        proceso.registrado = registro is not None
         if instalada and inicio < instalada.replace(microsecond=0):
-            registro = leer_registro(pid, inicio, registros)
             if registro is None:
                 proceso.estado = DESCONOCIDO
             else:
@@ -153,4 +160,9 @@ def procesos_vivos(paquete: Path = PAQUETE, correr: Callable[[], str] = _correr_
                 proceso.anterior = registro["content"] != actual
                 proceso.estado = ANTERIOR if proceso.anterior else MISMO
         salida.append(proceso)
+    por_pid = {p.pid: p for p in salida}
+    for p in salida:                          # group the wrapper under its registered server
+        envoltorio = por_pid.get(p.ppid)
+        if p.registrado and envoltorio is not None and not envoltorio.registrado and not envoltorio.es_envoltorio:
+            p.envoltorio, envoltorio.es_envoltorio = envoltorio, True
     return salida

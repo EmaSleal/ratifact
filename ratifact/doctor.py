@@ -6,10 +6,13 @@ salida 0 si no hay nada pendiente, 1 si hay acciones. No escribe nada."""
 from __future__ import annotations
 
 import os
+import platform
 import subprocess
+import sys
 from pathlib import Path
 from typing import Callable
 
+from ratifact import procesos as procesos_mod
 from ratifact import __version__, build, delegacion, modelos, procesos, retirado, rutas
 from ratifact import config as _cfg
 from ratifact.config import _ruta_config
@@ -55,29 +58,60 @@ def _fuente(paquete: Path | None, acciones: list[str], recibo: Path | None = Non
     return [f"Source: {fuente} · same as the installation"]
 
 
-def _vivos(paquete: Path | None, vivos: Callable[[], list[procesos.ProcesoVivo]] | None) -> list[str]:
-    """ADR-037 §5 and ADR-038: running `ratifact serve` processes (PID, start time, parent process); one that started
-    before the latest modification of the installation is flagged only if its startup record shows different content.
-    Read only: nothing is written, signalled or stopped."""
-    paquete = paquete or build.PAQUETE
+def _listar(paquete: Path, vivos: Callable[[], list[procesos.ProcesoVivo]] | None):
+    """(process list, error text): the list is None when it cannot be obtained (platform without `ps`, etc.)."""
     try:
-        lista = vivos() if vivos else procesos.procesos_vivos(paquete)
+        return (vivos() if vivos else procesos.procesos_vivos(paquete)), ""
     except (OSError, subprocess.SubprocessError) as e:
-        return [f"Running `ratifact serve` processes: cannot be listed ({e})"]
-    instalada = procesos.modificacion_instalacion(paquete)
-    cuando = f" (installation modified {instalada:%Y-%m-%d %H:%M:%S})" if instalada else ""
-    if not lista:
+        return None, str(e)
+
+
+def _vivos(paquete: Path | None, lista: list[procesos.ProcesoVivo] | None, error: str = "") -> list[str]:
+    """ADR-037 §5 and ADR-038: servers are the `ratifact serve` processes with a PID record; a wrapper (Claude Desktop
+    on Linux) is shown inside its server's entry; one without a record is listed apart and not counted. Read only."""
+    paquete = paquete or build.PAQUETE
+    if lista is None:
+        return [f"Running `ratifact serve` processes: cannot be listed ({error})"]
+    ins = procesos.modificacion_instalacion(paquete)
+    cuando = f" (installation modified {ins:%Y-%m-%d %H:%M:%S})" if ins else ""
+    servidores = [p for p in lista if p.registrado]
+    sin_registro = [p for p in lista if not p.registrado and not p.es_envoltorio]
+    if not servidores and not sin_registro:
         return [f"Running `ratifact serve` processes: none{cuando}"]
-    lineas = [f"Running `ratifact serve` processes{cuando}:"]
-    for p in lista:
+    lineas = [f"Running `ratifact serve` servers: {len(servidores)}{cuando}" + (":" if servidores else "")]
+    for p in servidores:
         marca = {procesos.ANTERIOR: f" ⚠ started BEFORE the installation and runs different content (ratifact {p.build}): "
                                  "restart its client",
-                 procesos.MISMO: f" · started before the reinstallation, same content (ratifact {p.build}): nothing to do",
-                 procesos.DESCONOCIDO: " · started before the reinstallation; the content may be identical (no record of "
-                                    "its startup build): get_context in that client gives the definitive answer"
+                 procesos.MISMO: f" · started before the reinstallation, same content (ratifact {p.build}): nothing to do"
                  }.get(p.estado, "")
-        lineas.append(f"  PID {p.pid} · started {p.inicio:%Y-%m-%d %H:%M:%S} · parent {p.padre}{marca}")
+        envoltorio = f" (wrapper {p.envoltorio.pid}, {p.envoltorio.padre})" if p.envoltorio else ""
+        lineas.append(f"  PID {p.pid} · started {p.inicio:%Y-%m-%d %H:%M:%S} · parent {p.padre}{envoltorio}{marca}")
+    if sin_registro:
+        lineas.append("Unregistered processes (possible server from before ADR-038, or wrapper); not counted as servers:")
+        for p in sin_registro:
+            lineas.append(f"  PID {p.pid} · started {p.inicio:%Y-%m-%d %H:%M:%S} · parent {p.padre}")
     return lineas
+
+
+def _osrelease() -> str:
+    try:
+        return Path("/proc/sys/kernel/osrelease").read_text(encoding="utf-8")
+    except OSError:
+        return platform.release()
+
+
+def _es_wsl() -> bool:
+    return sys.platform.startswith("linux") and "microsoft" in _osrelease().lower()
+
+
+def _plataforma() -> list[str]:
+    """ADR-012: Windows is supported only through WSL. Informational only: it never adds a pending action."""
+    if sys.platform == "win32":
+        return ["⚠ Native Windows is not a supported platform (ADR-012): install ratifact inside WSL2, with the "
+                "repositories on the WSL filesystem (not under /mnt/c). The rest of the diagnosis follows."]
+    if _es_wsl():
+        return ["Running inside WSL (ADR-012): supported; keep the repositories on the WSL filesystem"]
+    return []
 
 
 def _config(acciones: list[str]) -> list[str]:
@@ -122,7 +156,11 @@ def _proyectos(plan, acciones: list[str]) -> list[str]:
             esquema = "not initialized" if p.existe else "missing"
         else:
             esquema = f"schema v{p.version}"
-        lineas += [f"  {p.nombre}", f"    code: {codigo}",
+        lineas += [f"  {p.nombre}", f"    code: {codigo}"]
+        if p.codigo and _es_wsl() and p.codigo.as_posix().startswith("/mnt/"):
+            lineas.append("    ⚠ the repository is under /mnt/ (Windows filesystem seen from WSL): slow and with git "
+                          "differences (ADR-012); move it to the WSL filesystem")
+        lineas += [
                    f"    memory: {p.mem} · {esquema} · {p.ubicacion} · git: {p.git}",
                    f"    integrations: {', '.join(p.integraciones) or 'none detected'}",
                    f"    models: {modelos.describir(p.entrada, inst.config)} · delegation="
@@ -166,8 +204,12 @@ def _settings(config: Path, acciones: list[str]) -> list[str]:
             + f" · delegation: {politica or delegacion.DEFECTO + ' (default)'}"]
 
 
-def _servidores(plan, procesos: list[Proceso]) -> list[str]:
+def _servidores(plan, procesos: list[Proceso], lista: list[procesos_mod.ProcesoVivo] | None = None) -> list[str]:
+    """Same criterion as the servers count: only PIDs with a record. Without the process list, unchanged."""
     propios, otros = separar_procesos(procesos, plan.inst.config)
+    if lista is not None:
+        registrados = {p.pid for p in lista if p.registrado}
+        propios = [p for p in propios if p.pid in registrados]
     return [f"Running servers with this configuration: {', '.join(str(p.pid) for p in propios) or 'none'}"
             + (f" · with other configurations (ignored): {len(otros)}" if otros else "")]
 
@@ -211,22 +253,31 @@ def _enlaces(encontrados: set[str], acciones: list[str], paquete: Path | None) -
     return ([f"/run-task links: {estado}"] if enlaces else []) + describir_rutas(Path.home(), encontrados)
 
 
+def _servidores_vivos(procesos: Callable[[], list[Proceso]]) -> list[Proceso]:
+    """The cmdline-based listing, which can fail where there is no /proc nor `ps` (native Windows): then, none."""
+    try:
+        return procesos()
+    except (OSError, subprocess.SubprocessError):
+        return []
+
+
 def informe(procesos: Callable[[], list[Proceso]] = procesos_servidor, paquete: Path | None = None,
             log_viejo: Path | None = None, vivos: Callable[[], list[procesos.ProcesoVivo]] | None = None,
             recibo: Path | None = None) -> tuple[list[str], list[str]]:
     """(líneas del informe, acciones pendientes)."""
     acciones: list[str] = []
+    lista, error = _listar(paquete or build.PAQUETE, vivos)
     lineas = [f"ratifact {__version__} (memory schema v{VERSION_ESQUEMA}) · build "
-              f"{build.build_de(paquete or build.PAQUETE)}", *_donde(paquete, acciones),
-              *_fuente(paquete, acciones, recibo), *_vivos(paquete, vivos), *_config(acciones)]
+              f"{build.build_de(paquete or build.PAQUETE)}", *_plataforma(), *_donde(paquete, acciones),
+              *_fuente(paquete, acciones, recibo), *_vivos(paquete, lista, error), *_config(acciones)]
     try:
         plan = planificar(procesos=lambda: [], log_viejo=log_viejo)
     except _cfg.ErrorMemoria as e:
-        sugerencia = mensaje_sugerencia(sugerencias_config(procesos(), rutas.origen(paquete)))
+        sugerencia = mensaje_sugerencia(sugerencias_config(_servidores_vivos(procesos), rutas.origen(paquete)))
         acciones.append(str(e) + (f" Hint: {sugerencia}." if sugerencia else ""))
         return (lineas + _settings(_ruta_config(), acciones) + _log(log_viejo) + _entorno(acciones)
                 + _clientes(acciones, paquete), acciones)
-    lineas += (_settings(plan.inst.config, acciones) + _proyectos(plan, acciones) + _log(log_viejo) + _entorno(acciones) + _servidores(plan, procesos())
+    lineas += (_settings(plan.inst.config, acciones) + _proyectos(plan, acciones) + _log(log_viejo) + _entorno(acciones) + _servidores(plan, _servidores_vivos(procesos), lista)
                + _clientes(acciones, paquete))
     if not plan.vacio:
         pasos = describir(plan)
