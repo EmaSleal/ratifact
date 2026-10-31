@@ -11,6 +11,7 @@ from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
+from ratifact.delegacion import cliente_actual
 from ratifact.config import ALIAS_RUTA, ErrorMemoria, _entorno
 from ratifact.esquema import _asegurar_esquema
 from ratifact.rutas import log_por_defecto
@@ -55,6 +56,7 @@ def _registrar_uso(nombre: str, kwargs: dict, respuesta, ms: float, alias: str |
             "resp_chars": len(texto),
             "ms": round(ms, 1),
             "error": texto.startswith("ERROR"),
+            "client": cliente_actual(),
         }
         if fila["error"]:
             fila["tipo_error"] = "interno" if texto.startswith("ERROR (internal)") else "validacion"

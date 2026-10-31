@@ -10,11 +10,12 @@ from __future__ import annotations
 
 import datetime as _dt
 import re
-from dataclasses import dataclass, field
 from pathlib import Path
 
 from ratifact import modelos
 from ratifact.config import ErrorMemoria
+from ratifact.workers import (LINEA, Trabajadores, aviso_in_review, parsear_workers, proponer_workers,  # noqa: F401
+                              ultimo_workers_valido, workers_del_resultado)
 
 CLAVE = "delegation"
 POLITICAS = ("required", "suggested", "off")
@@ -92,14 +93,14 @@ def bloque(entrada: dict, tarea: dict | None = None) -> str:
     return "\n".join(lineas)
 
 
-def routing(entrada: dict, tarea: dict | None = None) -> str:
+def routing(entrada: dict, tarea: dict | None = None, cliente: str = "unknown") -> str:
     """Valor del campo `routing:` del frontmatter (ADR-036 §6): modelos efectivos y política de esta ejecución, más el
-    build del servidor y la hora de la transición (ADR-037 §3)."""
+    build del servidor y la hora de la transición (ADR-037 §3) y el cliente MCP (ADR-041 §4, siempre al final)."""
     efectivos, _ = modelos.efectivos(entrada)
     politica, _, _ = efectiva(entrada, tarea)
     roles = ",".join(f"{r}={efectivos[r][0] if r in efectivos else 'session'}" for r in modelos.ROLES)
     from ratifact import build
-    return f"{roles} · delegation={politica} · build={build.build_id()} · at={build.marca_tiempo()}"
+    return f"{roles} · delegation={politica} · build={build.build_id()} · at={build.marca_tiempo()} · client={cliente}"
 
 
 def politica_de_routing(texto: str) -> str | None:
@@ -116,11 +117,33 @@ def build_de_routing(texto: str) -> str | None:
 
 def at_de_routing(texto: str) -> _dt.datetime | None:
     """`at=2026-10-25T18:40-06:00` del campo routing (ADR-037 §3); None si falta o no es una fecha válida."""
-    m = re.search(r"at=(\S+)", texto or "")
+    m = re.search(r"(?:^|\s)at=(\S+)", texto or "")
     try:
         return _dt.datetime.fromisoformat(m.group(1)) if m else None
     except ValueError:
         return None
+
+
+def cliente_de_routing(texto: str) -> str:
+    """`client=claude-code/2.1.0` del campo routing (ADR-041 §4); "unknown" si falta (formato anterior)."""
+    m = re.search(r"(?:^|\s)client=(\S+)", texto or "")
+    return m.group(1) if m else "unknown"
+
+
+def cliente_actual() -> str:
+    """`<nombre>/<versión>` del clientInfo de la inicialización MCP de la sesión que llama (ADR-041 §4), saneado para
+    no romper el routing (sin espacios, `·`, `=`, `,` ni caracteres de control; máximo 64). "unknown" si no hay dato
+    o se llama fuera de una petición. Nunca lanza."""
+    try:
+        from mcp.server.lowlevel.server import request_ctx
+        info = request_ctx.get().session.client_params.clientInfo
+        if not info.name:
+            return "unknown"
+        crudo = f"{info.name}/{info.version or 'unknown'}"
+    except Exception:       # LookupError fuera de una petición, client_params None, sin clientInfo…
+        return "unknown"
+    limpio = re.sub(r"[\s·=,\x00-\x1f\x7f]+", "-", crudo).strip("-")[:64]
+    return limpio or "unknown"
 
 
 # ───────────────────────── parámetros de herramientas ─────────────────────────
@@ -150,79 +173,3 @@ def aplicar_proyecto(entrada: dict, politica: str) -> str:
     else:
         entrada[CLAVE] = politica
     return f"delegation: {politica}"
-
-
-# ───────────────────────── línea Workers ─────────────────────────
-
-ROL_MODELO = re.compile(r"^(explore|write|verify)/([^\s,×]+)×(\d+)$")
-ESCALADO = re.compile(r"^escalated:\s*(explore|write|verify)$")
-NINGUNO = re.compile(r"^none\s*[—–-]+\s*reason:\s*(\S.*)$")
-LINEA = re.compile(r"^\s*(?:[-*]\s+)?(?:\*\*)?Workers:(?:\*\*)?\s*(.*)$")
-
-
-@dataclass
-class Trabajadores:
-    """Una línea `Workers:` válida: (rol, modelo, cantidad) de cada trabajador, roles escalados y, si no hubo
-    trabajadores, el motivo."""
-    roles: list[tuple[str, str, int]] = field(default_factory=list)
-    escalados: list[str] = field(default_factory=list)
-    motivo: str = ""
-
-    @property
-    def total(self) -> int:
-        return sum(n for _, _, n in self.roles)
-
-
-def parsear_workers(linea: str) -> Trabajadores:
-    """Parser único de la línea `Workers:` (ADR-036 §4). Acepta `Workers: explore/haiku×1, write/sonnet×2`,
-    `Workers: write/sonnet×1, escalated: write` y `Workers: none — reason: <motivo>`. Lanza ValueError con el
-    motivo si está mal formada (incluido `none` sin motivo)."""
-    m = LINEA.match(linea or "")
-    if not m:
-        raise ValueError("it does not start with `Workers:`")
-    texto = m.group(1).strip()
-    if not texto:
-        raise ValueError("`Workers:` is empty")
-    if texto.lower().startswith("none"):
-        ninguno = NINGUNO.match(texto)
-        if not ninguno:
-            raise ValueError("`Workers: none` needs a reason: `Workers: none — reason: <why>`")
-        return Trabajadores(motivo=ninguno.group(1).strip())
-    salida = Trabajadores()
-    for item in (x.strip() for x in texto.split(",")):
-        rol_modelo, escalado = ROL_MODELO.match(item), ESCALADO.match(item)
-        if rol_modelo and int(rol_modelo.group(3)) > 0:
-            salida.roles.append((rol_modelo.group(1), rol_modelo.group(2), int(rol_modelo.group(3))))
-        elif escalado:
-            salida.escalados.append(escalado.group(1))
-        else:
-            raise ValueError(f"malformed item {item!r} (expected <role>/<model>×<n> with role explore, write or "
-                             "verify, or `escalated: <role>`)")
-    if not salida.roles:
-        raise ValueError("no worker listed (use `Workers: none — reason: <why>` if none ran)")
-    return salida
-
-
-def workers_del_resultado(resultado: str) -> tuple[Trabajadores | None, str]:
-    """La última línea `Workers:` de un texto de resultado: (trabajadores, "") si es válida; (None, qué falta) si no
-    está o está mal formada."""
-    lineas = [l for l in (resultado or "").splitlines() if LINEA.match(l)]
-    if not lineas:
-        return None, "the result has no `Workers:` line"
-    try:
-        return parsear_workers(lineas[-1]), ""
-    except ValueError as e:
-        return None, f"the `Workers:` line is invalid: {e}"
-
-
-def aviso_in_review(politica: str, resultado: str) -> str:
-    """Validación blanda de update_task(..., "in_review") (ADR-036 §5): aviso si la política era required y falta una
-    línea Workers válida. Nunca rechaza la transición."""
-    if politica != "required":
-        return ""
-    trabajadores, falta = workers_del_resultado(resultado)
-    if trabajadores is not None:
-        return ""
-    return (f"⚠ Delegation was required for this task, but {falta}. The status was changed anyway; add to the "
-            "result a line `Workers: <role>/<model>×<n>, …` (plus `escalated: write` if it applies) or "
-            "`Workers: none — reason: <why>`, separate from `Integrations used:`.")

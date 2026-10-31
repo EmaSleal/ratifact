@@ -150,13 +150,28 @@ transversal o depende de diagnosticar una causa que la especificación aún no c
   `Workers: explore/haiku×1, write/sonnet×2, verify/sonnet×1` (más `escalated: write` si corresponde) o
   `Workers: none — reason: <motivo>`. Con `required`, `update_task(..., "in_review")` sin una línea Workers válida
   cambia el estado igual pero responde con un aviso.
+- Formato ampliado (ADR-041, corrige ADR-036 §4–§5): `Workers: <rol>/<modelo>×<n>, …[, rework: <rol>×<n>, …][, escalated: <rol>][ — note: <texto libre>]`.
+  `<rol>/<modelo>×<n>` cuenta solo los encargos iniciales; `rework: <rol>×<n>` cuenta los reenvíos de ese rol después de
+  que una verificación encontró un defecto (el rol debe figurar entre los trabajadores, n ≥ 1); todo lo que sigue a
+  ` — ` es una nota que el parser ignora. Sin paréntesis: el retrabajo va en `rework:`, los comentarios en `— note:`.
+  Ejemplo: `Workers: explore/haiku×1, write/sonnet×1, verify/sonnet×1, rework: write×1 — note: resumed once for the verify fix`.
+  Las líneas de ADR-036 siguen siendo válidas.
+- Corrección sin duplicar: si el aviso dice que la línea es inválida, propone una corregida cuando puede derivarla;
+  enviar solo esa línea con `update_task(..., "in_review")` reemplaza la línea `Workers:` del último bloque de
+  resultado (o la agrega ahí) en lugar de crear un bloque nuevo.
 - Auditoría: al pasar a in_progress se graba en el frontmatter `routing: explore=<m>,write=<m>,verify=<m> ·
   delegation=<política> · build=<build> · at=<hora ISO 8601, a minutos>` (`session` si el rol no tiene modelo; se
   sobrescribe en cada reejecución; `build=` y `at=` desde T-016, ADR-037: las tareas anteriores conservan la forma corta
   y se siguen leyendo). `ratifact report` toma el período de `at=` cuando existe (si no, de `updated`). `ratifact report`
   mide el cumplimiento por proyecto (tareas required con trabajadores reales, escalamientos) y compara tareas
   delegadas y no delegadas en revisiones y en duración in_progress → in_review; las tareas sin `routing:` se cuentan
-  aparte. `ratifact doctor` muestra la política efectiva de cada proyecto (p. ej. `delegation=required (global)`).
+  aparte. Desde ADR-041 el routing termina con `· client=<nombre>/<versión>`, tomado del `clientInfo` MCP de la
+  inicialización (saneado: sin espacios, sin `·`, sin saltos de línea, máximo 64 caracteres; `client=unknown` si no
+  hay dato) y cada registro nuevo de `uso.jsonl` lleva el campo `client`; se graba el valor recibido, sin normalizar
+  (P-025). `ratifact report` mide además, entre las tareas delegadas (última línea `Workers:` válida de cada una),
+  cuántas tuvieron rework, los reenvíos totales por rol, los escalamientos y la tasa de retrabajo (con rework /
+  delegadas), y desglosa por cliente (`client=` del routing, `unknown` si falta) tareas, cumplimiento de la delegación
+  y tasa de retrabajo. `ratifact doctor` muestra la política efectiva de cada proyecto (p. ej. `delegation=required (global)`).
 
 ### Desfase de versiones (ADR-037)
 Hay tres copias de ratifact: la fuente (este repositorio), la instalación (directorio de uv tool, al que enlazan las

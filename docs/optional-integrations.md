@@ -72,12 +72,27 @@ task that touches security, is cross-cutting, or depends on diagnosing a cause t
   names): `Workers: explore/haiku×1, write/sonnet×2, verify/sonnet×1` (plus `escalated: write`), or
   `Workers: none — reason: <why>`. With `required`, `update_task(..., "in_review")` without a valid `Workers:` line
   still changes the status but answers with a warning.
+- Extended format (ADR-041, corrects ADR-036 §4–§5): `Workers: <role>/<model>×<n>, …[, rework: <role>×<n>, …][, escalated: <role>][ — note: <free text>]`.
+  `<role>/<model>×<n>` counts initial briefs only; `rework: <role>×<n>` counts re-sends of that role after a
+  verification found a defect (the role must appear among the workers, n ≥ 1); everything after ` — ` is a note the
+  parser ignores. No parentheses: rework goes in `rework:`, comments in `— note:`. Example:
+  `Workers: explore/haiku×1, write/sonnet×1, verify/sonnet×1, rework: write×1 — note: resumed once for the verify fix`.
+  ADR-036 lines stay valid.
+- Fixing a line without duplicating: if the warning says the line is invalid it proposes a corrected one when it can
+  derive it; sending only that line with `update_task(..., "in_review")` replaces the `Workers:` line of the latest
+  result block (or appends it there) instead of creating a new block.
 - Audit: `in_progress` records `routing: explore=<m>,write=<m>,verify=<m> · delegation=<policy> · build=<build> ·
   at=<ISO 8601 time, to the minute>` in the task's frontmatter (`session` for a role without a model; overwritten on
   re-runs; `build=` and `at=` since T-016, ADR-037 — older tasks keep the shorter form and are still read). `ratifact
   report` takes the period from `at=` when present (`updated` otherwise). `ratifact report` measures compliance
   per project (required tasks with real workers, escalations) and compares delegated and non-delegated tasks in
-  reviews and in_progress → in_review duration; tasks without `routing:` are counted apart. `ratifact doctor` shows
+  reviews and in_progress → in_review duration; tasks without `routing:` are counted apart.
+  Since ADR-041 routing ends with `· client=<name>/<version>`, taken from the MCP `clientInfo` of the initialize
+  handshake (sanitized: no spaces, no `·`, no newlines, max 64 chars; `client=unknown` if unavailable), and every new
+  `uso.jsonl` row has a `client` field. Values are recorded as received, without normalization (P-025). `ratifact
+  report` also measures, among delegated tasks (last valid `Workers:` line of each), how many had rework, the total
+  re-sends per role, escalations and the rework rate (with rework / delegated), plus a per-client breakdown (`client=`
+  from routing, `unknown` if missing) with tasks, delegation compliance and rework rate. `ratifact doctor` shows
   each project's effective policy (e.g. `delegation=required (global)`).
 
 ## Installer (PyPI task)

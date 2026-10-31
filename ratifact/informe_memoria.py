@@ -193,11 +193,15 @@ def _promedio(valores: list[float]) -> str:
     return f"{sum(valores) / len(valores):.1f}" if valores else "—"
 
 
+def _porcentaje(parte: int, total: int) -> str:
+    return f"{parte / total * 100:.0f} %" if total else "—"
+
+
 def indicador_delegacion(desde: dt.datetime, proyecto: str | None) -> list[str]:
     """ADR-036 §7: cumplimiento de la política de delegación por proyecto, desde las tareas con `routing:` cambiadas
     en el período (por `at=` del routing cuando existe, ADR-037 §3; si no, por `updated`) (las anteriores a la política, sin `routing:`, se cuentan aparte), y comparación delegadas vs. no
     delegadas en revisiones (changes_requested) y duración in_progress → in_review."""
-    from ratifact.delegacion import at_de_routing, politica_de_routing, workers_del_resultado
+    from ratifact.delegacion import at_de_routing, cliente_de_routing, politica_de_routing, ultimo_workers_valido
     config = ruta_config()
     try:
         proyectos = json.loads(config.read_text(encoding="utf-8"))
@@ -225,14 +229,31 @@ def indicador_delegacion(desde: dt.datetime, proyecto: str | None) -> list[str]:
         transiciones = _transiciones(mem) if con else {}
         requeridas = cumplen = escaladas = 0
         grupos = {"delegadas": ([], []), "no delegadas": ([], [])}
+        delegadas = con_rework = 0
+        reenvios: dict[str, int] = {}
+        clientes: dict[str, dict] = {}       # ADR-041 §5: tareas, required, cumplen, delegadas, con rework
         for meta, cuerpo, archivo in con:
             resultado = cuerpo.split("\n## Result", 1)[-1]
-            trabajadores, _ = workers_del_resultado(resultado)
+            trabajadores = valida = ultimo_workers_valido(resultado)      # una sola lectura por tarea (ADR-041 §5)
             delegada = bool(trabajadores and trabajadores.total)
             if politica_de_routing(meta["routing"]) == "required":
                 requeridas += 1
                 cumplen += delegada
             escaladas += bool(trabajadores and trabajadores.escalados)
+            cliente = clientes.setdefault(cliente_de_routing(meta["routing"]),
+                                          dict(tareas=0, requeridas=0, cumplen=0, delegadas=0, rework=0))
+            cliente["tareas"] += 1
+            if politica_de_routing(meta["routing"]) == "required":
+                cliente["requeridas"] += 1
+                cliente["cumplen"] += bool(valida and valida.total)
+            if valida and valida.total:
+                delegadas += 1
+                cliente["delegadas"] += 1
+                if valida.reenvios:
+                    con_rework += 1
+                    cliente["rework"] += 1
+                for rol, n in valida.reenvios.items():
+                    reenvios[rol] = reenvios.get(rol, 0) + n
             revisiones, horas = grupos["delegadas" if delegada else "no delegadas"]
             revisiones.append(len(re.findall(r"^### (?:Review|Revisión) \d+ · ", cuerpo, re.M)))
             id_ = _normalizar_id(meta.get("id") or re.match(r"T-\d+", archivo.name).group(0))
@@ -246,4 +267,11 @@ def indicador_delegacion(desde: dt.datetime, proyecto: str | None) -> list[str]:
         for grupo, (revisiones, horas) in grupos.items():
             lineas.append(f"    {grupo}: {len(revisiones)} tareas · revisiones (changes_requested) promedio "
                           f"{_promedio(revisiones)} · in_progress → in_review promedio {_promedio(horas)} h")
+        total = ", ".join(f"{r}×{n}" for r, n in reenvios.items()) or "0"
+        lineas.append(f"    retrabajo: con rework {con_rework} de {delegadas} delegadas · tasa "
+                      f"{_porcentaje(con_rework, delegadas)} · reenvíos {total} · escalamientos {escaladas}")
+        for nombre_cliente, c in sorted(clientes.items()):
+            lineas.append(f"    por cliente {nombre_cliente}: {c['tareas']} tareas · cumplimiento "
+                          f"{_porcentaje(c['cumplen'], c['requeridas'])} · retrabajo "
+                          f"{_porcentaje(c['rework'], c['delegadas'])}")
     return lineas or ["- ninguna tarea en el período"]

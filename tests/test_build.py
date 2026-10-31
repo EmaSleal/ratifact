@@ -259,7 +259,7 @@ def test_routing_graba_build_y_fecha(srv, proyecto):
     from ratifact import build
     _en_curso(srv)
     routing = _meta(proyecto["mem"])["routing"]
-    m = re.fullmatch(r"explore=\S+,write=\S+,verify=\S+ · delegation=required · build=(\S+) · at=(\S+)", routing)
+    m = re.fullmatch(r"explore=\S+,write=\S+,verify=\S+ · delegation=required · build=(\S+) · at=(\S+) · client=unknown", routing)
     assert m, routing
     assert m.group(1) == build.build_id()
     assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d[+-]\d\d:\d\d", m.group(2)), m.group(2)

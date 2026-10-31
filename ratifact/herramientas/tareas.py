@@ -2,9 +2,12 @@
 (amend_task y read_task en tareas_brief)."""
 from __future__ import annotations
 
+import re
+
 from ratifact import build as _build
 from ratifact import delegacion as _delegacion
 from ratifact import modelos as _modelos
+from ratifact import workers as _workers
 from ratifact import registros as _registros  # _ahora se busca en su módulo: las pruebas la reemplazan ahí
 from ratifact.app import _ejecutar, herramienta
 from ratifact.catalogo import _registros_en
@@ -182,7 +185,9 @@ def update_task(project: str, id: str, status: str, result: str = "", commit: st
     If this server process is older than the installation on disk, 'in_progress' is refused without changing
     anything (restart the client and repeat it); every other status works and carries a warning.
     With 'in_review', if the policy was required and `result` has no valid `Workers:` line, the response carries a
-    warning (the status changes anyway).
+    warning with a proposed corrected line when it can derive one (the status changes anyway). If the task is already
+    in review and `result` is only a valid `Workers:` line, it replaces that line in the latest result block instead of
+    adding a block (ADR-041). The routing also records the MCP client (`client=`).
     With 'merged', if the task declares `resolves`, the response reminds which pending items are still open (it
     never closes or modifies any)."""
     proyecto, estado, resultado = project, status, result
@@ -199,13 +204,25 @@ def update_task(project: str, id: str, status: str, result: str = "", commit: st
             if meta.get("status") == "in_review" and nuevo == "todo":
                 raise ErrorMemoria(f"{meta['id']} is in review: to ask for corrections use `request_changes`; "
                                    "'todo' is only for tasks that never ran.")
+            antes = meta.get("status")
             meta["status"], meta["updated"] = nuevo, _hoy()
             if commit:
                 meta["commit"] = commit
             entrada = _proyectos().get(proyecto, {})
             if nuevo == "in_progress":
-                meta["routing"] = _delegacion.routing(entrada, meta)
-            if resultado:
+                meta["routing"] = _delegacion.routing(entrada, meta, _delegacion.cliente_actual())
+            correccion = None
+            if resultado and antes == "in_review" and nuevo == "in_review":
+                solo = resultado.strip()
+                if "\n" not in solo and _workers.LINEA.match(solo):
+                    try:
+                        _workers.parsear_workers(solo)
+                        correccion = _workers.corregir_workers(cuerpo, solo)
+                    except ValueError:
+                        pass
+            if correccion:
+                cuerpo = correccion[0]
+            elif resultado:
                 cuerpo = _anexar_resultado(cuerpo, f"### {_hoy()} · {nuevo}\n{resultado.strip()}")
             _escribir_registro(ruta, meta, cuerpo)
             sha = _commit(proyecto, [ruta], f"{meta['id']} → {nuevo}")
@@ -220,7 +237,11 @@ def update_task(project: str, id: str, status: str, result: str = "", commit: st
                 guia = _delegacion.aviso_in_review(politica, resultado)
             if nuevo == "merged":
                 guia = _recordatorio_resuelve(proyecto, meta.get("resolves", ""))
-            return f"{meta['id']} → {nuevo} · commit {sha}" + (f"\n\n{guia}" if guia else "")
+            nota = ""
+            if correccion:
+                nota = (" · Workers line replaced in the latest result block" if correccion[1]
+                        else " · Workers line added to the latest result block")
+            return f"{meta['id']} → {nuevo}{nota} · commit {sha}" + (f"\n\n{guia}" if guia else "")
     return _ejecutar(f)
 
 
