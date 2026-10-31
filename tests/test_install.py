@@ -91,6 +91,8 @@ def maquina(casa):
                  "integrations": {"codegraph": "off"}}})
     vieja = casa / "repo-viejo" / "skills" / "run-task"
     vieja.mkdir(parents=True)
+    (casa / "repo-viejo" / "ratifact").mkdir()
+    (casa / "repo-viejo" / "ratifact" / "__init__.py").write_text("")           # an old own checkout
     (casa / ".claude/commands").mkdir()
     (casa / ".claude/commands/run-task.md").symlink_to(vieja / "SKILL.md")
     (casa / ".agents/skills/tarea").mkdir(parents=True)                       # a real folder: never replaced
@@ -134,11 +136,13 @@ def test_apply_configura_todo_y_el_segundo_no_cambia_nada(maquina, paquete, caps
     assert (maquina["repo"] / "CLAUDE.md").is_symlink()                     # the link is kept, its target edited
     assert "memoria-proyectos" in (maquina["otro"] / "AGENTS.md").read_text()
     home = maquina["home"]
-    for destino, objetivo in ((".claude/commands/run-task.md", "run-task/SKILL.md"),
+    for destino, objetivo in ((".claude/skills/run-task", "run-task"),
                               (".pi/agent/prompts/run-task.md", "run-task/SKILL.md"),
                               (".codex/skills/run-task", "run-task"),
                               (".agents/skills/run-task", "run-task")):
         assert (home / destino).is_symlink() and Path(os.readlink(home / destino)) == paquete / "skills" / objetivo
+    assert not (home / ".claude/commands/run-task.md").exists()               # old own command link: removed
+    assert f"remove stale /run-task command link: {home / '.claude/commands/run-task.md'}" in salida
     assert not (home / ".agents/skills/tarea").is_symlink() and (home / ".agents/skills/tarea").is_dir()
     assert not any((home / d).exists() for d in (".claude/commands/tarea.md", ".codex/skills/tarea"))
     assert "Claude Desktop" in salida and "requires approval" in salida      # what cannot be migrated
@@ -229,7 +233,7 @@ def test_doctor_informa_el_estado_de_cada_cliente(maquina, paquete, capsys):
     salida = capsys.readouterr().out
     assert codigo == 1 and "Claude Desktop: old configuration" in salida and "Pi: not configured" in salida
     assert "run `ratifact install --apply`" in salida
-    assert "/run-task link(s) point elsewhere" in salida                      # → the old working-copy link
+    assert "remove stale /run-task command link" in salida                   # → the old working-copy link
     modulo.main(aplicar=True, ejecutable=EXE, paquete=paquete, claude=None, procesos=lambda: [])
     capsys.readouterr()
     doctor.main(procesos=lambda: [], paquete=paquete, log_viejo=None)
@@ -337,10 +341,10 @@ def cliente_configurado(casa, paquete, capsys):
 
 
 def test_install_no_crea_enlaces_tarea(cliente_configurado, casa, paquete, capsys):
-    assert (casa / ".claude/skills/run-task").is_symlink() and (casa / ".claude/commands/run-task.md").is_symlink()
+    assert (casa / ".claude/skills/run-task").is_symlink() and not (casa / ".claude/commands/run-task.md").exists()
     assert not [p for p in casa.rglob("*tarea*") if "Projects" not in p.parts]
     codigo, salida = instalar(capsys, paquete, claude="/usr/bin/claude")
-    assert "tarea" not in salida and "Nothing to do: everything is already installed." in salida
+    assert "remove stale" not in salida and "Nothing to do: everything is already installed." in salida
 
 
 def test_plan_anuncia_y_apply_borra_el_enlace_propio_obsoleto(casa, paquete, capsys):

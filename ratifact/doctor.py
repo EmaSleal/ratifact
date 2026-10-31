@@ -14,6 +14,7 @@ from ratifact import __version__, build, delegacion, modelos, procesos, retirado
 from ratifact import config as _cfg
 from ratifact.config import _ruta_config
 from ratifact.esquema import VERSION_ESQUEMA
+from ratifact.instalar_extras import describir_rutas, planificar_enlaces
 from ratifact.instalacion import (Proceso, mensaje_sugerencia, procesos_servidor, separar_procesos,
                                   sugerencias_config)
 from ratifact.upgrade import describir, planificar
@@ -189,7 +190,6 @@ def _clientes(acciones: list[str], paquete: Path | None = None) -> list[str]:
 def _enlaces(encontrados: set[str], acciones: list[str], paquete: Path | None) -> list[str]:
     """/run-task links of the clients found: a missing, broken or foreign one is a pending action (`ratifact install
     --apply` fixes it); a real file/folder in its place is reported. Also any leftover link of the retired alias."""
-    from ratifact.instalar_extras import planificar_enlaces
     enlaces = planificar_enlaces(Path.home(), (paquete or Path(__file__).resolve().parent) / "skills", encontrados)
     otros = [e for e in enlaces if e.accion == "replace"]
     faltan = [e for e in enlaces if e.accion == "create"]
@@ -204,12 +204,11 @@ def _enlaces(encontrados: set[str], acciones: list[str], paquete: Path | None) -
         acciones.append(f"{e.destino} exists and is not a link, so /run-task is not linked there: remove it by hand "
                         "and run `ratifact install --apply`")
     for o in retirado.planificar_obsoletos(Path.home()):
-        acciones.append(f"stale /{retirado.NOMBRE} link at {o.ruta}: run `ratifact install --apply`"
-                        if o.accion == "remove" else
-                        f"{o.ruta} is a /{retirado.NOMBRE} leftover that is not a ratifact link: remove it by hand")
+        acciones.append(f"{o.describir()}: run `ratifact install --apply`" if o.accion == "remove"
+                        else o.describir())
     estado = "ok" if not (otros or faltan or reales) else (
         f"{len(faltan)} missing, {len(otros)} pointing elsewhere or broken, {len(reales)} blocked by a real file/folder")
-    return [f"/run-task links: {estado}"] if enlaces else []
+    return ([f"/run-task links: {estado}"] if enlaces else []) + describir_rutas(Path.home(), encontrados)
 
 
 def informe(procesos: Callable[[], list[Proceso]] = procesos_servidor, paquete: Path | None = None,

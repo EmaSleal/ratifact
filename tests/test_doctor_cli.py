@@ -178,8 +178,8 @@ def test_doctor_avisa_de_un_enlace_tarea_que_sigue_presente(vieja, hogar, capsys
     ajeno.parent.mkdir(parents=True)
     ajeno.mkdir()
     codigo, salida = _doctor(vieja, capsys, paquete=instalado)
-    assert f"stale /tarea link at {propio}: run `ratifact install --apply`" in salida
-    assert f"{ajeno} is a /tarea leftover that is not a ratifact link: remove it by hand" in salida
+    assert f"remove stale /tarea link: {propio}: run `ratifact install --apply`" in salida
+    assert f"{ajeno} is not a ratifact /tarea link: left untouched (remove it by hand" in salida
     assert codigo == 1 and propio.is_symlink()                      # read-only
 
 

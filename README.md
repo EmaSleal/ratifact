@@ -67,7 +67,7 @@ repository of its own), detects the test command and returns two texts to paste:
 
 `ratifact install --apply` links the `run-task` skill from the installed package:
 
-- Claude Code: `~/.claude/commands/run-task.md`
+- Claude Code: `~/.claude/skills/run-task` (the older `~/.claude/commands/run-task.md` link is removed if it is ours)
 - Pi: `~/.pi/agent/prompts/run-task.md` (and `~/.pi/agent/skills/run-task` if that folder exists)
 - Codex: `~/.codex/skills/run-task` and `~/.agents/skills/run-task` (the whole folder: Codex does not follow a linked
   `SKILL.md`)

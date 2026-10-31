@@ -97,10 +97,17 @@ def planificar(config: Path | None = None, base: Path | None = None,
     viejo, nuevo = log_viejo or rutas.log_viejo(), rutas.log_por_defecto()
     if viejo and viejo.is_file() and not nuevo.exists() and viejo.resolve() != nuevo.resolve():
         plan.log = (viejo, nuevo)
-    if not plan.vacio:                 # the stale-link cleanup alone never needs the clients closed
-        _bloqueos(plan, procesos())
     plan.obsoletos = retirado.planificar_obsoletos(Path.home())
+    if not plan.vacio and not solo_enlaces_obsoletos(plan):
+        _bloqueos(plan, procesos())
     return plan
+
+
+def solo_enlaces_obsoletos(plan: Plan) -> bool:
+    """True iff the only pending thing is removing stale skill links: no memory, config or log step and no block
+    already found. Only then `upgrade` does not need the clients closed (it touches no memory)."""
+    return (any(o.accion == "remove" for o in plan.obsoletos) and not plan.bloqueos and
+            not (plan.migrar or plan.mover or plan.config is not None or plan.vistas or plan.log))
 
 
 def _bloqueos(plan: Plan, procesos: list[Proceso]) -> None:

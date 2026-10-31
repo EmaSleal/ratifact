@@ -307,7 +307,7 @@ Corren contra una carpeta temporal: no tocan `projects.json`, la telemetría ni 
 (`skills/` y `run-task.md` en la raíz del repositorio son enlaces a ella). `ratifact install --apply` lo enlaza desde la
 copia instalada (nunca desde la copia de trabajo), así existe en todos los proyectos:
 
-- Claude Code: `~/.claude/commands/run-task.md`
+- Claude Code: `~/.claude/skills/run-task` (el enlace antiguo `~/.claude/commands/run-task.md` se borra si es nuestro)
 - Pi: `~/.pi/agent/prompts/run-task.md` (y `~/.pi/agent/skills/run-task` si existe esa carpeta)
 - Codex: `~/.codex/skills/run-task` y `~/.agents/skills/run-task` (según la versión lee una u otra; se enlaza la carpeta
   entera porque Codex no sigue un `SKILL.md` enlazado como archivo)

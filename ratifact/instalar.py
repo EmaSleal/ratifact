@@ -58,6 +58,7 @@ class Plan:
     bloques: list[ex.Cambio] = field(default_factory=list)
     enlaces: list[ex.Enlace] = field(default_factory=list)
     obsoletos: list[ret.Obsoleto] = field(default_factory=list)
+    encontrados: set[str] = field(default_factory=set)       # clients detected on this machine
     manuales: list[str] = field(default_factory=list)
     integraciones: list[str] = field(default_factory=list)
 
@@ -138,6 +139,7 @@ def planificar(ejecutable: str | None, paquete: Path, claude=_BUSCAR, cliente: s
                                                 *((c / ".claude" / "settings.json", True) for _, c in codigos)])
     plan.bloques, bloques_a_mano = ex.planificar_bloques([(n, c, _repos_de(c) if c.is_dir() else [])
                                                           for n, c in codigos])
+    plan.encontrados = encontrados
     plan.enlaces = ex.planificar_enlaces(Path.home(), paquete / "skills", encontrados)
     plan.obsoletos = ret.planificar_obsoletos(Path.home())
     _manuales(plan)
@@ -170,6 +172,7 @@ def describir(plan: Plan) -> list[str]:
         lineas.append("/run-task links:")
         lineas += [f"  {e.describir()}" for e in cambian]
     lineas += [o.describir() for o in plan.obsoletos if o.accion == "remove"]
+    lineas += ex.describir_rutas(Path.home(), plan.encontrados)
     return lineas
 
 

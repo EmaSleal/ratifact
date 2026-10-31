@@ -133,8 +133,7 @@ def _destinos(home: Path, clientes: set[str]) -> list[tuple[Path, str, bool]]:
     salida = []
     for s in SKILLS:
         if "claude-code" in clientes:
-            salida.append((home / ".claude" / "commands" / f"{s}.md", s, False))
-            salida.append((home / ".claude" / "skills" / s, s, True))
+            salida.append((home / ".claude" / "skills" / s, s, True))       # the single Claude Code entry point
         if "pi" in clientes:
             salida.append((home / ".pi" / "agent" / "prompts" / f"{s}.md", s, False))
             if (home / ".pi" / "agent" / "skills").is_dir():
@@ -142,6 +141,17 @@ def _destinos(home: Path, clientes: set[str]) -> list[tuple[Path, str, bool]]:
         if "codex" in clientes:       # depending on the version, Codex reads ~/.codex/skills or ~/.agents/skills
             salida += [(home / ".codex" / "skills" / s, s, True), (home / ".agents" / "skills" / s, s, True)]
     return salida
+
+
+def rutas_revisadas(home: Path, clientes: set[str]) -> list[Path]:
+    """Every skill-link path `install` and `doctor` look at: the /run-task destinations of the detected clients, then
+    the legacy ones that are cleaned up. One list for both commands."""
+    from ratifact.retirado import rutas_candidatas
+    return [d for d, _, _ in _destinos(home, clientes)] + rutas_candidatas(home)
+
+
+def describir_rutas(home: Path, clientes: set[str]) -> list[str]:
+    return ["Skill link paths checked:"] + [f"  {r}" for r in rutas_revisadas(home, clientes)]
 
 
 def planificar_enlaces(home: Path, skills: Path, clientes: set[str]) -> list[Enlace]:
