@@ -206,6 +206,6 @@ def test_analizar_uso_reporta_duplicados(srv, proyecto, entorno, monkeypatch, ca
     analizar_uso.main()
 
     salida = capsys.readouterr().out
-    assert "Creaciones idempotentes" in salida
-    assert "duplicados detectados" in salida
-    assert "1" in salida.split("duplicados detectados")[1].split("\n")[0]
+    assert "Idempotent creations" in salida
+    assert "duplicates detected" in salida
+    assert "1" in salida.split("duplicates detected")[1].split("\n")[0]

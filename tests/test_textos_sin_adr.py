@@ -14,12 +14,12 @@ from test_analizar_uso import _log_filas
 from test_install import casa, instalar, maquina, paquete  # noqa: F401  (fixtures)
 from test_upgrade import correr, hogar, vieja  # noqa: F401,F811  (fixtures)
 
-ADR = re.compile(r"ADR[- ]?\d{3}")
+ADR = re.compile(r"ADR[- ]?\d{3}|\b[TtPp]-\d+\b")   # ADR-NNN and the development-history ids T-NNN / P-NNN
 
 
 def sin_citas(texto: str, permitidos: tuple[str, ...] = ()) -> list[str]:
-    """Matches of ADR-NNN that are not the id of a record created by the test."""
-    return [m for m in ADR.findall(texto) if m not in permitidos]
+    """Matches of ADR-NNN, T-NNN or P-NNN that are not the id of a record created by the test."""
+    return [m for m in ADR.findall(texto) if m.upper() not in {x.upper() for x in permitidos}]
 
 
 # ───────────────────────── CLI ─────────────────────────
@@ -32,22 +32,24 @@ def test_ayuda_de_la_cli_sin_adr(capsys):
             cli.main([*argumentos, "--help"])
         textos.append(capsys.readouterr().out)
     assert "--apply" in textos[2] and "English keys" in textos[0]
+    assert "--days DAYS" in textos[4] and "--project PROJECT" in textos[4]
+    assert sin_espanol("\n".join(textos).replace("--dias", "").replace("--proyecto", "")) == []
     assert sin_citas("\n".join(textos)) == []
 
 
 def test_install_plan_y_apply_sin_adr(maquina, paquete, capsys):
     _, plan = instalar(capsys, paquete)
     assert "never asked" in plan and "Integrations per project" in plan
-    assert sin_citas(plan) == []
+    assert sin_citas(plan) == [] and sin_espanol(plan) == []
     _, aplicado = instalar(capsys, paquete, aplicar=True)
-    assert sin_citas(aplicado) == []
+    assert sin_citas(aplicado) == [] and sin_espanol(aplicado) == []
 
 
 def test_upgrade_plan_y_apply_sin_adr(vieja, capsys):
     _, plan = correr(vieja, capsys)
-    assert "Dry run: nothing was changed" in plan and sin_citas(plan) == []
+    assert "Dry run: nothing was changed" in plan and sin_citas(plan) == [] and sin_espanol(plan) == []
     _, aplicado = correr(vieja, capsys, aplicar=True)
-    assert sin_citas(aplicado) == []
+    assert sin_citas(aplicado) == [] and sin_espanol(aplicado) == []
 
 
 def test_doctor_sin_adr_en_ninguna_plataforma(vieja, capsys, monkeypatch, tmp_path):
@@ -61,7 +63,7 @@ def test_doctor_sin_adr_en_ninguna_plataforma(vieja, capsys, monkeypatch, tmp_pa
         textos.append(capsys.readouterr().out)
     assert "Native Windows is not a supported platform: install ratifact inside WSL2" in textos[1]
     assert "Running inside WSL: supported" in textos[2]
-    assert sin_citas("\n".join(textos)) == []
+    assert sin_citas("\n".join(textos)) == [] and sin_espanol("\n".join(textos)) == []
 
 
 def test_doctor_memoria_dentro_del_repo_explica_el_motivo(vieja, capsys):
@@ -84,9 +86,50 @@ def test_report_sin_adr(entorno, monkeypatch, capsys):
     log = _log_filas(entorno["tmp"] / "log" / "uso.jsonl", filas)
     cli.main(["report", "--log", str(log), "--days", "14"])
     salida = capsys.readouterr().out
-    assert "Creaciones idempotentes:" in salida and "Criterio de uso real de 1.0" in salida
-    assert "Delegación: tareas con `routing:`" in salida
+    assert "Idempotent creations:" in salida and "Real-use criterion for 1.0" in salida
+    assert "Delegation: tasks with `routing:`" in salida
     assert sin_citas(salida) == []
+
+
+# ───────────────────────── criterion 22: everything the CLI prints is English ─────────────────────────
+
+PALABRAS_EN_ESPANOL = ("Creaciones", "Criterio", "Delegación", "tareas", "pendientes", "decisiones", "uso real",
+                       "llamadas", "errores", "interno", "validacion")
+
+
+def sin_espanol(texto: str) -> list[str]:
+    return [p for p in PALABRAS_EN_ESPANOL if re.search(rf"\b{re.escape(p)}\b", texto, re.I)]
+
+
+def test_report_completo_en_ingles(srv, proyecto, entorno, monkeypatch, capsys):
+    """Report with idempotent creations, delegation, rework and per-client breakdown; plus empty and missing log."""
+    from ratifact import cli
+    from test_delegacion import WORKERS_OK, _en_curso
+    from test_workers_adr041 import cliente
+    with cliente("claude-code", "2"):
+        _en_curso(srv, "T-001")
+        srv.update_task(project="demo", id="T-001", status="in_review",
+                        result="Workers: write/sonnet×1, verify/sonnet×1, rework: write×2 — note: x")
+    filas = [{"herramienta": h, "resp_chars": 10, "error": False}
+             for h in ("get_context", "read_document", "search", "propose_decision", "add_pending", "create_task")]
+    filas += [{"herramienta": "propose_decision", "resp_chars": 10, "duplicado": True},
+              {"herramienta": "search", "resp_chars": 10, "error": True, "tipo_error": "interno", "detalle": "x"},
+              {"herramienta": "search", "resp_chars": 10, "error": True, "tipo_error": "validacion", "detalle": "y"}]
+    log = _log_filas(entorno["tmp"] / "log" / "uso.jsonl", filas)
+    cli.main(["report", "--log", str(log), "--days", "14"])
+    salida = capsys.readouterr().out
+    for encabezado in ("Idempotent creations:", "Real-use criterion for 1.0", "Delegation: tasks with `routing:`",
+                       "tasks with routing", "rework: with rework", "per client claude-code/2:",
+                       "Open pending items referenced by merged tasks", "Latest errors", "Largest responses", "[internal]", "[validation]"):
+        assert encabezado in salida, encabezado
+    assert sin_espanol(salida) == [], salida
+    # empty period (no rows inside the window) and missing log
+    vacio = _log_filas(entorno["tmp"] / "log" / "vacio.jsonl", [{"herramienta": "search", "resp_chars": 1}])
+    cli.main(["report", "--log", str(vacio), "--days", "0"])
+    assert "No calls in the period." in capsys.readouterr().out
+    with pytest.raises(SystemExit):
+        cli.main(["report", "--log", str(entorno["tmp"] / "no-existe.jsonl")])
+    assert sin_espanol(capsys.readouterr().err) == []
 
 
 # ───────────────────────── respuestas de las herramientas MCP ─────────────────────────

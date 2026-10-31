@@ -126,7 +126,7 @@ def planificar(ejecutable: str | None, paquete: Path, claude=_BUSCAR, cliente: s
     if not ejecutable:
         plan.bloqueo = problema or "the `ratifact` executable was not found"
     elif rutas.es_copia_de_trabajo(paquete):
-        plan.bloqueo = (f"this command runs from the working copy {paquete.parent} (P-017): the links would point to "
+        plan.bloqueo = (f"this command runs from the working copy {paquete.parent}: the links would point to "
                         f"it; run the installed one instead: `{ejecutable} install --apply`")
     _config_a_crear(procesos(), plan)
     elegidos = [c for c in cl.clientes(claude=claude) if cliente in (None, c.nombre)]

@@ -296,12 +296,12 @@ def test_report_retrabajo_y_desglose_por_cliente(srv, proyecto, entorno):
     meta["routing"] = "explore=haiku,write=sonnet,verify=sonnet · delegation=required"
     _escribir_registro(ruta, meta, cuerpo)
     lineas = indicador_delegacion(dt.datetime.now() - dt.timedelta(days=7), "demo")
-    assert lineas[0].startswith("  demo: 5 tareas con routing · required 5 · con trabajadores")
-    assert "    retrabajo: con rework 3 de 4 delegadas · tasa 75 % · reenvíos write×4, verify×1 · escalamientos 0" \
+    assert lineas[0].startswith("  demo: 5 tasks with routing · required 5 · with workers")
+    assert "    rework: with rework 3 of 4 delegated · rate 75 % · resends write×4, verify×1 · escalations 0" \
         in lineas
-    assert "    por cliente claude-code/2: 3 tareas · cumplimiento 100 % · retrabajo 67 %" in lineas
-    assert "    por cliente codex/0.9: 1 tareas · cumplimiento 0 % · retrabajo —" in lineas
-    assert "    por cliente unknown: 1 tareas · cumplimiento 100 % · retrabajo 100 %" in lineas
+    assert "    per client claude-code/2: 3 tasks · compliance 100 % · rework 67 %" in lineas
+    assert "    per client codex/0.9: 1 tasks · compliance 0 % · rework —" in lineas
+    assert "    per client unknown: 1 tasks · compliance 100 % · rework 100 %" in lineas
 
 
 def test_report_cuenta_la_ultima_linea_valida_aunque_haya_una_invalida_despues(srv, proyecto):
@@ -310,9 +310,9 @@ def test_report_cuenta_la_ultima_linea_valida_aunque_haya_una_invalida_despues(s
     srv.update_task(project="demo", id="T-001", status="in_review",
                     result="Workers: write/sonnet×1, rework: write×1, escalated: write\nWorkers: write/sonnet×1 (x)")
     lineas = indicador_delegacion(dt.datetime.now() - dt.timedelta(days=7), "demo")
-    assert "required 1 · con trabajadores 1 · cumplimiento 100 % · escalamientos 1" in lineas[0]
-    assert lineas[1].startswith("    delegadas: 1 tareas")
-    assert "    retrabajo: con rework 1 de 1 delegadas · tasa 100 % · reenvíos write×1 · escalamientos 1" in lineas
+    assert "required 1 · with workers 1 · compliance 100 % · escalations 1" in lineas[0]
+    assert lineas[1].startswith("    delegated: 1 tasks")
+    assert "    rework: with rework 1 of 1 delegated · rate 100 % · resends write×1 · escalations 1" in lineas
 
 
 def test_correccion_con_review_tras_otro_encabezado_cae_al_comportamiento_normal(srv, proyecto):

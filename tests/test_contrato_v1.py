@@ -341,7 +341,7 @@ def test_analizar_uso_agrega_nombres_viejos_y_nuevos(entorno, monkeypatch, capsy
     conteo = {l.split()[0]: int(l.split()[1]) for l in tabla[1:]}
     assert conteo == {"get_context": 3, "search": 2, "read_document": 1, "log_session": 1, "update_project": 1}
     assert not any(viejo in salida for viejo in ("obtener_contexto", "leer_documento", "registrar_sesion"))
-    assert "Chats iniciados: 3" in salida and "Lecturas: 1 vs búsquedas: 2" in salida
+    assert "Chats started: 3" in salida and "Reads: 1 vs searches: 2" in salida
 
 
 # ───────────────────────── docs/upgrade-v1.md ─────────────────────────
@@ -353,7 +353,7 @@ def test_guia_de_actualizacion_trae_el_texto_exacto_a_pegar():
     guia = (RAIZ_REPO / "docs" / "upgrade-v1.md").read_text(encoding="utf-8")
     assert PLANTILLA_INSTRUCCIONES.format(proyecto="<project>") in guia
     assert PLANTILLA_AGENTES.format(proyecto="<project>") in guia
-    assert "ratifact install --apply" in guia and "## ratifact install (T-013)" in guia
+    assert "ratifact install --apply" in guia and "## ratifact install" in guia
     for nombre in ("accept_decision", "accept_decisions", "propose_decision", "register_project", *HERRAMIENTAS_NUEVAS):
         assert f"`{nombre}`" in guia, nombre
     for es, en in HERRAMIENTAS_V0.items():

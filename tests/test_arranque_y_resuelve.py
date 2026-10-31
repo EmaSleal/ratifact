@@ -104,10 +104,10 @@ def test_analizar_uso_tamano_de_contexto_por_proyecto(entorno, monkeypatch, caps
     filas += [{"herramienta": "search", "resp_chars": 50000}]
     _correr(monkeypatch, "--log", str(_log_filas(entorno["tmp"] / "log" / "uso.jsonl", filas)))
     salida = capsys.readouterr().out
-    bloque = salida.split("- Tamaño de get_context por proyecto")[1].split("\n- ")[0].splitlines()
-    assert "referencia 2,000 tokens = 8,000 caracteres" in bloque[0]
-    assert bloque[1] == "  demo: p50 9000 caracteres (~2250 tokens) · máx 9000 (~2250 tokens) · 3 llamadas  ⚠ > 2,000 tokens"
-    assert bloque[2] == "  otro: p50 8000 caracteres (~2000 tokens) · máx 8000 (~2000 tokens) · 2 llamadas"
+    bloque = salida.split("- get_context size per project")[1].split("\n- ")[0].splitlines()
+    assert "reference 2,000 tokens = 8,000 characters" in bloque[0]
+    assert bloque[1] == "  demo: p50 9000 characters (~2250 tokens) · max 9000 (~2250 tokens) · 3 calls  ⚠ > 2,000 tokens"
+    assert bloque[2] == "  otro: p50 8000 characters (~2000 tokens) · max 8000 (~2000 tokens) · 2 calls"
 
 
 # ───────────────────────── criterio 4: create_task con resuelve ─────────────────────────
@@ -207,26 +207,26 @@ def test_analizar_uso_pendientes_referenciados_por_tareas_integradas(srv, proyec
     hoy = dt.date.today().isoformat()
     log = _log_filas(entorno["tmp"] / "log" / "uso.jsonl", [{"herramienta": "search", "resp_chars": 10}])
     _correr(monkeypatch, "--log", str(log))
-    seccion = capsys.readouterr().out.split("Pendientes abiertos referenciados por tareas integradas\n")[1]
+    seccion = capsys.readouterr().out.split("Open pending items referenced by merged tasks\n")[1]
     assert seccion.split("\n\n")[0].splitlines() == [
         "  demo",
-        "    declarados en resuelve:",
-        f"      P-001: T-001 (integrada {hoy})",
-        "    mencionados en la spec:",
-        f"      P-002: T-001 (integrada {hoy})",
-        f"      P-004: T-001 (integrada {hoy})",
-        "    mencionados en el Resultado:",
-        f"      P-003: T-001 (integrada {hoy})",
-        f"      P-005: T-001 (integrada {hoy})"]
+        "    declared in resolves:",
+        f"      P-001: T-001 (merged {hoy})",
+        "    mentioned in the spec:",
+        f"      P-002: T-001 (merged {hoy})",
+        f"      P-004: T-001 (merged {hoy})",
+        "    mentioned in the Result:",
+        f"      P-003: T-001 (merged {hoy})",
+        f"      P-005: T-001 (merged {hoy})"]
 
 
 def test_analizar_uso_higiene_sin_referencias(srv, proyecto, entorno, monkeypatch, capsys):
     log = _log_filas(entorno["tmp"] / "log" / "uso.jsonl", [{"herramienta": "search", "resp_chars": 10}])
     _correr(monkeypatch, "--log", str(log))
-    seccion = capsys.readouterr().out.split("Pendientes abiertos referenciados por tareas integradas\n")[1]
+    seccion = capsys.readouterr().out.split("Open pending items referenced by merged tasks\n")[1]
     assert seccion.split("\n\n")[0].splitlines() == [
-        "  demo", "    declarados en resuelve: (ninguno)", "    mencionados en la spec: (ninguno)",
-        "    mencionados en el Resultado: (ninguno)"]
+        "  demo", "    declared in resolves: (none)", "    mentioned in the spec: (none)",
+        "    mentioned in the Result: (none)"]
 
 
 # ───────────────────────── criterio 7: contrato ─────────────────────────

@@ -11,7 +11,7 @@ Run task **$ARGUMENTS** of this repository's project.
 The project name in `ratifact` is in this repository's `CLAUDE.md` / `AGENTS.md` ("with project `<name>`"). If you cannot find it, call `list_projects` and pick the project whose path contains the current directory (in multi-repo projects, the path is the folder that groups them); if it is still unclear, ask me. From here on, `<project>` is that name.
 
 ## 1. Prepare
-1. Read the task with the `ratifact` MCP tool → `read_task("<project>", "$ARGUMENTS")` (e.g. `read_task("<project>", "T-007")`). It returns the frontmatter, the full spec, every Amendment, the block relevant to the status in full, and an index of older Result/Review blocks (read one with `read_document` and its line range only if you need it). If the id does not exist, use `list_tasks("<project>")` to find the task.
+1. Read the task with the `ratifact` MCP tool → `read_task("<project>", "$ARGUMENTS")` (e.g. `read_task("<project>", "T-001")`). It returns the frontmatter, the full spec, every Amendment, the block relevant to the status in full, and an index of older Result/Review blocks (read one with `read_document` and its line range only if you need it). If the id does not exist, use `list_tasks("<project>")` to find the task.
 2. Depending on its status (`status` field):
    - `todo`: first run.
    - `changes_requested`: the user reviewed an earlier run and asks for corrections. The **latest** "Review N" block is included in full: its **Findings** and **Additional criteria** add to the original criteria, which still apply. What the review approves is not redone.

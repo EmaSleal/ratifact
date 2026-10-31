@@ -40,7 +40,7 @@ def test_report_con_opciones_en_ingles(entorno, capsys):
     _escribir_log(Path(entorno["env"]["MEMORIA_PROYECTOS_LOG"]), "get_context")
     cli.main(["report", "--days", "3", "--project", "demo"])
     salida = capsys.readouterr().out
-    assert "últimos 3 días" in salida and "get_context" in salida
+    assert "last 3 days" in salida and "get_context" in salida
 
 
 def test_analizar_uso_sigue_como_envoltorio(entorno):
@@ -48,7 +48,7 @@ def test_analizar_uso_sigue_como_envoltorio(entorno):
     import os
     r = subprocess.run([sys.executable, str(RAIZ_REPO / "analizar_uso.py"), "--dias", "2"], capture_output=True,
                        text=True, env={**os.environ, **entorno["env"]})
-    assert r.returncode == 0 and "últimos 2 días" in r.stdout and "search" in r.stdout
+    assert r.returncode == 0 and "last 2 days" in r.stdout and "search" in r.stdout
 
 
 def _doctor(vieja, capsys, paquete=None):
@@ -63,7 +63,7 @@ def test_doctor_informa_y_no_escribe_nada(vieja, entorno, capsys):
     assert arbol(entorno["tmp"]) == antes
     assert codigo == 1
     base = vieja["base"]
-    for esperado in ("ratifact 1.0.0", f"Running from: working copy {RAIZ_REPO}", "P-017",
+    for esperado in ("ratifact 1.0.0", f"Running from: working copy {RAIZ_REPO}", "changes in the working tree reach the clients immediately",
                      f"Configuration: {vieja['config']} (from MEMORIA_PROYECTOS_CONFIG (deprecated))",
                      "Keys in projects.json: Spanish",
                      f"memory: {base / '.memorias' / 'uno'} · schema v1 · old default (.memorias/) · git: clean",

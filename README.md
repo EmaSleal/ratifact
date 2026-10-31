@@ -72,7 +72,7 @@ repository of its own), detects the test command and returns two texts to paste:
 - Codex: `~/.codex/skills/run-task` and `~/.agents/skills/run-task` (the whole folder: Codex does not follow a linked
   `SKILL.md`)
 
-In the repository, `/run-task T-007` (Codex: `$run-task T-007`) reads the task with `read_task`, creates its branch
+In the repository, `/run-task T-001` (Codex: `$run-task T-001`) reads the task with `read_task`, creates its branch
 from main, implements it, runs the project's tests and leaves the task `in_review` (or `failed`) with the result. The
 `run-task` skill is linked into Claude Code, Pi and Codex by `ratifact install --apply`. A link that exists as a real file or folder is never replaced: the
 plan says to remove it by hand. The links point inside the installed package; if a reinstall moves it (for example
@@ -159,13 +159,13 @@ task that touches security, is cross-cutting, or depends on diagnosing a cause t
   result block (or appends it there) instead of creating a new block.
 - Audit: `in_progress` records `routing: explore=<m>,write=<m>,verify=<m> · delegation=<policy> · build=<build> ·
   at=<ISO 8601 time, to the minute>` in the task's frontmatter (`session` for a role without a model; overwritten on
-  re-runs; `build=` and `at=` since T-016 — older tasks keep the shorter form and are still read). `ratifact
+  re-runs; `build=` and `at=` are written on newer tasks — older tasks keep the shorter form and are still read). `ratifact
   report` takes the period from `at=` when present (`updated` otherwise). `ratifact report` measures compliance
   per project (required tasks with real workers, escalations) and compares delegated and non-delegated tasks in
   reviews and in_progress → in_review duration; tasks without `routing:` are counted apart.
   Routing also ends with `· client=<name>/<version>`, taken from the MCP `clientInfo` of the initialize
   handshake (sanitized: no spaces, no `·`, no newlines, max 64 chars; `client=unknown` if unavailable), and every new
-  `uso.jsonl` row has a `client` field. Values are recorded as received, without normalization (P-025). `ratifact
+  `uso.jsonl` row has a `client` field. Values are recorded as received, without normalization. `ratifact
   report` also measures, among delegated tasks (last valid `Workers:` line of each), how many had rework, the total
   re-sends per role, escalations and the rework rate (with rework / delegated), plus a per-client breakdown (`client=`
   from routing, `unknown` if missing) with tasks, delegation compliance and rework rate. `ratifact doctor` shows
@@ -212,7 +212,7 @@ What reveals a drift:
   reinstall with identical code does not trigger the warning or the `in_progress` refusal.
 
 `ratifact install --apply` and `ratifact upgrade --apply` end by reminding you to restart the clients and run
-`ratifact doctor`. A server older than T-016 cannot diagnose itself; `doctor` still shows it.
+`ratifact doctor`. A server that predates the build/PID registry cannot diagnose itself; `doctor` still shows it.
 
 ## Upgrade from memoria-proyectos
 

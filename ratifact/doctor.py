@@ -29,10 +29,10 @@ def _donde(paquete: Path | None, acciones: list[str]) -> list[str]:
     paquete = paquete or Path(__file__).resolve().parent
     origen = rutas.origen(paquete)
     if rutas.es_copia_de_trabajo(paquete):
-        acciones.append(f"clients should run the fixed installation, not the working copy (P-017): "
+        acciones.append(f"clients should run the fixed installation, not the working copy: "
                         f"`uv tool install --reinstall {paquete.parent}` and configure them with `ratifact serve` "
                         "(docs/upgrade-v1.md)")
-        return [f"Running from: working copy {paquete.parent} ⚠ (P-017: changes in the working tree reach the "
+        return [f"Running from: working copy {paquete.parent} ⚠ (changes in the working tree reach the "
                 "clients immediately)"]
     return [f"Running from: fixed installation {paquete}" + (f" · installed from {origen}" if origen else "")]
 

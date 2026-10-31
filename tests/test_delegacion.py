@@ -256,12 +256,12 @@ def test_report_mide_cumplimiento_y_compara(srv, proyecto, entorno):
     srv.request_changes(project="demo", id="T-004", findings="z")
     _en_curso(srv, "T-005", delegation="off")
     lineas = indicador_delegacion(dt.datetime.now() - dt.timedelta(days=7), "demo")
-    assert lineas[0] == ("  demo: 4 tareas con routing · required 3 · con trabajadores 2 · cumplimiento 67 % · "
-                         "escalamientos 1 · sin routing (anteriores a la política): 1")
-    assert re.fullmatch(r"    delegadas: 2 tareas · revisiones \(changes_requested\) promedio 0\.5 · "
-                        r"in_progress → in_review promedio \d+\.\d h", lineas[1]), lineas[1]
-    assert re.fullmatch(r"    no delegadas: 2 tareas · revisiones \(changes_requested\) promedio 1\.0 · "
-                        r"in_progress → in_review promedio \d+\.\d h", lineas[2]), lineas[2]
+    assert lineas[0] == ("  demo: 4 tasks with routing · required 3 · with workers 2 · compliance 67 % · "
+                         "escalations 1 · without routing (before the policy): 1")
+    assert re.fullmatch(r"    delegated: 2 tasks · reviews \(changes_requested\) average 0\.5 · "
+                        r"in_progress → in_review average \d+\.\d h", lineas[1]), lineas[1]
+    assert re.fullmatch(r"    not delegated: 2 tasks · reviews \(changes_requested\) average 1\.0 · "
+                        r"in_progress → in_review average \d+\.\d h", lineas[2]), lineas[2]
 
 
 def test_report_imprime_la_seccion(srv, proyecto, entorno, monkeypatch, capsys):
@@ -270,8 +270,8 @@ def test_report_imprime_la_seccion(srv, proyecto, entorno, monkeypatch, capsys):
     log = _log_filas(entorno["tmp"] / "log" / "uso.jsonl", [{"herramienta": "search", "resp_chars": 10}])
     _correr(monkeypatch, "--log", str(log))
     salida = capsys.readouterr().out
-    seccion = salida.split("Delegación: tareas con `routing:`")[1]
-    assert "demo: 1 tareas con routing · required 1 · con trabajadores 0 · cumplimiento 0 %" in seccion
+    seccion = salida.split("Delegation: tasks with `routing:`")[1]
+    assert "demo: 1 tasks with routing · required 1 · with workers 0 · compliance 0 %" in seccion
 
 
 # ───────────────────────── criterio 14: doctor ─────────────────────────

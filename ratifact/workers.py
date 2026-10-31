@@ -34,8 +34,10 @@ class Trabajadores:
 def parsear_workers(linea: str) -> Trabajadores:
     """Parser único de la línea `Workers:` (ADR-036 §4, ampliado por ADR-041 §1). Acepta
     `Workers: explore/haiku×1, write/sonnet×2, rework: write×1, escalated: write — note: <texto>` (rework, escalated
-    y nota opcionales, en ese orden; todo lo que sigue a ` — ` es nota y no se valida) y
-    `Workers: none — reason: <motivo>`. Lanza ValueError con el motivo si está mal formada (incluido `none` sin motivo)."""
+    y nota opcionales, en ese orden) y `Workers: none — reason: <motivo>`. Separador de la nota (ADR-042): el canónico
+    es ` — note:` (` — reason:` para `none`); también se aceptan ` - note:` / ` -- note:` (y `none - reason:`) en ASCII;
+    un guion ASCII en cualquier otro lugar no separa nada (la raya ` — ` / ` – ` sí, ver NOTA). La nota, una vez separada, no se valida.
+    Lanza ValueError con el motivo si está mal formada (incluido `none` sin motivo)."""
     m = LINEA.match(linea or "")
     if not m:
         raise ValueError("it does not start with `Workers:`")

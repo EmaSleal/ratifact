@@ -131,7 +131,7 @@ def test_analizar_uso_muestra_la_carpeta_en_respuestas_grandes(srv, proyecto, en
     srv.list_documents(project="demo", folder="docs")
     monkeypatch.setattr(sys, "argv", ["analizar_uso.py"])
     analizar_uso.main()
-    seccion = capsys.readouterr().out.split("Respuestas más grandes")[1].splitlines()
+    seccion = capsys.readouterr().out.split("Largest responses")[1].splitlines()
     assert "list_documents" in seccion[1] and seccion[1].endswith(" · docs"), seccion[1]
 
 

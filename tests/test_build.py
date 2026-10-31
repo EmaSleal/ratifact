@@ -303,7 +303,7 @@ def test_report_usa_at_y_updated_solo_sin_at(srv, proyecto):
         meta["routing"], meta["updated"] = routing, updated
         _escribir_registro(archivo, meta, cuerpo)
     lineas = indicador_delegacion(dt.datetime.now() - dt.timedelta(days=7), "demo")
-    assert lineas[0].startswith("  demo: 2 tareas con routing · required 2 "), lineas[0]
+    assert lineas[0].startswith("  demo: 2 tasks with routing · required 2 "), lineas[0]
 
 
 # ───────────────────────── criteria 9–10: local source ─────────────────────────

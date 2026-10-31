@@ -3,7 +3,7 @@
 English: [README.md](README.md) (qué es, instalación, primer proyecto, /run-task, comandos, integraciones, upgrade).
 
 Servidor MCP local: comando `ratifact serve` (paquete instalable, sección 0; `servidor.py` es su envoltorio hasta 1.1). Proyectos registrados: `projects.json`.
-Desde la v1 (T-011) el contrato está en inglés: herramientas, parámetros, descripciones y respuestas
+Desde la v1 el contrato está en inglés: herramientas, parámetros, descripciones y respuestas
 (`docs/v1-english-naming.md`). Pasos para usuarios existentes después de actualizar: `docs/upgrade-v1.md`.
 
 Variables de entorno: `RATIFACT_CONFIG` (projects.json), `RATIFACT_LOG` (telemetría) y `RATIFACT_BASE` (carpeta de
@@ -12,19 +12,19 @@ servidor avisa una vez por variable). Sin variable, la configuración es `~/.con
 no `~/.config/memoria-proyectos/projects.json` (no se mueve ni reescribe nada).
 
 ## 0. Comando `ratifact` (instalación fija)
-Desde T-012 el repositorio es un paquete instalable (`pyproject.toml`, MIT). `uv tool install ratifact` (desde PyPI) o
+El repositorio es un paquete instalable (`pyproject.toml`, MIT). `uv tool install ratifact` (desde PyPI) o
 `uv tool install ~/Projects/.memoria-proyectos` (desde la copia local) instala una copia fija (no editable) y deja el
 ejecutable `~/.local/bin/ratifact`; después de cada integración en main: `uv tool install --reinstall
 ~/Projects/.memoria-proyectos`, reiniciar los clientes y verificar con `ratifact doctor` (procedimiento completo en
 "Desfase de versiones", más abajo). Los clientes se configuran con `ratifact install --apply`
-(T-013, sección 1); las configuraciones viejas con `servidor.py` siguen funcionando hasta 1.1.
+(sección 1); las configuraciones viejas con `servidor.py` siguen funcionando hasta 1.1.
 
 | Subcomando | Qué hace |
 |---|---|
 | `ratifact serve` | Servidor MCP por stdio (lo que lanzan los clientes). `servidor.py` es un envoltorio de esto hasta 1.1. |
 | `ratifact install [--apply] [--client NOMBRE]` | Configura los clientes MCP que encuentra (Claude Desktop, Claude Code, Pi, Codex) y enlaza `/run-task` (sección 1). Sin `--apply` solo muestra el plan. |
 | `ratifact report [--days N] [--project P] [--log RUTA]` | Resumen del uso (sección 7). `analizar_uso.py` es un envoltorio hasta 1.1 (acepta `--dias`/`--proyecto`). |
-| `ratifact doctor` | Solo lectura: versión y de dónde corre (instalación fija o copia de trabajo, con aviso — P-017), configuración usada y grafía de sus claves, por proyecto código, memoria (ruta, esquema, `.memorias/` viejo o `.ratifact/` nuevo, estado git) e integraciones detectadas, log, variables `MEMORIA_PROYECTOS_*` y acciones pendientes, el estado de cada cliente (configurado con ratifact / configuración vieja / sin configurar / no encontrado), el build, si la fuente local es más nueva que la instalación y los procesos `ratifact serve` vivos, marcando los anteriores a la instalación. Sale con 0 si no hay nada pendiente, 1 si hay acciones. Si no existe la configuración por defecto pero hay servidores corriendo con `RATIFACT_CONFIG`/`MEMORIA_PROYECTOS_CONFIG` o un `projects.json` junto al repositorio de origen, sugiere el comando exacto (`RATIFACT_CONFIG=<ruta> ratifact upgrade`). |
+| `ratifact doctor` | Solo lectura: versión y de dónde corre (instalación fija o copia de trabajo, con aviso), configuración usada y grafía de sus claves, por proyecto código, memoria (ruta, esquema, `.memorias/` viejo o `.ratifact/` nuevo, estado git) e integraciones detectadas, log, variables `MEMORIA_PROYECTOS_*` y acciones pendientes, el estado de cada cliente (configurado con ratifact / configuración vieja / sin configurar / no encontrado), el build, si la fuente local es más nueva que la instalación y los procesos `ratifact serve` vivos, marcando los anteriores a la instalación. Sale con 0 si no hay nada pendiente, 1 si hay acciones. Si no existe la configuración por defecto pero hay servidores corriendo con `RATIFACT_CONFIG`/`MEMORIA_PROYECTOS_CONFIG` o un `projects.json` junto al repositorio de origen, sugiere el comando exacto (`RATIFACT_CONFIG=<ruta> ratifact upgrade`). |
 | `ratifact upgrade` | Paso explícito, con todos los clientes cerrados. Sin opciones solo muestra el plan; `--apply` lo ejecuta: migra a v2 las memorias v1, mueve `<base>/.memorias/<p>` a `<base>/.ratifact/<p>` (las rutas propias nunca se mueven), escribe `~/.config/ratifact/projects.json` con claves en inglés y renombra el viejo a `projects.json.bak-v1`, regenera las vistas y copia el log viejo. Aborta si hay un servidor corriendo con esa configuración, un `.lock` tomado o una memoria con cambios sin commit (cabecera "Aborted — nothing was changed:", el plan y los motivos; código de salida 1); idempotente; si un paso falla, lo revierte. |
 | `ratifact --version` | Versión instalada. |
 
@@ -165,14 +165,14 @@ transversal o depende de diagnosticar una causa que la especificación aún no c
   resultado (o la agrega ahí) en lugar de crear un bloque nuevo.
 - Auditoría: al pasar a in_progress se graba en el frontmatter `routing: explore=<m>,write=<m>,verify=<m> ·
   delegation=<política> · build=<build> · at=<hora ISO 8601, a minutos>` (`session` si el rol no tiene modelo; se
-  sobrescribe en cada reejecución; `build=` y `at=` desde T-016: las tareas anteriores conservan la forma corta
+  sobrescribe en cada reejecución; `build=` y `at=` solo en las tareas nuevas: las tareas anteriores conservan la forma corta
   y se siguen leyendo). `ratifact report` toma el período de `at=` cuando existe (si no, de `updated`). `ratifact report`
   mide el cumplimiento por proyecto (tareas required con trabajadores reales, escalamientos) y compara tareas
   delegadas y no delegadas en revisiones y en duración in_progress → in_review; las tareas sin `routing:` se cuentan
   aparte. El routing también termina con `· client=<nombre>/<versión>`, tomado del `clientInfo` MCP de la
   inicialización (saneado: sin espacios, sin `·`, sin saltos de línea, máximo 64 caracteres; `client=unknown` si no
-  hay dato) y cada registro nuevo de `uso.jsonl` lleva el campo `client`; se graba el valor recibido, sin normalizar
-  (P-025). `ratifact report` mide además, entre las tareas delegadas (última línea `Workers:` válida de cada una),
+  hay dato) y cada registro nuevo de `uso.jsonl` lleva el campo `client`; se graba el valor recibido, sin normalizar.
+  `ratifact report` mide además, entre las tareas delegadas (última línea `Workers:` válida de cada una),
   cuántas tuvieron rework, los reenvíos totales por rol, los escalamientos y la tasa de retrabajo (con rework /
   delegadas), y desglosa por cliente (`client=` del routing, `unknown` si falta) tareas, cumplimiento de la delegación
   y tasa de retrabajo. `ratifact doctor` muestra la política efectiva de cada proyecto (p. ej. `delegation=required (global)`).
@@ -210,7 +210,7 @@ cambio: integrar en main → `uv tool install --reinstall ~/Projects/.memoria-pr
   así que reinstalar con el mismo código no dispara el aviso ni el rechazo de `in_progress`.
 
 `ratifact install --apply` y `ratifact upgrade --apply` terminan recordando reiniciar los clientes y verificar con
-`ratifact doctor`. Un servidor anterior a T-016 no se autodiagnostica; `doctor` sí lo muestra.
+`ratifact doctor`. Un servidor anterior al registro de build/PID no se autodiagnostica; `doctor` sí lo muestra.
 
 ## 5. Tareas de código (Claude Desktop → Claude Code)
 Flujo: en Claude Desktop se acuerda un cambio y se registra con `create_task` → queda `.project/tasks/T-NNN.md` →
@@ -242,19 +242,19 @@ tarea (con **Findings** y **Additional criteria**). `update_task` rechaza pasar 
 siempre `request_changes`. El parámetro `status` acepta también (hasta 1.1) los nombres en español de antes del esquema v2
 (`pendiente`, `en_curso`, `en_revision`, `fallida`, `integrada`, `descartada`); se guarda y se responde en inglés.
 
-Pendientes que resuelve una tarea: `create_task(..., resolves="P-036, P-037 (partial)")` — ids separados por
-coma, cada uno opcionalmente con `(parcial)` o `(partial)` (sin distinguir mayúsculas ni espacios; `p-36` vale como `P-036`). Cada id
+Pendientes que resuelve una tarea: `create_task(..., resolves="P-001 (partial)")` — ids separados por
+coma, cada uno opcionalmente con `(parcial)` o `(partial)` (sin distinguir mayúsculas ni espacios; `p-1` vale como `P-001`). Cada id
 debe existir y estar abierto; si alguno no, la herramienta lo rechaza nombrando los inválidos y no escribe nada. Se guarda
-en el frontmatter (`resolves: P-036, P-037 (partial)`) y como sección "## Resolves" de la tarea; sin `resolves`, ni
+en el frontmatter (`resolves: P-001 (partial)`) y como sección "## Resolves" de la tarea; sin `resolves`, ni
 campo ni sección. Al marcar la tarea `merged`, la respuesta recuerda cada pendiente declarado que siga abierto: los completos
-con la llamada a `close_pending` y los parciales con cómo registrar lo que falta (P-016): una nota anexada al archivo del
+con la llamada a `close_pending` y los parciales con cómo registrar lo que falta: una nota anexada al archivo del
 pendiente con `update_document(..., mode="append")`, o cerrarlo con `close_pending` y abrir el resto con `add_pending`. Nunca se cierra ni se modifica un
 pendiente automáticamente.
 
 ## 6. Ubicación de la memoria
 Con la clave `"memoria"` en `projects.json`, la memoria vive fuera del repositorio del código (repo git propio) y no depende
 de la rama activa. Recomendado para todos los proyectos. Las herramientas siguen usando rutas `.project/...`.
-Sin esa clave, la memoria es `<carpeta de proyectos>/.ratifact/<nombre>` (desde T-012); una que todavía vive en la
+Sin esa clave, la memoria es `<carpeta de proyectos>/.ratifact/<nombre>`; una que todavía vive en la
 ruta por defecto vieja `.memorias/<nombre>` se sigue encontrando ahí hasta que `ratifact upgrade --apply` la mueve.
 Las claves de cada proyecto en `projects.json` se leen en español (`ruta`, `memoria`, `escritura`, `pruebas`,
 `integraciones`) o en inglés (`path`, `memory`, `writable`, `tests`, `integrations`); si están las dos, gana la inglesa.
@@ -263,7 +263,7 @@ Al escribir se conserva la grafía que ya tiene la entrada. Renombrar las claves
 
 ## 7. Telemetría
 Cada llamada a una herramienta agrega una línea a `~/.local/state/ratifact/uso.jsonl` (`$XDG_STATE_HOME/ratifact/`; hasta
-T-012 era `<repo>/logs/uso.jsonl`, y `ratifact upgrade` lo copia si el nuevo no existe) con herramienta, proyecto,
+antes de instalarse como paquete era `<repo>/logs/uso.jsonl`, y `ratifact upgrade` lo copia si el nuevo no existe) con herramienta, proyecto,
 tamaños, duración y error; nunca el contenido. Resumen: `ratifact report --days 7` (opcional `--project game`; también
 `python3 ~/Projects/.memoria-proyectos/analizar_uso.py --dias 7` hasta 1.1).
 El informe lee el mismo log que escribe el servidor: `--log <ruta>` si se indica, si no `RATIFACT_LOG` (o
@@ -302,7 +302,7 @@ modelo. Si la aplicación no soporta formularios (MCP elicitation), la herramien
 Crear registros en la memoria debe pasar por usted; modificar o leer, no. Marque como "requiere aprobación":
 `propose_decision`, `add_pending`, `create_task`, `create_document`, `register_project`, `accept_decision` y
 `accept_decisions`. Las aprobaciones se guardan por nombre de servidor y de herramienta: tras pasar a la clave
-`ratifact` (T-013) hay que marcarlas de nuevo; `ratifact install` lo recuerda en sus pasos manuales.
+`ratifact` hay que marcarlas de nuevo; `ratifact install` lo recuerda en sus pasos manuales.
 Deje en "permitir siempre" el resto (lecturas, `read_task`, `amend_task`, `update_document` sobre archivos existentes, `update_task`,
 `update_index`, `log_session`, `reject_decision`, `supersede_decision`). El servidor no tiene herramientas
 para borrar archivos: nada se elimina, solo cambia de estado. En Claude Code no se usan aprobaciones para el código.
@@ -417,7 +417,7 @@ vive en `ratifact/`; ningún módulo supera 300 líneas y no hay importaciones c
 | Módulo | Responsabilidad |
 |---|---|
 | `ratifact/cli.py` | Comando `ratifact` (`serve`, `install`, `report`, `doctor`, `upgrade`, `--version`); `servidor()` carga herramientas y prompts. |
-| `ratifact/instalar.py`, `ratifact/instalar_extras.py` | `ratifact install` (T-013): plan y ejecución; permisos de Claude Code, bloque de CLAUDE.md/AGENTS.md y enlaces de `/run-task`. |
+| `ratifact/instalar.py`, `ratifact/instalar_extras.py` | `ratifact install`: plan y ejecución; permisos de Claude Code, bloque de CLAUDE.md/AGENTS.md y enlaces de `/run-task`. |
 | `ratifact/clientes.py`, `ratifact/clientes_toml.py` | Clientes MCP (Claude Desktop, Claude Code, Pi, Codex): detección, estado (también para doctor) y edición de su configuración; la de Codex es una edición acotada del TOML. |
 | `ratifact/archivos.py` | Escritura segura de archivos de otros programas: validación, respaldo `.bak-ratifact-<fecha>` y reemplazo atómico. |
 | `ratifact/skills/` | Skill `run-task`, incluida en el paquete. |

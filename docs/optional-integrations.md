@@ -1,6 +1,6 @@
 # Optional integrations — design
 
-Status: agreed · 2026-10-17 · implemented by T-008, before the v1 rename.
+Status: agreed · 2026-10-17 · implemented before the v1 rename.
 
 ## Goal
 ratifact adapts to the agent tooling the user already has (codegraph, engram, gentle-ai…) to get more out of it, without depending on it. With no integration installed, ratifact works exactly as today.
@@ -30,7 +30,7 @@ One module per integration in `ratifact/integraciones/` (English names after the
 
 Initial set:
 - **codegraph** (project) — `planificar`: if available, use it to fill `archivos` precisely. `ejecutar`: after reading the spec and before opening files, call `codegraph_context` with the objective + listed files. `verificar`: check callers of changed symbols to confirm the blast radius.
-- **gentle-ai** (project) — revised by T-014. `execute`: a ratifact task is gentle-ai's **delegated-direct** route — never SDD, no SDD artifacts; whether to delegate is set by ratifact's delegation policy (T-015), not by gentle-ai thresholds — the old "4+ files" / "2+ non-trivial files" criterion and "otherwise implement directly" were removed; the ratifact task is the **ODD** feature document, so no other ODD document is created. `verify`: verification in a clean worker; if **RDD** is on, the review of the finished change runs before `update_task(in_review)` and the result summarizes its receipt (depth, findings, corrections); if RDD is off, no review is started. ratifact neither enables nor blocks RDD. Prefix: `gentle-ai` (no longer `sdd-`).
+- **gentle-ai** (project) — revised. `execute`: a ratifact task is gentle-ai's **delegated-direct** route — never SDD, no SDD artifacts; whether to delegate is set by ratifact's delegation policy, not by gentle-ai thresholds — the old "4+ files" / "2+ non-trivial files" criterion and "otherwise implement directly" were removed; the ratifact task is the **ODD** feature document, so no other ODD document is created. `verify`: verification in a clean worker; if **RDD** is on, the review of the finished change runs before `update_task(in_review)` and the result summarizes its receipt (depth, findings, corrections); if RDD is off, no review is started. ratifact neither enables nor blocks RDD. Prefix: `gentle-ai` (no longer `sdd-`).
 - **engram** (user) — `cerrar`: technical learnings may go to engram; decisions only through ratifact; on conflict the agreed decision wins (moves today's text in app.py, plantillas.py, SKILL.md).
 
 ## Injection points
@@ -45,7 +45,7 @@ Guidance is never written into the task file (stale on reruns). Disabled integra
 ## Configuration
 `projects.json` per project: `"integraciones": {"codegraph": "off"}` (absent = auto). Set through `actualizar_proyecto(nombre, integraciones="codegraph=off,gentle-ai=auto")` — **new parameter**, must ship before the English contract freeze. Unknown integration names are rejected with the list of known ones.
 
-## Model routing (T-014)
+## Model routing
 Independent of any integration. The user sets a model per delegated role — `explore`, `write`, `verify`:
 - **Global:** `settings.json` next to the active `projects.json` (`CONFIG.parent`), `{"models": {"explore": "haiku", "write": "sonnet", "verify": "sonnet"}}`. Created by hand; read on every call. `projects.json` gets no new top-level keys (every top-level key there is a project).
 - **Per project:** `"models"` in the project's entry, set with `update_project(name, models="explore=haiku,write=sonnet")`; `inherit` removes a role's exception. Merged role by role: project wins, missing roles inherit the global value.
@@ -54,7 +54,7 @@ Independent of any integration. The user sets a model per delegated role — `ex
 - **Reporting:** superseded by the delegation policy below — workers and models go in the result's own `Workers:` line (see Delegation below); `Integrations used:` lists integrations only. One line summarizes the RDD receipt if a review ran.
 - The Model routing block is the same under every delegation policy.
 
-## Delegation (T-015)
+## Delegation
 Delegation policy: ratifact, not the executing agent, decides whether a task is delegated.
 `"delegation": "required" | "suggested" | "off"` goes in `settings.json` next to `"models"` (global; default
 `required`); a project exception is set with `update_project("my-app", delegation="off")` (`inherit` removes it), and a
@@ -86,13 +86,13 @@ task that touches security, is cross-cutting, or depends on diagnosing a cause t
   result block (or appends it there) instead of creating a new block.
 - Audit: `in_progress` records `routing: explore=<m>,write=<m>,verify=<m> · delegation=<policy> · build=<build> ·
   at=<ISO 8601 time, to the minute>` in the task's frontmatter (`session` for a role without a model; overwritten on
-  re-runs; `build=` and `at=` since T-016 — older tasks keep the shorter form and are still read). `ratifact
+  re-runs; `build=` and `at=` are written on newer tasks — older tasks keep the shorter form and are still read). `ratifact
   report` takes the period from `at=` when present (`updated` otherwise). `ratifact report` measures compliance
   per project (required tasks with real workers, escalations) and compares delegated and non-delegated tasks in
   reviews and in_progress → in_review duration; tasks without `routing:` are counted apart.
   Routing also ends with `· client=<name>/<version>`, taken from the MCP `clientInfo` of the initialize
   handshake (sanitized: no spaces, no `·`, no newlines, max 64 chars; `client=unknown` if unavailable), and every new
-  `uso.jsonl` row has a `client` field. Values are recorded as received, without normalization (P-025). `ratifact
+  `uso.jsonl` row has a `client` field. Values are recorded as received, without normalization. `ratifact
   report` also measures, among delegated tasks (last valid `Workers:` line of each), how many had rework, the total
   re-sends per role, escalations and the rework rate (with rework / delegated), plus a per-client breakdown (`client=`
   from routing, `unknown` if missing) with tasks, delegation compliance and rework rate. `ratifact doctor` shows
@@ -102,5 +102,5 @@ task that touches security, is cross-cutting, or depends on diagnosing a cause t
 Reports detected integrations and how to disable one. Never asks interactively.
 
 ## Measurement
-- `analizar_uso.py`: code reads through leer_documento by project (T-007).
+- `analizar_uso.py`: code reads through leer_documento by project.
 - Task results: one line "Integraciones usadas: codegraph (n consultas)" — self-reported; ratifact cannot see other MCPs.

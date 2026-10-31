@@ -71,7 +71,7 @@ def indicador_decisiones(desde: dt.datetime, proyecto: str | None) -> list[str]:
     try:
         proyectos = json.loads(config.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return [f"- Decisiones: sin configuración ({config})"]
+        return [f"- Decisions: no configuration ({config})"]
     por_proyecto, viejas, abiertas = {}, [], 0
     limite_vieja = dt.date.today() - dt.timedelta(days=DIAS_PROPUESTA_VIEJA)
     for nombre, p in proyectos.items():
@@ -87,10 +87,10 @@ def indicador_decisiones(desde: dt.datetime, proyecto: str | None) -> list[str]:
             if estado == "proposed" and fecha and fecha < limite_vieja:
                 viejas.append(f"  {nombre} {meta.get('id', archivo.stem)} {fecha.isoformat()} {meta.get('title', '')}")
         por_proyecto[nombre] = conteo
-    lineas = ["- Decisiones creadas en el período (según la memoria): "
+    lineas = ["- Decisions created in the period (per the memory): "
               + ("; ".join(f"{n}: " + " · ".join(f"{e} {c[e]}" for e in ESTADOS_DECISION)
-                           for n, c in por_proyecto.items()) or "ninguna")]
-    lineas.append(f"- Propuestas abiertas hoy: {abiertas} · con más de {DIAS_PROPUESTA_VIEJA} días: {len(viejas)}")
+                           for n, c in por_proyecto.items()) or "none")]
+    lineas.append(f"- Open proposals today: {abiertas} · older than {DIAS_PROPUESTA_VIEJA} days: {len(viejas)}")
     return lineas + viejas
 
 
@@ -129,7 +129,7 @@ def higiene_pendientes(proyecto: str | None) -> list[str]:
     try:
         proyectos = json.loads(config.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return [f"- sin configuración ({config})"]
+        return [f"- no configuration ({config})"]
     lineas = []
     for nombre, p in proyectos.items():
         if proyecto and nombre != proyecto:
@@ -140,8 +140,8 @@ def higiene_pendientes(proyecto: str | None) -> list[str]:
             meta, _ = _registro(archivo, "pendiente")
             if meta.get("status") == "open":
                 abiertos.add(_normalizar_id(meta.get("id") or archivo.stem))
-        grupos = {"declarados en resuelve": defaultdict(list), "mencionados en la spec": defaultdict(list),
-                  "mencionados en el Resultado": defaultdict(list)}
+        grupos = {"declared in resolves": defaultdict(list), "mentioned in the spec": defaultdict(list),
+                  "mentioned in the Result": defaultdict(list)}
         for archivo in _carpeta(mem, "tasks").glob("T-*.md"):
             meta, cuerpo = _registro(archivo, "tarea")
             if meta.get("status") != "merged":
@@ -149,15 +149,15 @@ def higiene_pendientes(proyecto: str | None) -> list[str]:
             id_tarea = _normalizar_id(meta.get("id") or re.match(r"T-\d+", archivo.name).group(0))
             ref = (id_tarea, _fecha_integracion(meta, cuerpo))
             spec, resultado = _menciones(cuerpo)
-            for clave, ids in (("declarados en resuelve", {i for i, _ in _ids_resuelve(meta.get("resolves", ""))}),
-                               ("mencionados en la spec", spec), ("mencionados en el Resultado", resultado)):
+            for clave, ids in (("declared in resolves", {i for i, _ in _ids_resuelve(meta.get("resolves", ""))}),
+                               ("mentioned in the spec", spec), ("mentioned in the Result", resultado)):
                 for i in ids & abiertos:
                     grupos[clave][i].append(ref)
         lineas.append(f"  {nombre}")
         for clave, por_id in grupos.items():
-            lineas.append(f"    {clave}:" + ("" if por_id else " (ninguno)"))
+            lineas.append(f"    {clave}:" + ("" if por_id else " (none)"))
             for i in sorted(por_id, key=_numero):
-                refs = ", ".join(f"{t} (integrada {fecha})"
+                refs = ", ".join(f"{t} (merged {fecha})"
                                  for t, fecha in sorted(por_id[i], key=lambda r: _numero(r[0])))
                 lineas.append(f"      {i}: {refs}")
     return lineas
@@ -206,7 +206,7 @@ def indicador_delegacion(desde: dt.datetime, proyecto: str | None) -> list[str]:
     try:
         proyectos = json.loads(config.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return [f"- sin configuración ({config})"]
+        return [f"- no configuration ({config})"]
     lineas = []
     for nombre, p in proyectos.items():
         if proyecto and nombre != proyecto or not isinstance(p, dict):
@@ -228,7 +228,7 @@ def indicador_delegacion(desde: dt.datetime, proyecto: str | None) -> list[str]:
         con = [(m, c, a) for m, c, a in tareas if m.get("routing")]
         transiciones = _transiciones(mem) if con else {}
         requeridas = cumplen = escaladas = 0
-        grupos = {"delegadas": ([], []), "no delegadas": ([], [])}
+        grupos = {"delegated": ([], []), "not delegated": ([], [])}
         delegadas = con_rework = 0
         reenvios: dict[str, int] = {}
         clientes: dict[str, dict] = {}       # ADR-041 §5: tareas, required, cumplen, delegadas, con rework
@@ -254,24 +254,24 @@ def indicador_delegacion(desde: dt.datetime, proyecto: str | None) -> list[str]:
                     cliente["rework"] += 1
                 for rol, n in valida.reenvios.items():
                     reenvios[rol] = reenvios.get(rol, 0) + n
-            revisiones, horas = grupos["delegadas" if delegada else "no delegadas"]
+            revisiones, horas = grupos["delegated" if delegada else "not delegated"]
             revisiones.append(len(re.findall(r"^### (?:Review|Revisión) \d+ · ", cuerpo, re.M)))
             id_ = _normalizar_id(meta.get("id") or re.match(r"T-\d+", archivo.name).group(0))
             duracion = _duracion(transiciones.get(id_, []))
             if duracion is not None:
                 horas.append(duracion.total_seconds() / 3600)
         porcentaje = f"{cumplen / requeridas * 100:.0f} %" if requeridas else "—"
-        lineas.append(f"  {nombre}: {len(con)} tareas con routing · required {requeridas} · con trabajadores "
-                      f"{cumplen} · cumplimiento {porcentaje} · escalamientos {escaladas} · sin routing (anteriores "
-                      f"a la política): {len(tareas) - len(con)}")
+        lineas.append(f"  {nombre}: {len(con)} tasks with routing · required {requeridas} · with workers "
+                      f"{cumplen} · compliance {porcentaje} · escalations {escaladas} · without routing (before the "
+                      f"policy): {len(tareas) - len(con)}")
         for grupo, (revisiones, horas) in grupos.items():
-            lineas.append(f"    {grupo}: {len(revisiones)} tareas · revisiones (changes_requested) promedio "
-                          f"{_promedio(revisiones)} · in_progress → in_review promedio {_promedio(horas)} h")
+            lineas.append(f"    {grupo}: {len(revisiones)} tasks · reviews (changes_requested) average "
+                          f"{_promedio(revisiones)} · in_progress → in_review average {_promedio(horas)} h")
         total = ", ".join(f"{r}×{n}" for r, n in reenvios.items()) or "0"
-        lineas.append(f"    retrabajo: con rework {con_rework} de {delegadas} delegadas · tasa "
-                      f"{_porcentaje(con_rework, delegadas)} · reenvíos {total} · escalamientos {escaladas}")
+        lineas.append(f"    rework: with rework {con_rework} of {delegadas} delegated · rate "
+                      f"{_porcentaje(con_rework, delegadas)} · resends {total} · escalations {escaladas}")
         for nombre_cliente, c in sorted(clientes.items()):
-            lineas.append(f"    por cliente {nombre_cliente}: {c['tareas']} tareas · cumplimiento "
-                          f"{_porcentaje(c['cumplen'], c['requeridas'])} · retrabajo "
+            lineas.append(f"    per client {nombre_cliente}: {c['tareas']} tasks · compliance "
+                          f"{_porcentaje(c['cumplen'], c['requeridas'])} · rework "
                           f"{_porcentaje(c['rework'], c['delegadas'])}")
-    return lineas or ["- ninguna tarea en el período"]
+    return lineas or ["- no tasks in the period"]

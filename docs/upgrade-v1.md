@@ -1,6 +1,6 @@
 # Upgrading to v1 (English contract)
 
-Applies to: T-011 (step 2 of the v1 migration). The memory data was already migrated to schema v2 (T-010); this release renames
+Step 2 of the v1 migration. The memory data was already migrated to schema v2; this release renames
 the **tool contract**: tool names, parameters, descriptions and responses are now in English, and two tools were added
 (`amend_task`, `read_task`). Nothing in your memories or in `projects.json` is moved or rewritten.
 
@@ -52,7 +52,7 @@ Decisions, pending items and tasks live in `ratifact`; on a contradiction with a
 accepted decision wins.
 ```
 
-(Until T-013 the block said ``uses the `memoria-proyectos` MCP server (ratifact)``; `ratifact install --apply` rewrites
+(Before the `ratifact` server key the block said ``uses the `memoria-proyectos` MCP server (ratifact)``; `ratifact install --apply` rewrites
 that exact block in the registered projects — see "ratifact install" below.)
 
 ## 3. Update per-tool approval settings to the new names
@@ -80,7 +80,7 @@ Claude Code (`.claude/settings.json` or `~/.claude/settings.json`), in `permissi
 "mcp__ratifact__accept_decisions"
 ```
 
-and in `permissions.allow` replace any old Spanish tool names with their new names (table below). Since T-013
+and in `permissions.allow` replace any old Spanish tool names with their new names (table below). Since the `ratifact` key
 `ratifact install --apply` does this rename (prefix and v0 tool names) by itself.
 
 ## 4. Relink /run-task
@@ -106,7 +106,7 @@ RATIFACT_CONFIG=<home>/Projects/.memoria-proyectos/projects.json
 
 Without any variable, the configuration is `~/.config/ratifact/projects.json` if it exists, else
 `~/.config/memoria-proyectos/projects.json`. The MCP server key (`memoria-proyectos`) did not change in this release;
-T-013 renames it to `ratifact` (below).
+The `ratifact` key replaces it (below).
 
 ## What still accepts the old Spanish values (until 1.1)
 
@@ -159,10 +159,10 @@ Parameters: see `docs/v1-english-naming.md` §4 and its addenda (e.g. `proyecto`
 
 ## Clients from the fixed installation
 
-Applies to: T-012 (step 3 of the v1 migration). The repository is now an installable package with a `ratifact` command.
-Clients stop running the working copy (`uv run --script …/servidor.py`, P-017): they run a fixed copy installed with
+Step 3 of the v1 migration. The repository is now an installable package with a `ratifact` command.
+Clients stop running the working copy (`uv run --script …/servidor.py`): they run a fixed copy installed with
 `uv tool install`, so editing or switching branches in the repository no longer changes the running server. The tool
-contract (28 tools) does not change. Until T-013 this setup is manual; `servidor.py` and `analizar_uso.py` keep working
+contract (28 tools) does not change. Until `ratifact install` (next section) this setup is manual; `servidor.py` and `analizar_uso.py` keep working
 as thin wrappers until 1.1, so the current client configurations do not break in the meantime.
 
 ### 1. Install the command
@@ -203,7 +203,7 @@ when you switch the client to the fragments below.
 
 ### 3. Point each client at `ratifact serve`
 
-Since T-013 this is `ratifact install --apply` (next section): it writes the entry of each client with the absolute
+Now this is `ratifact install --apply` (next section): it writes the entry of each client with the absolute
 path of the installed executable (`uv tool dir --bin`, usually `<home>/.local/bin/ratifact`), args `["serve"]` and no
 environment variables, under the new server key `ratifact`. Then restart every client and run `ratifact doctor`: it
 should end with `Pending actions: none`.
@@ -218,9 +218,9 @@ uv tool install --reinstall ~/Projects/.memoria-proyectos
 
 and restart every client (Claude Desktop, Claude Code, Pi, Codex) so they launch the new copy.
 
-## ratifact install (T-013)
+## ratifact install
 
-Applies to: T-013 (last step of v1). Installing and configuring ratifact no longer requires editing any file
+Last step of v1. Installing and configuring ratifact no longer requires editing any file
 by hand.
 
 ```
@@ -249,7 +249,7 @@ What `--apply` does, each part independent of the others (an error in one client
    project, `permissions.allow` / `ask` / `deny` entries `mcp__memoria-proyectos__<tool>` become
    `mcp__ratifact__<tool>` (and `mcp__memoria-proyectos` → `mcp__ratifact`), in the same list.
 4. **CLAUDE.md / AGENTS.md.** In each registered project (and each repo of a multi-repo project), the block generated
-   until T-013 is replaced by the one above — only that exact text; a block edited by hand is left alone (listed as a
+   from before `ratifact install` is replaced by the one above — only that exact text; a block edited by hand is left alone (listed as a
    manual step, no backup).
 
 Backups: client files outside repositories (`claude_desktop_config.json`, `~/.claude.json`, `~/.claude/settings.json`,
@@ -267,9 +267,9 @@ the integrations detected per project and how to turn one off (`update_project("
 integrations="codegraph=off")`); it never asks.
 
 `ratifact install` must run from the fixed installation: from a working copy it shows the plan but refuses `--apply`
-(the links would point to the working copy, P-017), and an executable inside the uv cache (`uvx`) is not used for the
+(the links would point to the working copy), and an executable inside the uv cache (`uvx`) is not used for the
 clients.
 
-Also in T-013: an aborted `ratifact upgrade --apply` prints `Aborted — nothing was changed:` followed by the plan and
+Also: an aborted `ratifact upgrade --apply` prints `Aborted — nothing was changed:` followed by the plan and
 the reasons, with a non-zero exit code; tool descriptions are normalized with `inspect.cleandoc` before registering
 them, so every Python version (3.10–3.14) shows the clients the same text.

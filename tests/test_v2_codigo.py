@@ -179,11 +179,11 @@ def test_analizar_uso_higiene_y_arranque_con_memoria_v1_y_v2(srv, proyecto_v1, e
     filas = [{"herramienta": "get_context", "resp_chars": 4000, "proyecto": n} for n in ("demo", "ing")]
     _correr(monkeypatch, "--log", str(_log_filas(entorno["tmp"] / "log" / "uso.jsonl", filas)))
     salida = capsys.readouterr().out
-    assert "  demo: p50 4000 caracteres" in salida and "  ing: p50 4000 caracteres" in salida
-    seccion = salida.split("Pendientes abiertos referenciados por tareas integradas\n")[1]
+    assert "  demo: p50 4000 characters" in salida and "  ing: p50 4000 characters" in salida
+    seccion = salida.split("Open pending items referenced by merged tasks\n")[1]
     demo, ing = seccion.split("  ing\n")
-    assert "declarados en resuelve:\n      P-001: T-001 (integrada 2026-10-06)" in demo      # v1: "integrada", "resuelve"
-    assert f"declarados en resuelve:\n      P-001: T-001 (integrada {hoy})" in ing          # v2: "merged", "resolves"
+    assert "declared in resolves:\n      P-001: T-001 (merged 2026-10-06)" in demo      # v1: "integrada", "resuelve"
+    assert f"declared in resolves:\n      P-001: T-001 (merged {hoy})" in ing          # v2: "merged", "resolves"
     assert (proyecto_v1["mem"] / "tareas").is_dir()                                        # analizar_uso no migra
     assert p["mem"].is_dir()
 
@@ -255,10 +255,10 @@ def test_telemetria_y_analizar_uso_cuentan_los_alias(srv, con_registros, entorno
     assert [f.get("alias_ruta") for f in filas] == [".project/DECISIONS.md", ".project/tasks", None]
     _correr(monkeypatch, "--log", entorno["env"]["MEMORIA_PROYECTOS_LOG"])
     salida = capsys.readouterr().out
-    assert "- Rutas v1 traducidas (alias, se quita en 1.1): \n  demo: 2 usos · " in salida
+    assert "- v1 paths translated (alias, removed in 1.1): \n  demo: 2 uses · " in salida
 
 
 def test_sin_alias_analizar_uso_dice_ninguna(srv, proyecto, entorno, monkeypatch, capsys):
     srv.list_documents(project="demo", folder=".project")
     _correr(monkeypatch, "--log", entorno["env"]["MEMORIA_PROYECTOS_LOG"])
-    assert "- Rutas v1 traducidas (alias, se quita en 1.1): ninguna" in capsys.readouterr().out
+    assert "- v1 paths translated (alias, removed in 1.1): none" in capsys.readouterr().out

@@ -100,3 +100,48 @@ def _descripciones(nodo):
 def test_sin_identificadores_adr_en_las_descripciones_del_contrato():
     malas = [d[:80] for d in _descripciones(json.loads(_leer(CONTRATO))) if ADR.search(d)]
     assert not malas, malas
+
+
+# ── sin identificadores del historial de desarrollo (T-NNN / P-NNN) ──
+
+ID_HISTORIAL = re.compile(r"\b[TtPp]-\d+\b")
+IDS_PERMITIDOS = {("T", 1), ("T", 2), ("P", 1)}
+PUBLICOS_Y_SKILL = [*PUBLICOS, SKILL]
+
+
+def _ids_historicos(texto: str):
+    for n, linea in enumerate(texto.splitlines(), 1):
+        for m in ID_HISTORIAL.finditer(linea):
+            clave = (m.group(0)[0].upper(), int(m.group(0)[2:]))
+            if clave not in IDS_PERMITIDOS:
+                yield n, m.group(0)
+
+
+@pytest.mark.parametrize("ruta", PUBLICOS_Y_SKILL, ids=lambda p: p.name)
+def test_sin_ids_del_historial(ruta):
+    ofensores = [f"{ruta.name}:{n} {i}" for n, i in _ids_historicos(_leer(ruta))]
+    assert not ofensores, ofensores
+
+
+# Marcadores de formato permitidos en las descripciones del contrato (ejemplos de entrada).
+FORMATOS_PERMITIDOS = {"P-036", "P-037", "T-24", "T-024", "T-1"}
+
+
+def test_descripciones_del_contrato_sin_ids_del_historial():
+    ofensores = []
+
+    def recorrer(nodo, ruta=""):
+        if isinstance(nodo, dict):
+            for k, v in nodo.items():
+                if k == "descripcion" and isinstance(v, str):
+                    for m in ID_HISTORIAL.finditer(v):
+                        if m.group(0).upper() not in FORMATOS_PERMITIDOS:
+                            ofensores.append((ruta, m.group(0)))
+                else:
+                    recorrer(v, f"{ruta}/{k}")
+        elif isinstance(nodo, list):
+            for i, v in enumerate(nodo):
+                recorrer(v, f"{ruta}[{i}]")
+
+    recorrer(json.loads(_leer(CONTRATO)))
+    assert not ofensores, ofensores
