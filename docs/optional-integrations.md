@@ -73,10 +73,16 @@ task that touches security, is cross-cutting, or depends on diagnosing a cause t
   `Workers: none — reason: <why>`. With `required`, `update_task(..., "in_review")` without a valid `Workers:` line
   still changes the status but answers with a warning.
 - Extended format (ADR-041, corrects ADR-036 §4–§5): `Workers: <role>/<model>×<n>, …[, rework: <role>×<n>, …][, escalated: <role>][ — note: <free text>]`.
-  `<role>/<model>×<n>` counts initial briefs only; `rework: <role>×<n>` counts re-sends of that role after a
-  verification found a defect (the role must appear among the workers, n ≥ 1); everything after ` — ` is a note the
-  parser ignores. No parentheses: rework goes in `rework:`, comments in `— note:`. Example:
+  `<role>/<model>×<n>` counts initial briefs only; `rework: <role>×<n>` counts re-sends of that role caused by
+  a defect detected by the verifier or by the orchestrator's diff review (the role must appear among the workers,
+  n ≥ 1); everything after ` — ` is a note the parser ignores. No parentheses: rework goes in `rework:`, comments in `— note:`. Example:
   `Workers: explore/haiku×1, write/sonnet×1, verify/sonnet×1, rework: write×1 — note: resumed once for the verify fix`.
+- ADR-042 (corrects ADR-041 §1): rework counts re-sends caused by a defect found by the verifier or by the
+  orchestrator's diff review, e.g. `Workers: write/sonnet×1, rework: write×1 — note: diff review found a missing test`.
+  Initial briefs never count as rework, even with several workers of the same role in parallel: two parallel writers
+  are `Workers: write/sonnet×2`. The canonical separator stays ` — `, but ` - note:` / ` -- note:` and
+  `none - reason:` / `none -- reason:` are accepted (`Workers: write/sonnet×1 - note: x`); an ASCII hyphen anywhere
+  else (`Workers: write/sonnet×1 - resumed once`) is still invalid.
   ADR-036 lines stay valid.
 - Fixing a line without duplicating: if the warning says the line is invalid it proposes a corrected one when it can
   derive it; sending only that line with `update_task(..., "in_review")` replaces the `Workers:` line of the latest

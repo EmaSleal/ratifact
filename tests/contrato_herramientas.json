@@ -1,7 +1,7 @@
 {
   "herramientas": [
     {
-      "descripcion": "Moves a decision from 'proposed' to 'accepted'. It is the ONLY way to accept a decision and the client asks\n    for the user's approval on every call. `user_quote`: the user's literal words confirming it in the chat (stored\n    in the ADR as evidence). Never call it without that confirmation.",
+      "descripcion": "Moves a decision from 'proposed' to 'accepted'. It is the ONLY way to accept a decision and the client asks\nfor the user's approval on every call. `user_quote`: the user's literal words confirming it in the chat (stored\nin the ADR as evidence). Never call it without that confirmation.",
       "esquema_entrada": {
         "properties": {
           "id": {
@@ -28,7 +28,7 @@
       "nombre": "accept_decision"
     },
     {
-      "descripcion": "Accepts SEVERAL proposals with a single user approval; the user sees the full list when approving. Use it only\n    when the user explicitly accepted those decisions in the same message; `user_quote` is that literal message.\n    All or nothing: if any of them is not proposed or does not exist, none is accepted.",
+      "descripcion": "Accepts SEVERAL proposals with a single user approval; the user sees the full list when approving. Use it only\nwhen the user explicitly accepted those decisions in the same message; `user_quote` is that literal message.\nAll or nothing: if any of them is not proposed or does not exist, none is accepted.",
       "esquema_entrada": {
         "properties": {
           "ids": {
@@ -58,7 +58,7 @@
       "nombre": "accept_decisions"
     },
     {
-      "descripcion": "Records an open question or unresolved topic. Idempotent (ADR-019): if a pending item with this topic\n    (ignoring case and spaces) was created in the last minutes AND is STILL 'open', nothing new is created and the\n    existing id is returned. If that item was already closed, a human already intervened, so a new one is recorded.",
+      "descripcion": "Records an open question or unresolved topic. Idempotent (ADR-019): if a pending item with this topic\n(ignoring case and spaces) was created in the last minutes AND is STILL 'open', nothing new is created and the\nexisting id is returned. If that item was already closed, a human already intervened, so a new one is recorded.",
       "esquema_entrada": {
         "properties": {
           "context": {
@@ -159,7 +159,7 @@
       "nombre": "close_pending"
     },
     {
-      "descripcion": "Creates a NEW text file in an allowed area (by default .project/ and docs/). Fails if it already exists.\n    Separate from update_document so the user can require approval for creating files.",
+      "descripcion": "Creates a NEW text file in an allowed area (by default .project/ and docs/). Fails if it already exists.\nSeparate from update_document so the user can require approval for creating files.",
       "esquema_entrada": {
         "properties": {
           "content": {
@@ -258,7 +258,7 @@
       "nombre": "create_task"
     },
     {
-      "descripcion": "ONLY for apps that support MCP forms (elicitation), such as Claude Code. In Claude Desktop or claude.ai do NOT\n    use it: call review_proposals and present the options (accept / adjust / reject / postpone) with your own cards\n    or multiple-choice questions; then apply accept_decision or reject_decision as the user chooses.\n    Opens one form per pending proposal; the answers come from the user without going through the model, so\n    acceptances and rejections are applied directly. Returns the summary and the proposals to adjust.",
+      "descripcion": "ONLY for apps that support MCP forms (elicitation), such as Claude Code. In Claude Desktop or claude.ai do NOT\nuse it: call review_proposals and present the options (accept / adjust / reject / postpone) with your own cards\nor multiple-choice questions; then apply accept_decision or reject_decision as the user chooses.\nOpens one form per pending proposal; the answers come from the user without going through the model, so\nacceptances and rejections are applied directly. Returns the summary and the proposals to adjust.",
       "esquema_entrada": {
         "properties": {
           "project": {
@@ -292,7 +292,7 @@
       "nombre": "get_context"
     },
     {
-      "descripcion": "Creates the empty .project/ structure of a registered project (idempotent), in the current schema (v2:\n    decisions/, pending/, sessions/, tasks/, content_language \"en\").",
+      "descripcion": "Creates the empty .project/ structure of a registered project (idempotent), in the current schema (v2:\ndecisions/, pending/, sessions/, tasks/, content_language \"en\").",
       "esquema_entrada": {
         "properties": {
           "project": {
@@ -309,7 +309,7 @@
       "nombre": "init_memory"
     },
     {
-      "descripcion": "Lists files (with size) under a project folder.\n    In .project/decisions, pending and tasks it lists one record per line: \"ID · status · title  (path)\".\n    A path with a v1 folder (.project/tareas, decisiones, pendientes, sesiones) is translated and flagged.\n    If the full listing is too large, it is summarized by levels: unexpanded folders with their file count\n    (\"module/ (38 files)\"); ask for a more specific `folder` to see the detail.",
+      "descripcion": "Lists files (with size) under a project folder.\nIn .project/decisions, pending and tasks it lists one record per line: \"ID · status · title  (path)\".\nA path with a v1 folder (.project/tareas, decisiones, pendientes, sesiones) is translated and flagged.\nIf the full listing is too large, it is summarized by levels: unexpanded folders with their file count\n(\"module/ (38 files)\"); ask for a more specific `folder` to see the detail.",
       "esquema_entrada": {
         "properties": {
           "folder": {
@@ -340,7 +340,7 @@
       "nombre": "list_projects"
     },
     {
-      "descripcion": "Lists the code tasks with their status and branch. Closed ones (merged, discarded) only with\n    include_closed=True.",
+      "descripcion": "Lists the code tasks with their status and branch. Closed ones (merged, discarded) only with\ninclude_closed=True.",
       "esquema_entrada": {
         "properties": {
           "include_closed": {
@@ -384,7 +384,7 @@
       "nombre": "log_session"
     },
     {
-      "descripcion": "Returns, ready to copy, the Claude project instructions and the CLAUDE.md/AGENTS.md block with the right\n    project name. Give them to the user as they are, without summarizing.",
+      "descripcion": "Returns, ready to copy, the Claude project instructions and the CLAUDE.md/AGENTS.md block with the right\nproject name. Give them to the user as they are, without summarizing.",
       "esquema_entrada": {
         "properties": {
           "project": {
@@ -401,7 +401,7 @@
       "nombre": "project_instructions"
     },
     {
-      "descripcion": "Creates an ADR. It is ALWAYS 'proposed'. To accept it, call accept_decision afterwards: that tool asks for\n    the user's approval. `summary`: one line for the decisions view.\n    Idempotent (ADR-019): if an ADR with this title (ignoring case and spaces) was created in the last minutes AND\n    is STILL 'proposed', nothing new is created and the existing id is returned. If that ADR already changed status\n    (e.g. rejected: the user asked for another version), a human already intervened, so a new ADR is recorded.",
+      "descripcion": "Creates an ADR. It is ALWAYS 'proposed'. To accept it, call accept_decision afterwards: that tool asks for\nthe user's approval. `summary`: one line for the decisions view.\nIdempotent (ADR-019): if an ADR with this title (ignoring case and spaces) was created in the last minutes AND\nis STILL 'proposed', nothing new is created and the existing id is returned. If that ADR already changed status\n(e.g. rejected: the user asked for another version), a human already intervened, so a new ADR is recorded.",
       "esquema_entrada": {
         "properties": {
           "alternatives": {
@@ -443,7 +443,7 @@
       "nombre": "propose_decision"
     },
     {
-      "descripcion": "Reads a project text file, optionally a line range (1-based, inclusive).\n    Also accepts a memory record id (\"T-24\", \"tasks/T-024.md\", \"ADR-020-slug.md\"): if the path does not exist, it\n    reads the real record and prepends the line \"(→ .project/<folder>/<file>)\". A path with a v1 folder\n    (.project/tareas/…, .project/acuerdos.md…) is translated and flagged the same way.\n    For a task, read_task returns a working brief (spec, amendments, the latest relevant block) instead.",
+      "descripcion": "Reads a project text file, optionally a line range (1-based, inclusive).\nAlso accepts a memory record id (\"T-24\", \"tasks/T-024.md\", \"ADR-020-slug.md\"): if the path does not exist, it\nreads the real record and prepends the line \"(→ .project/<folder>/<file>)\". A path with a v1 folder\n(.project/tareas/…, .project/acuerdos.md…) is translated and flagged the same way.\nFor a task, read_task returns a working brief (spec, amendments, the latest relevant block) instead.",
       "esquema_entrada": {
         "properties": {
           "from_line": {
@@ -475,7 +475,7 @@
       "nombre": "read_document"
     },
     {
-      "descripcion": "Working brief of a task, instead of reading the whole file: the frontmatter, the full spec (Goal, Acceptance\n    criteria, Resolves, Applicable decisions, Files involved, Out of scope, Notes, Amendments, How to verify), every\n    Amendment block, the block relevant to the status in full (changes_requested → latest Review; in_review or\n    failed → latest Result block; in_progress → the latest Review it answers) and a one-line index (heading · line\n    range · size) of every other Result/Review block, readable with read_document and that range.",
+      "descripcion": "Working brief of a task, instead of reading the whole file: the frontmatter, the full spec (Goal, Acceptance\ncriteria, Resolves, Applicable decisions, Files involved, Out of scope, Notes, Amendments, How to verify), every\nAmendment block, the block relevant to the status in full (changes_requested → latest Review; in_review or\nfailed → latest Result block; in_progress → the latest Review it answers) and a one-line index (heading · line\nrange · size) of every other Result/Review block, readable with read_document and that range.",
       "esquema_entrada": {
         "properties": {
           "id": {
@@ -497,7 +497,7 @@
       "nombre": "read_task"
     },
     {
-      "descripcion": "Registers a project: adds it to projects.json, initializes its memory (its own git repo) and returns the\n    instructions to paste into Claude and into CLAUDE.md/AGENTS.md. `path`: the code folder (must exist inside the\n    projects folder). `memory`: optional; by default <projects folder>/.ratifact/<name>, outside the code\n    repository. `tests`: command to run the tests; if omitted it is detected (Maven, Gradle, npm/pnpm/yarn, Godot,\n    pytest, cargo, go). Only with the user's confirmation.",
+      "descripcion": "Registers a project: adds it to projects.json, initializes its memory (its own git repo) and returns the\ninstructions to paste into Claude and into CLAUDE.md/AGENTS.md. `path`: the code folder (must exist inside the\nprojects folder). `memory`: optional; by default <projects folder>/.ratifact/<name>, outside the code\nrepository. `tests`: command to run the tests; if omitted it is detected (Maven, Gradle, npm/pnpm/yarn, Godot,\npytest, cargo, go). Only with the user's confirmation.",
       "esquema_entrada": {
         "properties": {
           "memory": {
@@ -529,7 +529,7 @@
       "nombre": "register_project"
     },
     {
-      "descripcion": "Closes a proposal the user does NOT approve. It becomes 'rejected' with its reason (it is not deleted: the\n    history keeps what was considered and why it was not adopted). Only on the user's explicit instruction.",
+      "descripcion": "Closes a proposal the user does NOT approve. It becomes 'rejected' with its reason (it is not deleted: the\nhistory keeps what was considered and why it was not adopted). Only on the user's explicit instruction.",
       "esquema_entrada": {
         "properties": {
           "id": {
@@ -556,7 +556,7 @@
       "nombre": "reject_decision"
     },
     {
-      "descripcion": "Sends a task in review back so the coding agent fixes it on the SAME branch.\n    Use it only when the user, after reviewing the result, decides to ask for changes.\n    `findings`: what is approved and what fails, and why. `additional_criteria`: a verifiable list of what the fix\n    must meet (added to the original criteria). The task becomes 'changes_requested' and is re-run with\n    /run-task T-NNN, which continues on the existing branch without rewriting earlier commits.\n    To extend a task that has not run yet (todo), use amend_task.",
+      "descripcion": "Sends a task in review back so the coding agent fixes it on the SAME branch.\nUse it only when the user, after reviewing the result, decides to ask for changes.\n`findings`: what is approved and what fails, and why. `additional_criteria`: a verifiable list of what the fix\nmust meet (added to the original criteria). The task becomes 'changes_requested' and is re-run with\n/run-task T-NNN, which continues on the existing branch without rewriting earlier commits.\nTo extend a task that has not run yet (todo), use amend_task.",
       "esquema_entrada": {
         "properties": {
           "additional_criteria": {
@@ -588,7 +588,7 @@
       "nombre": "request_changes"
     },
     {
-      "descripcion": "Returns the decisions in 'proposed' status so the user can decide to accept, adjust or reject them.\n    Paginated: `limit` per page (max 25) starting at `from_id` (e.g. \"ADR-020\"). With `summary=True` it returns one\n    line per proposal (useful to see the overview before going into detail).",
+      "descripcion": "Returns the decisions in 'proposed' status so the user can decide to accept, adjust or reject them.\nPaginated: `limit` per page (max 25) starting at `from_id` (e.g. \"ADR-020\"). With `summary=True` it returns one\nline per proposal (useful to see the overview before going into detail).",
       "esquema_entrada": {
         "properties": {
           "from_id": {
@@ -620,7 +620,7 @@
       "nombre": "review_proposals"
     },
     {
-      "descripcion": "Searches text (case-insensitive) in the project's text files and returns snippets with path and line. Use\n    it before reading whole documents.\n    Memory records come first (\"ID · status · title (path)\"): the one whose id is `query` (e.g. \"T-1\", \"adr-20\")\n    and up to 5 whose title contains it at the start of a word; then memory lines and code lines, sharing the rest\n    equally. In each section, files whose name contains `query` at the start of a word or camelCase part come first\n    (if no line matches: \"path: (file name matches)\"), and one line per file is shown before repeating files.\n    `max_results` counts every line; if something is left out, the last line says how many lines (and files) per\n    section.",
+      "descripcion": "Searches text (case-insensitive) in the project's text files and returns snippets with path and line. Use\nit before reading whole documents.\nMemory records come first (\"ID · status · title (path)\"): the one whose id is `query` (e.g. \"T-1\", \"adr-20\")\nand up to 5 whose title contains it at the start of a word; then memory lines and code lines, sharing the rest\nequally. In each section, files whose name contains `query` at the start of a word or camelCase part come first\n(if no line matches: \"path: (file name matches)\"), and one line per file is shown before repeating files.\n`max_results` counts every line; if something is left out, the last line says how many lines (and files) per\nsection.",
       "esquema_entrada": {
         "properties": {
           "max_results": {
@@ -647,7 +647,7 @@
       "nombre": "search"
     },
     {
-      "descripcion": "Marks a decision as superseded by another one already recorded (status 'superseded'; decisions are never\n    deleted).",
+      "descripcion": "Marks a decision as superseded by another one already recorded (status 'superseded'; decisions are never\ndeleted).",
       "esquema_entrada": {
         "properties": {
           "new_id": {
@@ -674,7 +674,7 @@
       "nombre": "supersede_decision"
     },
     {
-      "descripcion": "Modifies an EXISTING text file in an allowed area. mode: 'replace' | 'append'.\n    To create a new file use create_document.",
+      "descripcion": "Modifies an EXISTING text file in an allowed area. mode: 'replace' | 'append'.\nTo create a new file use create_document.",
       "esquema_entrada": {
         "properties": {
           "content": {
@@ -711,7 +711,7 @@
       "nombre": "update_document"
     },
     {
-      "descripcion": "Rewrites INDEX.md (the project's executive summary). It must be a regenerated SUMMARY, not an\n    accumulation; limit ~6000 characters.",
+      "descripcion": "Rewrites INDEX.md (the project's executive summary). It must be a regenerated SUMMARY, not an\naccumulation; limit ~6000 characters.",
       "esquema_entrada": {
         "properties": {
           "content": {

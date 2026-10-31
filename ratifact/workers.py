@@ -12,7 +12,8 @@ NINGUNO = re.compile(r"^none\s*[—–-]+\s*reason:\s*(\S.*)$")
 LINEA = re.compile(r"^\s*(?:[-*]\s+)?(?:\*\*)?Workers:(?:\*\*)?\s*(.*)$")
 REENVIO = re.compile(r"^rework:\s*(explore|write|verify)×(\d+)$")
 REENVIO_SEGUIDO = re.compile(r"^(explore|write|verify)×(\d+)$")
-NOTA = re.compile(r"\s[—–]\s")
+# ADR-042: el guion ASCII (`-`, `--`) separa la nota solo si lo sigue `note:`; ` — ` y ` – ` siempre.
+NOTA = re.compile(r"\s(?:[—–]\s|--?\s(?=note:))", re.I)
 
 
 @dataclass

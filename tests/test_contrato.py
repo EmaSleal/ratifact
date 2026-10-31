@@ -4,6 +4,8 @@ cualquier cambio en lo que ve el cliente MCP rompe esta prueba.
 
 Para regenerar la instantánea a propósito (solo si el cambio de contrato es intencional):
     uv run --with pytest --with "mcp>=1.2,<2" python tests/test_contrato.py
+Es el único comando de regeneración: normaliza las descripciones (inspect.cleandoc) y escribe con formato fijo, así
+dos regeneraciones seguidas dan los mismos bytes.
 """
 from __future__ import annotations
 
@@ -32,6 +34,7 @@ def contrato(mcp) -> dict:
 
 
 def serializar(datos: dict) -> str:
+    """Formato fijo de la instantánea: claves ordenadas, sangría 2, sin escapar ASCII y salto de línea final."""
     return json.dumps(datos, sort_keys=True, ensure_ascii=False, indent=2) + "\n"
 
 
@@ -43,10 +46,25 @@ def _sin_sangria(datos: dict) -> dict:
             for grupo, elementos in datos.items()}
 
 
+def instantanea(mcp) -> str:
+    """Texto exacto de tests/contrato_herramientas.json: contrato normalizado y serializado. Lo usan la regeneración
+    y la prueba, así que no dependen de la sangría del docstring del intérprete."""
+    return serializar(_sin_sangria(contrato(mcp)))
+
+
 def test_contrato_de_herramientas_y_prompts_sin_cambios(srv):
-    actual = serializar(_sin_sangria(contrato(srv.mcp)))
+    actual = instantanea(srv.mcp)
     esperado = serializar(_sin_sangria(json.loads(INSTANTANEA.read_text(encoding="utf-8"))))
     assert actual == esperado, "El contrato MCP cambió respecto de tests/contrato_herramientas.json"
+
+
+def test_instantanea_regeneracion_determinista(srv):
+    """T-019: regenerar dos veces da los mismos bytes, y el archivo versionado es exactamente esa salida (regenerarlo
+    no cambia la sangría de descripciones ajenas al cambio)."""
+    primera, segunda = instantanea(srv.mcp), instantanea(srv.mcp)
+    assert primera == segunda
+    assert INSTANTANEA.read_bytes() == primera.encode("utf-8"), \
+        "tests/contrato_herramientas.json no está normalizado: regenerarlo con el comando del docstring"
 
 
 def test_descripciones_normalizadas_al_registrar(srv):
@@ -64,7 +82,7 @@ if __name__ == "__main__":
     import sys
     sys.path.insert(0, str(INSTANTANEA.parents[1]))
     import servidor
-    INSTANTANEA.write_text(serializar(contrato(servidor.mcp)), encoding="utf-8")
+    INSTANTANEA.write_text(instantanea(servidor.mcp), encoding="utf-8")
     print(f"Instantánea escrita en {INSTANTANEA}")
 
 

@@ -151,11 +151,17 @@ transversal o depende de diagnosticar una causa que la especificación aún no c
   `Workers: none — reason: <motivo>`. Con `required`, `update_task(..., "in_review")` sin una línea Workers válida
   cambia el estado igual pero responde con un aviso.
 - Formato ampliado (ADR-041, corrige ADR-036 §4–§5): `Workers: <rol>/<modelo>×<n>, …[, rework: <rol>×<n>, …][, escalated: <rol>][ — note: <texto libre>]`.
-  `<rol>/<modelo>×<n>` cuenta solo los encargos iniciales; `rework: <rol>×<n>` cuenta los reenvíos de ese rol después de
-  que una verificación encontró un defecto (el rol debe figurar entre los trabajadores, n ≥ 1); todo lo que sigue a
+  `<rol>/<modelo>×<n>` cuenta solo los encargos iniciales; `rework: <rol>×<n>` cuenta los reenvíos de ese rol causados por
+  un defecto detectado por el verificador o por la revisión del diff del orquestador (el rol debe figurar entre los trabajadores, n ≥ 1); todo lo que sigue a
   ` — ` es una nota que el parser ignora. Sin paréntesis: el retrabajo va en `rework:`, los comentarios en `— note:`.
   Ejemplo: `Workers: explore/haiku×1, write/sonnet×1, verify/sonnet×1, rework: write×1 — note: resumed once for the verify fix`.
   Las líneas de ADR-036 siguen siendo válidas.
+- ADR-042 (corrige ADR-041 §1): `rework` cuenta los reenvíos causados por un defecto que encontró el verificador o la
+  revisión del diff del orquestador, p. ej. `Workers: write/sonnet×1, rework: write×1 — note: diff review found a missing test`.
+  Los encargos iniciales nunca cuentan como retrabajo, ni con varios trabajadores del mismo rol en paralelo: dos
+  escritores en paralelo son `Workers: write/sonnet×2`. El separador canónico sigue siendo ` — `, pero se aceptan
+  ` - note:` / ` -- note:` y `none - reason:` / `none -- reason:` (`Workers: write/sonnet×1 - note: x`); un guion ASCII
+  en cualquier otro lugar (`Workers: write/sonnet×1 - resumed once`) sigue siendo inválido.
 - Corrección sin duplicar: si el aviso dice que la línea es inválida, propone una corregida cuando puede derivarla;
   enviar solo esa línea con `update_task(..., "in_review")` reemplaza la línea `Workers:` del último bloque de
   resultado (o la agrega ahí) en lugar de crear un bloque nuevo.
@@ -436,6 +442,8 @@ vive en `ratifact/` (ADR-020); ningún módulo supera 300 líneas y no hay impor
 | `ratifact/herramientas/proyectos.py` | `init_memory`, `project_instructions`, `register_project`, `update_project` y la detección del comando de pruebas. |
 
 `tests/contrato_herramientas.json` es la instantánea del contrato MCP (nombre, descripción y esquema de cada
-herramienta y prompt); `tests/test_contrato.py` falla si cambia. `tests/contrato_herramientas_v0.json` es la
+herramienta y prompt); `tests/test_contrato.py` falla si cambia. Para regenerarla a propósito (descripciones normalizadas con `inspect.cleandoc` y formato fijo, así que
+regenerar dos veces da los mismos bytes): `uv run --with pytest --with "mcp>=1.2,<2" python tests/test_contrato.py`.
+`tests/contrato_herramientas_v0.json` es la
 instantánea anterior al renombrado (v0, en español): la prueba comprueba que cada herramienta vieja tiene exactamente
 una nueva y que `amend_task`/`read_task` son las únicas agregadas.
