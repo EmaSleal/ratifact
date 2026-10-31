@@ -145,3 +145,41 @@ def test_descripciones_del_contrato_sin_ids_del_historial():
 
     recorrer(json.loads(_leer(CONTRATO)))
     assert not ofensores, ofensores
+
+
+# ── Codex figura como cliente experimental ──
+# Una enumeración de clientes soportados es una línea que nombra a Codex junto a Pi, con "client(es)" y Claude Desktop
+# en ella o en las dos anteriores (la lista puede partirse en varias líneas), o la fila de Codex de una tabla; las
+# listas de "reinicie los clientes" no declaran soporte y se excluyen.
+
+REINICIO = re.compile(r"restart|reinici", re.I)
+
+
+def _enumeraciones_de_clientes(texto: str):
+    lineas = texto.splitlines()
+    for n, linea in enumerate(lineas):
+        if "Codex" not in linea:
+            continue
+        ventana = "\n".join(lineas[max(n - 2, 0):n + 1])
+        lista = re.search(r"\bPi\b", linea) and "Claude Desktop" in ventana and re.search(r"client", ventana, re.I)
+        if not (lista or linea.startswith("| Codex")):
+            continue
+        if REINICIO.search(linea) or (n and REINICIO.search(lineas[n - 1])):
+            continue
+        yield n + 1, linea
+
+
+@pytest.mark.parametrize("nombre", ["README.md", "LEEME.md"])
+def test_codex_figura_como_experimental(nombre):
+    enumeraciones = list(_enumeraciones_de_clientes(_leer(RAIZ / nombre)))
+    assert enumeraciones, nombre
+    sin_marca = [f"{nombre}:{n}" for n, linea in enumeraciones if "experimental" not in linea]
+    assert not sin_marca, sin_marca
+
+
+@pytest.mark.parametrize("nombre", ["README.md", "LEEME.md"])
+def test_explica_que_significa_experimental(nombre):
+    texto = _leer(RAIZ / nombre)
+    assert "ratifact install" in texto and "$run-task" in texto
+    assert re.search(r"Codex es experimental|Codex is experimental", texto), nombre
+    assert re.search(r"experimental.{0,250}?(?:validated|validado)", texto, re.S), nombre
