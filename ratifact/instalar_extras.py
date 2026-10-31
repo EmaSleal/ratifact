@@ -1,6 +1,6 @@
 """Parts of `ratifact install` beyond the server entries (T-013): Claude Code permissions `mcp__memoria-proyectos__*` →
 `mcp__ratifact__*` (same lists, v0 Spanish tool names translated), the generated CLAUDE.md/AGENTS.md block of the
-registered projects (only the exact v1 text) and the /run-task links (and the /tarea alias until 1.1) to the skills of
+registered projects (only the exact v1 text) and the /run-task links to the skills of
 the installed package. Planning only reads; applying goes through ratifact.archivos."""
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from ratifact.vocabulario import HERRAMIENTAS_V0
 PREFIJO_VIEJO, PREFIJO = "mcp__memoria-proyectos", "mcp__ratifact"
 LISTAS_PERMISOS = ("allow", "ask", "deny")
 ARCHIVOS_BLOQUE = ("CLAUDE.md", "AGENTS.md")
-SKILLS = ("run-task", "tarea")          # tarea: deprecated alias, removed in 1.1
+SKILLS = ("run-task",)
 
 
 @dataclass
@@ -125,7 +125,7 @@ class Enlace:
             return (f"{self.destino} exists and is not a link: remove {self.destino} by hand and run "
                     "`ratifact install --apply` again")
         antes = f" (was → {self.previo})" if self.previo else ""
-        return f"{'link' if self.accion == 'create' else 'relink'} {self.destino} → {self.objetivo}{antes}"
+        return f"{'link' if self.accion == 'create' else 'relink'} /run-task: {self.destino} → {self.objetivo}{antes}"
 
 
 def _destinos(home: Path, clientes: set[str]) -> list[tuple[Path, str, bool]]:
@@ -134,6 +134,7 @@ def _destinos(home: Path, clientes: set[str]) -> list[tuple[Path, str, bool]]:
     for s in SKILLS:
         if "claude-code" in clientes:
             salida.append((home / ".claude" / "commands" / f"{s}.md", s, False))
+            salida.append((home / ".claude" / "skills" / s, s, True))
         if "pi" in clientes:
             salida.append((home / ".pi" / "agent" / "prompts" / f"{s}.md", s, False))
             if (home / ".pi" / "agent" / "skills").is_dir():

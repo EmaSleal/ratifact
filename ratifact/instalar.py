@@ -2,7 +2,8 @@
 hand. Without `--apply` it only shows the plan. With `--apply`: (1) creates an empty ~/.config/ratifact/projects.json
 if there is no configuration at all; (2) writes the `ratifact` server entry of Claude Desktop, Claude Code, Pi and Codex
 (ratifact.clientes); (3) renames the Claude Code permissions and (4) the generated CLAUDE.md/AGENTS.md block of the
-registered projects; (5) links /run-task (and /tarea until 1.1) to the installed package. It lists what cannot be done
+registered projects; (5) links /run-task to the installed package and
+removes the stale links of the retired alias (ADR-039). It lists what cannot be done
 automatically and reports the integrations per project without asking (ADR-025). Idempotent."""
 from __future__ import annotations
 
@@ -16,6 +17,7 @@ from typing import Callable
 
 from ratifact import clientes as cl
 from ratifact import instalar_extras as ex
+from ratifact import retirado as ret
 from ratifact import rutas
 from ratifact.build import RECORDATORIO
 from ratifact.archivos import ErrorInstalacion, escribir_validado, validar_json
@@ -55,13 +57,15 @@ class Plan:
     permisos: list[ex.Cambio] = field(default_factory=list)
     bloques: list[ex.Cambio] = field(default_factory=list)
     enlaces: list[ex.Enlace] = field(default_factory=list)
+    obsoletos: list[ret.Obsoleto] = field(default_factory=list)
     manuales: list[str] = field(default_factory=list)
     integraciones: list[str] = field(default_factory=list)
 
     @property
     def pendientes(self) -> list:
         return ([self.config] if self.config else []) + [c for c in self.clientes if c.cambia] + \
-            self.permisos + self.bloques + [e for e in self.enlaces if e.accion in ("create", "replace")]
+            self.permisos + self.bloques + [e for e in self.enlaces if e.accion in ("create", "replace")] + \
+            [o for o in self.obsoletos if o.accion == "remove"]
 
     @property
     def vacio(self) -> bool:
@@ -100,6 +104,7 @@ def _manuales(plan: Plan) -> None:
                 plan.manuales.append(f"Claude Code has a project-scoped `{cl.CLAVE_VIEJA}` server in {carpeta}: run "
                                      f"`claude mcp remove {cl.CLAVE_VIEJA} --scope local` there")
     plan.manuales += [e.describir() for e in plan.enlaces if e.accion == "skip"]
+    plan.manuales += [o.describir() for o in plan.obsoletos if o.accion == "skip"]
     plan.manuales += [f"{c.ruta}: {c.error}" for c in plan.permisos if c.error]
 
 
@@ -134,6 +139,7 @@ def planificar(ejecutable: str | None, paquete: Path, claude=_BUSCAR, cliente: s
     plan.bloques, bloques_a_mano = ex.planificar_bloques([(n, c, _repos_de(c) if c.is_dir() else [])
                                                           for n, c in codigos])
     plan.enlaces = ex.planificar_enlaces(Path.home(), paquete / "skills", encontrados)
+    plan.obsoletos = ret.planificar_obsoletos(Path.home())
     _manuales(plan)
     plan.manuales += bloques_a_mano
     plan.integraciones = _integraciones_informe(proyectos)
@@ -161,8 +167,9 @@ def describir(plan: Plan) -> list[str]:
         lineas += [f"  {c.ruta}" for c in plan.bloques]
     cambian = [e for e in plan.enlaces if e.accion in ("create", "replace")]
     if cambian:
-        lineas.append("/run-task links (and the /tarea alias until 1.1):")
+        lineas.append("/run-task links:")
         lineas += [f"  {e.describir()}" for e in cambian]
+    lineas += [o.describir() for o in plan.obsoletos if o.accion == "remove"]
     return lineas
 
 
@@ -210,6 +217,9 @@ def ejecutar(plan: Plan, correr: Callable = subprocess.run) -> tuple[list[str], 
     for e in plan.enlaces:
         if e.accion in ("create", "replace"):
             paso(lambda e=e: ex.aplicar_enlace(e))
+    for o in plan.obsoletos:
+        if o.accion == "remove":
+            paso(lambda o=o: ret.aplicar_obsoleto(o))
     return hecho, fallos
 
 

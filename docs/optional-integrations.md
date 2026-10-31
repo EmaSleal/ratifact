@@ -38,7 +38,7 @@ Initial set:
 |---|---|---|
 | `obtener_contexto` (planning) | One line "Integraciones: codegraph (detectada), gentle-ai (detectada) · engram (si está disponible)" + one `planificar` line per integration | ~50 tokens/integration; startup stays < 2,000 |
 | `registrar_tarea` | Only the detected-integrations line | minimal |
-| `actualizar_tarea(…, "en_curso")` (step 1.6 of `/tarea`) | Full `ejecutar` + `verificar` + `cerrar` guidance, computed at that moment | 0 extra calls |
+| `actualizar_tarea(…, "en_curso")` (step 1.6 of `/run-task`) | Full `ejecutar` + `verificar` + `cerrar` guidance, computed at that moment | 0 extra calls |
 
 Guidance is never written into the task file (stale on reruns). Disabled integrations (`off`) never appear.
 

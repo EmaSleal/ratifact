@@ -120,7 +120,7 @@ def test_instrucciones_cubren_codex(srv, proyecto):
     assert "ratifact install --apply" in salida and "the whole folder for Codex" in salida     # T-013
     assert "$run-task T-NNN" in salida and "/tarea" not in salida
     raiz = srv.Path(srv.__file__).parent
-    for nombre in ("run-task", "tarea"):     # tarea: alias deprecado hasta 1.1
+    for nombre in ("run-task",):
         skill = raiz / "skills" / nombre / "SKILL.md"
         assert skill.is_file() and not skill.is_symlink()                   # Codex no sigue SKILL.md enlazados
         assert (raiz / f"{nombre}.md").resolve() == skill.resolve()       # una sola fuente

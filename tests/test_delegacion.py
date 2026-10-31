@@ -303,5 +303,3 @@ def test_skill_pide_linea_workers_separada_de_integraciones(srv):
         assert "escalated: write" in cerrar
         integraciones = re.search(r"`Integrations used: …`[^.]*\.", cerrar).group(0)
         assert not re.search(r"\b(explore|write|verify)/", integraciones)
-    alias = (RAIZ_REPO / "ratifact" / "skills" / "tarea" / "SKILL.md").read_text(encoding="utf-8")
-    assert "Workers:" in alias

@@ -10,7 +10,7 @@ import subprocess
 from pathlib import Path
 from typing import Callable
 
-from ratifact import __version__, build, delegacion, modelos, procesos, rutas
+from ratifact import __version__, build, delegacion, modelos, procesos, retirado, rutas
 from ratifact import config as _cfg
 from ratifact.config import _ruta_config
 from ratifact.esquema import VERSION_ESQUEMA
@@ -187,18 +187,29 @@ def _clientes(acciones: list[str], paquete: Path | None = None) -> list[str]:
 
 
 def _enlaces(encontrados: set[str], acciones: list[str], paquete: Path | None) -> list[str]:
-    """/run-task links of the clients found: missing ones are informative; one pointing elsewhere (e.g. to a working
-    copy, or broken after `uv tool install --reinstall` with another Python) is a pending action."""
+    """/run-task links of the clients found: a missing, broken or foreign one is a pending action (`ratifact install
+    --apply` fixes it); a real file/folder in its place is reported. Also any leftover link of the retired alias."""
     from ratifact.instalar_extras import planificar_enlaces
     enlaces = planificar_enlaces(Path.home(), (paquete or Path(__file__).resolve().parent) / "skills", encontrados)
     otros = [e for e in enlaces if e.accion == "replace"]
     faltan = [e for e in enlaces if e.accion == "create"]
+    reales = [e for e in enlaces if e.accion == "skip"]
     if otros:
-        acciones.append(f"{len(otros)} /run-task link(s) point elsewhere (e.g. {otros[0].destino} → {otros[0].previo}): "
-                        "run `ratifact install --apply`")
-    estado = "ok" if not (otros or faltan) else f"{len(faltan)} missing, {len(otros)} pointing elsewhere"
-    return [f"/run-task links: {estado}" + (" (`ratifact install --apply` links them)" if faltan and not otros
-                                            else "")] if enlaces else []
+        acciones.append(f"{len(otros)} /run-task link(s) point elsewhere or are broken (e.g. {otros[0].destino} → "
+                        f"{otros[0].previo}): run `ratifact install --apply`")
+    if faltan:
+        acciones.append(f"{len(faltan)} /run-task link(s) are missing (e.g. {faltan[0].destino}): run "
+                        "`ratifact install --apply`")
+    for e in reales:
+        acciones.append(f"{e.destino} exists and is not a link, so /run-task is not linked there: remove it by hand "
+                        "and run `ratifact install --apply`")
+    for o in retirado.planificar_obsoletos(Path.home()):
+        acciones.append(f"stale /{retirado.NOMBRE} link at {o.ruta}: run `ratifact install --apply`"
+                        if o.accion == "remove" else
+                        f"{o.ruta} is a /{retirado.NOMBRE} leftover that is not a ratifact link: remove it by hand")
+    estado = "ok" if not (otros or faltan or reales) else (
+        f"{len(faltan)} missing, {len(otros)} pointing elsewhere or broken, {len(reales)} blocked by a real file/folder")
+    return [f"/run-task links: {estado}"] if enlaces else []
 
 
 def informe(procesos: Callable[[], list[Proceso]] = procesos_servidor, paquete: Path | None = None,

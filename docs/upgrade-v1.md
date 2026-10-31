@@ -85,12 +85,13 @@ and in `permissions.allow` replace any old Spanish tool names with their new nam
 
 ## 4. Relink /run-task
 
-`/tarea` is now `/run-task` (`$run-task` in Codex). Since T-013, run once per machine `ratifact install --apply`: it
-links `run-task` (and the deprecated `/tarea` alias, until 1.1) from the **installed** package into
-`~/.claude/commands/`, `~/.pi/agent/prompts/`, `~/.codex/skills/` and `~/.agents/skills/` (Codex gets the whole skill
-folder). Links made earlier by hand to the working copy are replaced; a real file or folder in their place is left
-alone and reported. Remove the alias links after 1.1:
-`rm ~/.claude/commands/tarea.md ~/.pi/agent/prompts/tarea.md ~/.codex/skills/tarea ~/.agents/skills/tarea`.
+`/tarea` was retired in 1.0.0; the command is `/run-task` (`$run-task` in Codex). Run once per machine
+`ratifact install --apply` (also `ratifact upgrade --apply`): it removes the old `tarea` links (only symlinks that point
+into a ratifact package or checkout; anything else named `tarea` is left alone and reported) and links `run-task` from
+the **installed** package into `~/.claude/commands/`, `~/.claude/skills/`, `~/.pi/agent/prompts/`, `~/.codex/skills/`
+and `~/.agents/skills/` (Codex gets the whole skill folder). A missing or broken `run-task` link is detected and
+recreated; `ratifact doctor` reports both cases. Links made earlier by hand to the working copy are replaced; a real
+file or folder in their place is left alone and reported.
 
 ## 5. (Optional) Rename the environment variables
 

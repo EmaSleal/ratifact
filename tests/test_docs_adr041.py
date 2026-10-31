@@ -27,7 +27,3 @@ def test_docs_mencionan_formato_cliente_y_tasa_de_retrabajo():
         for clave in ("rework:", "note:", "client=", "ADR-041"):
             assert clave in texto, (doc, clave)
         assert re.search(r"rework rate|tasa de retrabajo", texto), doc
-
-
-def test_alias_tarea_menciona_rework():
-    assert "rework" in _leer(RAIZ / "ratifact" / "skills" / "tarea" / "SKILL.md")

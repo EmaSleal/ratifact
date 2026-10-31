@@ -13,7 +13,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Callable
 
-from ratifact import esquema, rutas
+from ratifact import esquema, retirado, rutas
 from ratifact.esquema import VERSION_ESQUEMA
 from ratifact.registros import _escribir_atomico, _vistas_en
 from ratifact.upgrade import Plan
@@ -140,11 +140,18 @@ def _paso_log(plan: Plan, deshacer: list[Callable[[], None]]) -> list[str]:
     return [f"copied the usage log {viejo} → {nuevo} (the old one is kept)"]
 
 
+def _paso_obsoletos(plan: Plan, deshacer: list[Callable[[], None]]) -> list[str]:
+    """Removes the stale links of the retired alias (ADR-039): only symlinks to a ratifact package or checkout."""
+    return [retirado.aplicar_obsoleto(o) for o in plan.obsoletos if o.accion == "remove"]
+
+
 PASOS = (("1", "migrate memories to schema v2", _paso_migrar, lambda plan: plan.migrar),
          ("2", "move memories to .ratifact/", _paso_mover, lambda plan: plan.mover),
          ("3", "write projects.json with English keys", _paso_config, lambda plan: plan.config is not None),
          ("4", "regenerate views", _paso_vistas, lambda plan: True),
-         ("5", "copy the usage log", _paso_log, lambda plan: plan.log))
+         ("5", "copy the usage log", _paso_log, lambda plan: plan.log),
+         ("6", "remove stale links of the retired alias", _paso_obsoletos,
+          lambda plan: any(o.accion == "remove" for o in plan.obsoletos)))
 
 
 def ejecutar(plan: Plan) -> list[str]:

@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from ratifact import rutas
+from ratifact import retirado, rutas
 from ratifact.build import RECORDATORIO
 from ratifact import config as _cfg
 from ratifact.config import CLAVES_CONFIG
@@ -31,10 +31,12 @@ class Plan:
     log: tuple[Path, Path] | None = None             # (viejo, nuevo)
     bloqueos: list[str] = field(default_factory=list)
     otros_servidores: list[Proceso] = field(default_factory=list)
+    obsoletos: list[retirado.Obsoleto] = field(default_factory=list)   # enlaces del alias retirado (ADR-039)
 
     @property
     def vacio(self) -> bool:
-        return not (self.migrar or self.mover or self.config is not None or self.vistas or self.log)
+        return not (self.migrar or self.mover or self.config is not None or self.vistas or self.log or
+                    any(o.accion == "remove" for o in self.obsoletos))
 
 
 def _destino(p: Proyecto, base: Path) -> Path:
@@ -95,8 +97,9 @@ def planificar(config: Path | None = None, base: Path | None = None,
     viejo, nuevo = log_viejo or rutas.log_viejo(), rutas.log_por_defecto()
     if viejo and viejo.is_file() and not nuevo.exists() and viejo.resolve() != nuevo.resolve():
         plan.log = (viejo, nuevo)
-    if not plan.vacio:
+    if not plan.vacio:                 # the stale-link cleanup alone never needs the clients closed
         _bloqueos(plan, procesos())
+    plan.obsoletos = retirado.planificar_obsoletos(Path.home())
     return plan
 
 
@@ -134,6 +137,8 @@ def describir(plan: Plan) -> list[str]:
         lineas.append(f"4. regenerate DECISIONS.md/OPEN.md of {p.nombre}")
     if plan.log:
         lineas.append(f"5. copy the usage log {plan.log[0]} → {plan.log[1]}")
+    lineas += [f"6. {o.describir()}" for o in plan.obsoletos if o.accion == "remove"]
+    lineas += [f"Note: {o.describir()}" for o in plan.obsoletos if o.accion == "skip"]
     return lineas
 
 
@@ -155,6 +160,8 @@ def main(aplicar: bool = False, procesos: Callable[[], list[Proceso]] = procesos
         print(f"Ignored: {n} server process{'es' if n != 1 else ''} using another configuration "
               f"({', '.join(configs)}; pids {', '.join(str(p.pid) for p in plan.otros_servidores)})")
     if plan.vacio:
+        for o in plan.obsoletos:
+            print(f"Note: {o.describir()}")
         print("Nothing to do: everything is already upgraded.")
         return 0
     abortado = aplicar and bool(plan.bloqueos)

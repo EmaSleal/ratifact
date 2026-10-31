@@ -47,7 +47,7 @@ def test_rutas_por_defecto_fuera_del_paquete(srv, monkeypatch, tmp_path):
     assert srv.LOG_USO == app.LOG_USO
     import ratifact
     skills = Path(ratifact.__file__).parent / "skills"            # shipped inside the package (T-013)
-    assert (skills / "run-task" / "SKILL.md").is_file() and (skills / "tarea" / "SKILL.md").is_file()
+    assert (skills / "run-task" / "SKILL.md").is_file() and not (skills / "tarea").exists()
     assert (RAIZ_REPO / "skills" / "run-task" / "SKILL.md").resolve() == (skills / "run-task" / "SKILL.md").resolve()
     assert (RAIZ_REPO / "run-task.md").resolve() == (skills / "run-task" / "SKILL.md").resolve()
 

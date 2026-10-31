@@ -91,6 +91,7 @@ def test_doctor_sin_pendientes_tras_el_upgrade_sale_con_0(vieja, entorno, capsys
         monkeypatch.delenv(f"MEMORIA_PROYECTOS_{sufijo}")
         if sufijo != "CONFIG":
             monkeypatch.setenv(f"RATIFACT_{sufijo}", valor)
+    monkeypatch.setattr("shutil.which", lambda *_a, **_k: None)       # sin `claude`: no hay enlaces que exigir
     instalado = tmp_path / "site-packages" / "ratifact"       # instalación fija (no es la copia de trabajo)
     instalado.mkdir(parents=True)
     antes = arbol(entorno["tmp"])
@@ -157,8 +158,41 @@ def test_doctor_no_pide_upgrade_despues_de_registrar_un_proyecto_nuevo(vieja, en
     salida = srv.register_project(name="nuevo", path=str(crear_repo(vieja["base"] / "nuevo" / "codigo")))
     assert not salida.startswith("ERROR"), salida
     assert json.loads(vieja["nueva"].read_text())["nuevo"]["memory"] == str(vieja["base"] / ".ratifact" / "nuevo")
+    monkeypatch.setattr("shutil.which", lambda *_a, **_k: None)
     instalado = tmp_path / "site-packages" / "ratifact"
     instalado.mkdir(parents=True)
     codigo, salida = _doctor(vieja, capsys, paquete=instalado)
     assert f"memory: {vieja['base'] / '.ratifact' / 'nuevo'} · schema v2 · new default (.ratifact/)" in salida
     assert "run `ratifact upgrade`" not in salida and "Pending actions: none" in salida and codigo == 0, salida
+
+
+# ───────────── T-017: doctor and the /run-task links / retired /tarea alias ─────────────
+
+def test_doctor_avisa_de_un_enlace_tarea_que_sigue_presente(vieja, hogar, capsys, tmp_path):
+    instalado = tmp_path / "site-packages" / "ratifact"
+    instalado.mkdir(parents=True)
+    propio = hogar / ".codex" / "skills" / "tarea"
+    propio.parent.mkdir(parents=True)
+    propio.symlink_to(instalado / "skills" / "tarea")
+    ajeno = hogar / ".agents" / "skills" / "tarea"
+    ajeno.parent.mkdir(parents=True)
+    ajeno.mkdir()
+    codigo, salida = _doctor(vieja, capsys, paquete=instalado)
+    assert f"stale /tarea link at {propio}: run `ratifact install --apply`" in salida
+    assert f"{ajeno} is a /tarea leftover that is not a ratifact link: remove it by hand" in salida
+    assert codigo == 1 and propio.is_symlink()                      # read-only
+
+
+def test_doctor_detecta_el_enlace_run_task_ausente_o_roto(vieja, hogar, capsys, tmp_path, monkeypatch):
+    instalado = tmp_path / "site-packages" / "ratifact"
+    (instalado / "skills" / "run-task").mkdir(parents=True)
+    (hogar / ".codex").mkdir()
+    monkeypatch.setattr("shutil.which", lambda *_a, **_k: None)
+    codigo, salida = _doctor(vieja, capsys, paquete=instalado)
+    assert "/run-task link(s) are missing" in salida and "run `ratifact install --apply`" in salida
+    assert "/run-task links: 2 missing" in salida
+    roto = hogar / ".codex" / "skills" / "run-task"
+    roto.parent.mkdir(parents=True)
+    roto.symlink_to(hogar / "no-existe")
+    codigo, salida = _doctor(vieja, capsys, paquete=instalado)
+    assert "point elsewhere or are broken" in salida and "1 missing, 1 pointing elsewhere" in salida

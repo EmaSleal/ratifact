@@ -312,7 +312,6 @@ copia instalada (nunca desde la copia de trabajo), así existe en todos los proy
 - Codex: `~/.codex/skills/run-task` y `~/.agents/skills/run-task` (según la versión lee una u otra; se enlaza la carpeta
   entera porque Codex no sigue un `SKILL.md` enlazado como archivo)
 
-`/tarea` (`ratifact/skills/tarea/`) queda como alias deprecado que remite a `/run-task` hasta 1.1 y se enlaza igual.
 Un destino que ya existe como archivo o carpeta real (no enlace) nunca se reemplaza: el plan pide borrarlo a mano.
 Si usa gentle-shell independiente, enlace también `~/.gentle-shell/agent/prompts/run-task.md` a la misma fuente.
 
@@ -411,7 +410,7 @@ vive en `ratifact/` (ADR-020); ningún módulo supera 300 líneas y no hay impor
 | `ratifact/instalar.py`, `ratifact/instalar_extras.py` | `ratifact install` (T-013): plan y ejecución; permisos de Claude Code, bloque de CLAUDE.md/AGENTS.md y enlaces de `/run-task`. |
 | `ratifact/clientes.py`, `ratifact/clientes_toml.py` | Clientes MCP (Claude Desktop, Claude Code, Pi, Codex): detección, estado (también para doctor) y edición de su configuración; la de Codex es una edición acotada del TOML. |
 | `ratifact/archivos.py` | Escritura segura de archivos de otros programas: validación, respaldo `.bak-ratifact-<fecha>` y reemplazo atómico. |
-| `ratifact/skills/` | Skills `run-task` y `tarea` (alias hasta 1.1), incluidas en el paquete. |
+| `ratifact/skills/` | Skill `run-task`, incluida en el paquete. |
 | `ratifact/rutas.py` | Rutas sin projects.json: configuración nueva/vieja, log por defecto (XDG), copia de trabajo o instalación fija y repositorio de origen. |
 | `ratifact/informe.py`, `ratifact/informe_memoria.py` | `ratifact report` (antes `analizar_uso.py`): agregados del log y los indicadores que salen de las memorias. |
 | `ratifact/instalacion.py` | Inventario de solo lectura para doctor/upgrade: projects.json y sus claves, memorias (ubicación, esquema, git), integraciones, servidores en marcha y `.lock` tomados. |

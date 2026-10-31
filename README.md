@@ -74,7 +74,7 @@ repository of its own), detects the test command and returns two texts to paste:
 
 In the repository, `/run-task T-007` (Codex: `$run-task T-007`) reads the task with `read_task`, creates its branch
 from main, implements it, runs the project's tests and leaves the task `in_review` (or `failed`) with the result. The
-deprecated `/tarea` alias keeps working until 1.1. A link that exists as a real file or folder is never replaced: the
+`run-task` skill is linked into Claude Code, Pi and Codex by `ratifact install --apply`. A link that exists as a real file or folder is never replaced: the
 plan says to remove it by hand. The links point inside the installed package; if a reinstall moves it (for example
 `uv tool install --reinstall` with another Python version), `ratifact doctor` reports the links as pending and
 `ratifact install --apply` fixes them.

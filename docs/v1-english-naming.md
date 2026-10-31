@@ -57,7 +57,7 @@ Derived names (with `<name>` = chosen product name): PyPI package and CLI `<name
 | listar_tareas | list_tasks | |
 
 Prompts: `inicio` → `start`, `cierre` → `close`.
-Command: `/tarea` → **`/run-task`** (`$run-task` in Codex). Not `/task`: Claude Code already ships `/tasks` and the two would be confused.
+Command: the old Spanish command (retired in 1.0.0) → **`/run-task`** (`$run-task` in Codex). Not `/task`: Claude Code already ships `/tasks` and the two would be confused.
 
 ## 4. Parameters
 

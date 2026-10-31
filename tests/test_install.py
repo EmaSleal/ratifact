@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -134,14 +135,14 @@ def test_apply_configura_todo_y_el_segundo_no_cambia_nada(maquina, paquete, caps
     assert "memoria-proyectos" in (maquina["otro"] / "AGENTS.md").read_text()
     home = maquina["home"]
     for destino, objetivo in ((".claude/commands/run-task.md", "run-task/SKILL.md"),
-                              (".claude/commands/tarea.md", "tarea/SKILL.md"),
                               (".pi/agent/prompts/run-task.md", "run-task/SKILL.md"),
-                              (".codex/skills/run-task", "run-task"), (".codex/skills/tarea", "tarea"),
+                              (".codex/skills/run-task", "run-task"),
                               (".agents/skills/run-task", "run-task")):
         assert (home / destino).is_symlink() and Path(os.readlink(home / destino)) == paquete / "skills" / objetivo
-    assert not (home / ".agents/skills/tarea").is_symlink()
+    assert not (home / ".agents/skills/tarea").is_symlink() and (home / ".agents/skills/tarea").is_dir()
+    assert not any((home / d).exists() for d in (".claude/commands/tarea.md", ".codex/skills/tarea"))
     assert "Claude Desktop" in salida and "requires approval" in salida      # what cannot be migrated
-    assert f"remove {home / '.agents/skills/tarea'}" in salida
+    assert f"{home / '.agents/skills/tarea'} is not a ratifact /tarea link: left untouched" in salida
     assert "Restart the clients" in salida and "verify with `ratifact doctor`" in salida      # T-016 (ADR-037 §6)
     for ruta in (maquina["desktop"], maquina["pi"], maquina["codex"], maquina["ajustes"], maquina["claude_json"]):
         assert list(ruta.parent.glob(ruta.name + ".bak-ratifact-*")), ruta
@@ -193,9 +194,10 @@ def test_integraciones_se_informan_sin_preguntar(maquina, paquete, capsys):
     assert "?" not in bloque
 
 
-def test_desde_cero_crea_projects_json_y_doctor_queda_sin_pendientes(casa, paquete, capsys):
+def test_desde_cero_crea_projects_json_y_doctor_queda_sin_pendientes(casa, paquete, capsys, monkeypatch):
     """Criterion 5, end to end in an empty HOME: install → register_project → doctor = "Pending actions: none"."""
     config = casa / ".config" / "ratifact" / "projects.json"
+    monkeypatch.setattr("shutil.which", lambda *_a, **_k: None)       # no `claude` on this machine: nothing to link
     codigo, salida = instalar(capsys, paquete, aplicar=True)
     assert codigo == 0 and json.loads(config.read_text()) == {}, salida
     assert "Pi: not found (skipped)" in salida
@@ -291,3 +293,156 @@ def test_respaldo_repetido_el_mismo_dia_no_pisa_el_anterior(tmp_path, monkeypatc
     assert primero != segundo and primero.read_text() == "uno" and segundo.read_text() == "dos"
     assert primero.parent == segundo.parent and str(ruta).lstrip("/") in str(primero)
     assert sorted(p.name for p in ruta.parent.iterdir()) == ["AGENTS.md"]
+
+
+# ───────────── T-017: the /tarea alias is retired (ADR-039) and /run-task links are verified ─────────────
+
+def _enlazar(ruta, destino):
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    ruta.symlink_to(destino)
+    return ruta
+
+
+def test_el_paquete_ya_no_trae_tarea():
+    assert not (RAIZ_REPO / "ratifact" / "skills" / "tarea").exists() and not (RAIZ_REPO / "tarea.md").exists()
+    assert (RAIZ_REPO / "ratifact" / "skills" / "run-task" / "SKILL.md").is_file()
+
+
+def test_la_rueda_no_incluye_skills_tarea(tmp_path):
+    import zipfile
+    salida = tmp_path / "dist"
+    try:
+        r = subprocess.run(["uv", "build", "--wheel", "-o", str(salida)], cwd=RAIZ_REPO, capture_output=True,
+                           text=True, timeout=300)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        pytest.skip(f"uv build unavailable: {e}")
+    if r.returncode != 0:
+        pytest.skip(f"uv build failed (offline?): {r.stderr[-200:]}")
+    rueda = next(salida.glob("*.whl"))
+    nombres = zipfile.ZipFile(rueda).namelist()
+    assert any(n.endswith("skills/run-task/SKILL.md") for n in nombres)
+    assert not [n for n in nombres if "skills/tarea" in n]
+
+
+@pytest.fixture
+def cliente_configurado(casa, paquete, capsys):
+    """Claude Code, Pi and Codex configured with the ratifact server and all their /run-task links in place."""
+    falso = ClaudeFalso(casa / ".claude.json")
+    (casa / ".pi/agent").mkdir(parents=True)
+    (casa / ".codex").mkdir()
+    (casa / ".claude.json").write_text("{}")
+    codigo, salida = instalar(capsys, paquete, aplicar=True, claude="/usr/bin/claude", correr=falso)
+    assert codigo == 0, salida
+    return falso
+
+
+def test_install_no_crea_enlaces_tarea(cliente_configurado, casa, paquete, capsys):
+    assert (casa / ".claude/skills/run-task").is_symlink() and (casa / ".claude/commands/run-task.md").is_symlink()
+    assert not [p for p in casa.rglob("*tarea*") if "Projects" not in p.parts]
+    codigo, salida = instalar(capsys, paquete, claude="/usr/bin/claude")
+    assert "tarea" not in salida and "Nothing to do: everything is already installed." in salida
+
+
+def test_plan_anuncia_y_apply_borra_el_enlace_propio_obsoleto(casa, paquete, capsys):
+    propio = _enlazar(casa / ".codex/skills/tarea", paquete / "skills" / "tarea")            # broken: no such folder
+    otro = _enlazar(casa / ".claude/commands/tarea.md", paquete / "skills" / "tarea" / "SKILL.md")
+    codigo, salida = instalar(capsys, paquete, claude=None)
+    assert f"remove stale /tarea link: {propio}" in salida and f"remove stale /tarea link: {otro}" in salida
+    assert "Nothing to do" not in salida and propio.is_symlink()                              # the plan changes nothing
+    codigo, salida = instalar(capsys, paquete, aplicar=True, claude=None)
+    assert codigo == 0 and not propio.is_symlink() and not otro.is_symlink(), salida
+    assert not propio.exists() and not otro.exists()
+
+
+def test_checkout_de_ratifact_tambien_cuenta_como_propio(casa, paquete, capsys):
+    repo = casa / "dev" / "repo"
+    (repo / "ratifact").mkdir(parents=True)
+    (repo / "ratifact" / "__init__.py").write_text("")
+    enlace = _enlazar(casa / ".agents/skills/tarea", repo / "skills" / "tarea")
+    instalar(capsys, paquete, aplicar=True, claude=None)
+    assert not enlace.is_symlink()
+
+
+def test_archivo_real_y_enlace_ajeno_llamados_tarea_se_conservan(casa, paquete, capsys):
+    real = casa / ".claude/commands/tarea.md"
+    real.parent.mkdir(parents=True)
+    real.write_text("mine")
+    ajeno = _enlazar(casa / ".codex/skills/tarea", casa / "otra-cosa" / "tarea")
+    sospechoso = _enlazar(casa / ".agents/skills/tarea", casa / "x" / "skills" / "tarea")     # not a ratifact tree
+    codigo, salida = instalar(capsys, paquete)
+    for ruta in (real, ajeno, sospechoso):
+        assert f"{ruta} is not a ratifact /tarea link: left untouched" in salida, salida
+    assert "remove stale" not in salida
+    instalar(capsys, paquete, aplicar=True)
+    assert real.read_text() == "mine" and ajeno.is_symlink() and sospechoso.is_symlink()
+    assert os.readlink(ajeno) == str(casa / "otra-cosa" / "tarea")
+
+
+def test_upgrade_apply_borra_el_enlace_propio_obsoleto(casa, paquete, capsys):
+    propio = _enlazar(casa / ".claude/skills/tarea", paquete / "skills" / "tarea")
+    real = casa / ".pi/agent/prompts/tarea.md"
+    real.parent.mkdir(parents=True)
+    real.write_text("mine")
+    (casa / ".config/ratifact").mkdir(parents=True)
+    (casa / ".config/ratifact/projects.json").write_text("{}")
+    from ratifact import upgrade
+    assert upgrade.main(aplicar=False, procesos=lambda: []) == 0
+    salida = capsys.readouterr().out
+    assert f"remove stale /tarea link: {propio}" in salida and "left untouched" in salida and propio.is_symlink()
+    assert upgrade.main(aplicar=True, procesos=lambda: []) == 0
+    capsys.readouterr()
+    assert not propio.is_symlink() and real.read_text() == "mine"
+
+
+def test_cliente_configurado_sin_enlace_run_task_no_dice_nada_que_hacer(cliente_configurado, casa, paquete, capsys):
+    enlace = casa / ".claude/skills/run-task"
+    enlace.unlink()
+    codigo, salida = instalar(capsys, paquete, claude="/usr/bin/claude")
+    assert f"link /run-task: {enlace} → {paquete / 'skills' / 'run-task'}" in salida
+    assert "Nothing to do" not in salida
+    codigo, salida = instalar(capsys, paquete, aplicar=True, claude="/usr/bin/claude", correr=cliente_configurado)
+    assert enlace.is_symlink() and Path(os.readlink(enlace)) == paquete / "skills" / "run-task"
+
+
+def test_enlace_run_task_roto_se_reemplaza(cliente_configurado, casa, paquete, capsys):
+    enlace = casa / ".codex/skills/run-task"
+    enlace.unlink()
+    enlace.symlink_to(casa / "no-existe" / "run-task")
+    codigo, salida = instalar(capsys, paquete, claude="/usr/bin/claude")
+    assert f"relink /run-task: {enlace}" in salida and "Nothing to do" not in salida
+    instalar(capsys, paquete, aplicar=True, claude="/usr/bin/claude", correr=cliente_configurado)
+    assert Path(os.readlink(enlace)) == paquete / "skills" / "run-task" and enlace.exists()
+
+
+def test_carpeta_real_en_la_ruta_de_run_task_se_conserva_con_aviso(cliente_configurado, casa, paquete, capsys):
+    enlace = casa / ".claude/skills/run-task"
+    enlace.unlink()
+    enlace.mkdir()
+    (enlace / "SKILL.md").write_text("mine")
+    codigo, salida = instalar(capsys, paquete, aplicar=True, claude="/usr/bin/claude", correr=cliente_configurado)
+    assert f"{enlace} exists and is not a link" in salida
+    assert enlace.is_dir() and not enlace.is_symlink() and (enlace / "SKILL.md").read_text() == "mine"
+
+
+def test_enlace_a_una_carpeta_ratifact_ajena_se_conserva_y_el_roto_en_site_packages_se_borra(casa, paquete, capsys):
+    ajena = casa / "u" / "ratifact" / "skills" / "tarea"          # no __init__.py, not under site-packages
+    ajeno = _enlazar(casa / ".codex/skills/tarea", ajena)
+    propio = _enlazar(casa / ".agents/skills/tarea", casa / "venv" / "site-packages" / "ratifact" / "skills" / "tarea")
+    codigo, salida = instalar(capsys, paquete)
+    assert f"{ajeno} is not a ratifact /tarea link: left untouched" in salida
+    assert f"remove stale /tarea link: {propio}" in salida and f"remove stale /tarea link: {ajeno}" not in salida
+    instalar(capsys, paquete, aplicar=True)
+    assert ajeno.is_symlink() and not propio.is_symlink()
+
+
+def test_upgrade_solo_con_enlace_obsoleto_no_se_bloquea_por_un_servidor(casa, paquete, capsys):
+    propio = _enlazar(casa / ".claude/skills/tarea", paquete / "skills" / "tarea")
+    config = casa / ".config/ratifact/projects.json"
+    config.parent.mkdir(parents=True)
+    config.write_text("{}")
+    from ratifact import upgrade
+    from ratifact.instalacion import Proceso
+    procesos = lambda: [Proceso(4242, "ratifact serve", config)]
+    codigo = upgrade.main(aplicar=True, procesos=procesos, log_viejo=casa / "sin-log.jsonl")
+    salida = capsys.readouterr().out
+    assert codigo == 0 and "server running" not in salida and not propio.is_symlink(), salida

@@ -40,7 +40,7 @@ ratifact = "ratifact.cli:main"
 requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
-# The run-task / tarea skills ship inside the package (ratifact/skills): `ratifact install` links them from the
+# The run-task skill ships inside the package (ratifact/skills): `ratifact install` links them from the
 # installed copy, never from a working copy.
 [tool.hatch.build.targets.wheel]
 packages = ["ratifact"]
