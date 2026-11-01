@@ -1,4 +1,6 @@
 """T-020 (ADR-012): doctor avisa en Windows nativo y reconoce WSL; la plataforma se simula."""
+from types import SimpleNamespace
+
 import pytest
 
 from test_upgrade import hogar, vieja  # noqa: F401,F811  (fixtures)
@@ -14,7 +16,7 @@ def paquete(tmp_path):
 
 
 def _doctor(paquete, monkeypatch, plataforma, osrelease="6.1.0-generic"):
-    monkeypatch.setattr(doctor.sys, "platform", plataforma)
+    monkeypatch.setattr(doctor, "sys", SimpleNamespace(platform=plataforma))   # not the global: shutil.which reads it
     monkeypatch.setattr(doctor, "_osrelease", lambda: osrelease)
     return doctor.informe(procesos=lambda: [], paquete=paquete, vivos=lambda: [])
 
