@@ -3,7 +3,9 @@
 A local [MCP](https://modelcontextprotocol.io) server that turns each repository into the persistent memory of its
 project. Decisions (ADRs), open items, code tasks and session logs live as Markdown files in a git repository of their
 own, outside the code repository, so no branch or checkout ever changes them. Any MCP client (Claude Desktop, Claude
-Code, Pi, Codex) reads and writes the same memory through 28 tools.
+Code, Pi, Codex (experimental)) reads and writes the same memory through 28 tools. Codex is experimental: `ratifact
+install` configures it and the MCP tools answer, but a full `/run-task` run (`$run-task` in Codex) has not been
+validated yet.
 
 - **Decisions are ratified, not assumed.** Every decision is recorded as `proposed`; it only becomes `accepted` through
   `accept_decision`, with the user's literal words, and the client asks the user to approve that call.
@@ -30,7 +32,7 @@ ratifact install --apply      # does it, with a backup of every file it touches
 | Claude Desktop | `~/.config/Claude/claude_desktop_config.json` (macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`) |
 | Claude Code | `claude mcp add --scope user` (or `~/.claude.json` if the `claude` command is not installed) |
 | Pi | `~/.pi/agent/mcp.json` |
-| Codex | `~/.codex/config.toml` |
+| Codex (experimental) | `~/.codex/config.toml` |
 
 Each one ends with a server named `ratifact` that runs `<absolute path>/ratifact serve`, with no environment variables.
 Other servers and settings are kept identical. Before writing, the file is backed up as `<file>.bak-ratifact-<date>`
