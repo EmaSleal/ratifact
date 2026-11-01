@@ -303,3 +303,15 @@ def test_skill_pide_linea_workers_separada_de_integraciones(srv):
         assert "escalated: write" in cerrar
         integraciones = re.search(r"`Integrations used: …`[^.]*\.", cerrar).group(0)
         assert not re.search(r"\b(explore|write|verify)/", integraciones)
+
+
+def test_transiciones_acepta_fechas_utc_con_z(monkeypatch, tmp_path):
+    # git imprime %cI con "Z" cuando el commit está en UTC; fromisoformat no lo acepta en Python 3.10.
+    import subprocess
+    from ratifact import informe_memoria
+    salida = "2026-11-01T00:31:45Z\tmemoria: T-001 → in_progress\n2026-11-01T01:00:00-06:00\tmemoria: T-001 → in_review\n"
+    monkeypatch.setattr(informe_memoria.subprocess, "run",
+                        lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout=salida, stderr=""))
+    t = informe_memoria._transiciones(tmp_path)["T-001"]
+    assert [e for _, e in t] == ["in_progress", "in_review"]
+    assert t[0][0].utcoffset() == dt.timedelta(0)
