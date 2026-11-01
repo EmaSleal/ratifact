@@ -174,6 +174,8 @@ def _transiciones(mem: Path) -> dict[str, list[tuple[dt.datetime, str]]]:
         fecha, _, asunto = linea.partition("\t")
         m = re.search(r"(T-\d+) → ([a-z_]+)$", asunto)
         if m:
+            # git writes "Z" for UTC commits; fromisoformat accepts it only from Python 3.11.
+            fecha = fecha[:-1] + "+00:00" if fecha.endswith("Z") else fecha
             salida[_normalizar_id(m.group(1))].append((dt.datetime.fromisoformat(fecha), m.group(2)))
     return salida
 
