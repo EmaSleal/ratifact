@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -104,7 +105,7 @@ def test_json_invalido_da_error_claro_y_no_toca_el_archivo(casa):
     ruta = _escribir(casa / ".config/Claude/claude_desktop_config.json", texto)
     plan = clientes.planificar(_cliente("claude-desktop", casa), EXE)
     assert plan.estado.startswith("error") and "not valid JSON" in plan.error and str(ruta) in plan.error
-    assert "line 4" in plan.error
+    assert re.search(r"line [34], column \d+", plan.error)              # 3.13 points at the comma, earlier at the brace
     with pytest.raises(clientes.ErrorInstalacion):
         clientes.aplicar(plan)
     assert ruta.read_text() == texto and not _backups(ruta)
