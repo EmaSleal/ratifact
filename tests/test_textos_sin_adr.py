@@ -54,12 +54,12 @@ def test_upgrade_plan_y_apply_sin_adr(vieja, capsys):
 
 
 def test_doctor_sin_adr_en_ninguna_plataforma(vieja, capsys, monkeypatch, tmp_path):
-    from ratifact import doctor
+    from ratifact import doctor, doctor_plataforma
     textos = []
     for plataforma, osrelease in (("linux", "6.1.0-generic"), ("win32", "6.1.0-generic"),
                                   ("linux", "5.15.153.1-microsoft-standard-WSL2")):
-        monkeypatch.setattr(doctor, "sys", SimpleNamespace(platform=plataforma))   # not the global: shutil.which reads it
-        monkeypatch.setattr(doctor, "_osrelease", lambda o=osrelease: o)
+        monkeypatch.setattr(doctor_plataforma, "sys", SimpleNamespace(platform=plataforma))   # not the global: shutil.which reads it
+        monkeypatch.setattr(doctor_plataforma, "_osrelease", lambda o=osrelease: o)
         doctor.main(procesos=lambda: [], paquete=tmp_path, log_viejo=vieja["log"])
         textos.append(capsys.readouterr().out)
     assert "Native Windows is not a supported platform: install ratifact inside WSL2" in textos[1]
@@ -120,7 +120,7 @@ def test_report_completo_en_ingles(srv, proyecto, entorno, monkeypatch, capsys):
     cli.main(["report", "--log", str(log), "--days", "14"])
     salida = capsys.readouterr().out
     for encabezado in ("Idempotent creations:", "Real-use criterion for 1.0", "Delegation: tasks with `routing:`",
-                       "tasks with routing", "rework: with rework", "per client claude-code/2:",
+                       "task with routing", "rework: with rework", "per client claude-code/2:",
                        "Open pending items referenced by merged tasks", "Latest errors", "Largest responses", "[internal]", "[validation]"):
         assert encabezado in salida, encabezado
     assert sin_espanol(salida) == [], salida

@@ -88,12 +88,12 @@ def test_correccion_reemplaza_linea_invalida_sin_bloque_nuevo(srv, proyecto):
     ruta = _en_revision(srv, proyecto, "Hecho.\nWorkers: write/sonnet×1 (resumed once)\nIntegrations used: none")
     assert len(BLOQUE.findall(ruta.read_text())) == 1
     salida = srv.update_task(project="demo", id="T-001", status="in_review",
-                             result="  Workers: write/sonnet×1, rework: write×1 — note: resumed once  \n")
+                             result="  Workers: explore/haiku×1, write/sonnet×1, rework: write×1 — note: resumed once  \n")
     texto = ruta.read_text()
     assert re.fullmatch(r"T-001 → in_review · Workers line replaced in the latest result block · commit \S+", salida)
     assert len(BLOQUE.findall(texto)) == 1
     assert "(resumed once)" not in texto and texto.count("Workers:") == 1
-    assert "Workers: write/sonnet×1, rework: write×1 — note: resumed once\nIntegrations used: none" in texto
+    assert "Workers: explore/haiku×1, write/sonnet×1, rework: write×1 — note: resumed once\nIntegrations used: none" in texto
     assert _meta(proyecto["mem"])["status"] == "in_review"
 
 
@@ -297,11 +297,11 @@ def test_report_retrabajo_y_desglose_por_cliente(srv, proyecto, entorno):
     _escribir_registro(ruta, meta, cuerpo)
     lineas = indicador_delegacion(dt.datetime.now() - dt.timedelta(days=7), "demo")
     assert lineas[0].startswith("  demo: 5 tasks with routing · required 5 · with workers")
-    assert "    rework: with rework 3 of 4 delegated · rate 75 % · resends write×4, verify×1 · escalations 0" \
+    assert "    rework: with rework 2 of 3 measurable delegated · rate 67 % · resends write×4, verify×1 · escalations 0" \
         in lineas
     assert "    per client claude-code/2: 3 tasks · compliance 100 % · rework 67 %" in lineas
-    assert "    per client codex/0.9: 1 tasks · compliance 0 % · rework —" in lineas
-    assert "    per client unknown: 1 tasks · compliance 100 % · rework 100 %" in lineas
+    assert "    per client codex/0.9: 1 task · compliance 0 % · rework —" in lineas
+    assert "    per client unknown: 1 task · compliance 100 % · rework —" in lineas
 
 
 def test_report_cuenta_la_ultima_linea_valida_aunque_haya_una_invalida_despues(srv, proyecto):
@@ -311,8 +311,8 @@ def test_report_cuenta_la_ultima_linea_valida_aunque_haya_una_invalida_despues(s
                     result="Workers: write/sonnet×1, rework: write×1, escalated: write\nWorkers: write/sonnet×1 (x)")
     lineas = indicador_delegacion(dt.datetime.now() - dt.timedelta(days=7), "demo")
     assert "required 1 · with workers 1 · compliance 100 % · escalations 1" in lineas[0]
-    assert lineas[1].startswith("    delegated: 1 tasks")
-    assert "    rework: with rework 1 of 1 delegated · rate 100 % · resends write×1 · escalations 1" in lineas
+    assert lineas[1].startswith("    delegated: 1 task")
+    assert "    rework: with rework 1 of 1 measurable delegated · rate 100 % · resends write×1 · escalations 1" in lineas
 
 
 def test_correccion_con_review_tras_otro_encabezado_cae_al_comportamiento_normal(srv, proyecto):

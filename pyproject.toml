@@ -1,6 +1,6 @@
 [project]
 name = "ratifact"
-version = "1.0.0"
+version = "1.0.1"
 description = "Local MCP server that turns each repository into the persistent memory of its project: decisions, open items, tasks and sessions in a git repository of their own."
 readme = "README.md"
 requires-python = ">=3.10"

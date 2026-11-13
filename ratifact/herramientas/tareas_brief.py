@@ -14,7 +14,8 @@ from ratifact import registros as _registros  # _ahora se busca en su módulo: l
 from ratifact.app import _ejecutar, herramienta
 from ratifact.busqueda import _fin_frontmatter
 from ratifact.config import MEM, ErrorMemoria, _mem
-from ratifact.esquema import _bloqueo
+from ratifact.esquema import _bloqueo, _idioma_contenido
+from ratifact.idioma import bloque_idioma
 from ratifact.registros import (MARCA_DUPLICADO, VENTANA_IDEMPOTENCIA_MINUTOS, _buscar_registro, _commit,
                                 _escribir_registro, _hoy, _leer_registro)
 from ratifact.vocabulario import TAREAS
@@ -165,7 +166,8 @@ def read_task(project: str, id: str) -> str:
         cuerpo_desde = _fin_frontmatter(lineas)
         fin_spec = next((i for i in range(cuerpo_desde, len(lineas)) if lineas[i].strip() in SECCIONES_RESULTADO),
                         len(lineas))
-        partes = [f"(→ {relativa})\n" + "\n".join(lineas[:fin_spec]).rstrip()]
+        partes = [f"(→ {relativa})\n" + "\n".join(lineas[:fin_spec]).rstrip(),
+                  bloque_idioma(_idioma_contenido(_mem(project)))]
         bloques = _bloques(lineas, fin_spec + 1)
         elegido = _relevante(meta.get("status", ""), bloques)
         texto = lambda b: "\n".join(lineas[b[1] - 1:b[2]])   # noqa: E731

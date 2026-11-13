@@ -12,7 +12,8 @@ from ratifact import registros as _registros  # _ahora se busca en su módulo: l
 from ratifact.app import _ejecutar, herramienta
 from ratifact.catalogo import _registros_en
 from ratifact.config import ErrorMemoria, _mem, _proyectos, _repos, _valor
-from ratifact.esquema import _bloqueo
+from ratifact.esquema import _bloqueo, _idioma_contenido
+from ratifact.idioma import bloque_idioma
 from ratifact.integraciones import registro as _integraciones
 from ratifact.registros import (_buscar_registro, _commit, _duplicado_reciente, _escribir_registro, _hoy,
                                 _ids_resuelve, _leer_registro, _mensaje_duplicado, _normalizar_id, _resumen_tareas,
@@ -228,10 +229,10 @@ def update_task(project: str, id: str, status: str, result: str = "", commit: st
             sha = _commit(proyecto, [ruta], f"{meta['id']} → {nuevo}")
             guia = ""
             if nuevo == "in_progress":
-                partes = (_integraciones._guia_en_curso(proyecto), _modelos.bloque(entrada),
-                          _delegacion.bloque(entrada, meta))
+                partes = (bloque_idioma(_idioma_contenido(_mem(proyecto))), _integraciones._guia_en_curso(proyecto),
+                          _modelos.bloque(entrada), _delegacion.bloque(entrada, meta))
                 guia = "\n\n".join(p for p in partes if p)
-            if nuevo == "in_review":
+            if nuevo == "in_review":   # also re-evaluated on a Workers-line-only correction
                 politica = (_delegacion.politica_de_routing(meta.get("routing", ""))
                             or _delegacion.efectiva(entrada, meta)[0])
                 guia = _delegacion.aviso_in_review(politica, resultado)
