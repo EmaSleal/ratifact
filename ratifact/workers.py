@@ -161,6 +161,14 @@ def ultimo_workers_valido(resultado: str) -> Trabajadores | None:
     return None
 
 
+def proponer_omision(linea: str) -> str:
+    """Full corrected line (ADR-046) for a valid line without explore: `, skipped: explore` goes at the end of the
+    head, before the note separator; the existing note is kept and `<why>` is added as a placeholder."""
+    partes = NOTA.split(LINEA.match(linea).group(1).strip(), maxsplit=1)
+    nota = re.sub(r"^note:\s*", "", partes[1].strip(), flags=re.I) if len(partes) > 1 else ""
+    return f"Workers: {partes[0].rstrip()}, skipped: explore — note: " + (f"{nota}; <why>" if nota else "<why>")
+
+
 def aviso_in_review(politica: str, resultado: str) -> str:
     """Validación blanda de update_task(..., "in_review") (ADR-036 §5): aviso si la política era required y falta una
     línea Workers válida. Nunca rechaza la transición."""
@@ -171,11 +179,13 @@ def aviso_in_review(politica: str, resultado: str) -> str:
         if (not trabajadores.roles or trabajadores.omitidos
                 or any(r == "explore" for r, _, _ in trabajadores.roles)):   # `none` (sin trabajadores) no avisa
             return ""
+        linea = [l for l in resultado.splitlines() if LINEA.match(l)][-1]
         return ("⚠ Delegation was required and this `Workers:` line has no explore worker and no `skipped: explore`. "
                 "The status was changed anyway. If the main session had already explored the task's files in this "
-                "session, declare it by adding `skipped: explore — note: <why>` to the line (send only that line with "
-                'update_task(project, id, "in_review", result=<that line>)); otherwise explore runs in an explore '
-                "worker.")
+                "session, send the corrected line (replace <why> with the reason; copy it as is):\n"
+                + proponer_omision(linea) + "\nSend only that line with "
+                'update_task(project, id, "in_review", result=<that line>): it replaces the `Workers:` line of the '
+                "latest result block, no new block is created. Otherwise explore runs in an explore worker.")
     base = f"⚠ Delegation was required for this task, but {falta}. The status was changed anyway; "
     lineas = [l for l in (resultado or "").splitlines() if LINEA.match(l)]
     propuesta = proponer_workers(lineas[-1]) if lineas else None

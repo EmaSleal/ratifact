@@ -85,3 +85,54 @@ def test_sin_aviso_si_politica_no_required(srv, proyecto):
     srv.create_task(project="demo", title="x", goal="o", acceptance_criteria="c")
     salida = srv.update_task(project="demo", id="T-001", status="in_review", result=f"Workers: {BASE}")
     assert "skipped" not in salida
+
+
+# --- Review 1: corrected-line proposal and re-evaluation on a Workers-line-only correction ---
+
+def _propuesta(aviso):
+    return [l for l in aviso.splitlines() if l.startswith("Workers:")][-1]
+
+
+def test_aviso_propone_linea_completa_con_nota_existente():
+    from ratifact.workers import aviso_in_review, parsear_workers
+    aviso = aviso_in_review("required", f"Workers: {BASE} — note: foo")
+    t = parsear_workers(_propuesta(aviso).replace("<why>", "already explored"))
+    assert t.omitidos == ["explore"] and t.nota.startswith("foo") and "already explored" in t.nota
+
+
+def test_aviso_propone_linea_completa_sin_nota():
+    from ratifact.workers import aviso_in_review, parsear_workers
+    linea = _propuesta(aviso_in_review("required", f"Workers: {BASE}"))
+    assert linea == f"Workers: {BASE}, skipped: explore — note: <why>"
+    assert parsear_workers(linea.replace("<why>", "x")).omitidos == ["explore"]
+
+
+def _revision(srv, proyecto, texto):
+    from test_workers_adr041 import _en_revision
+    return _en_revision(srv, proyecto, texto)
+
+
+def _bloques(ruta):
+    import re
+    return len(re.findall(r"^### \d{4}-\d{2}-\d{2} · \S+", ruta.read_text(), re.M))
+
+
+def test_correccion_valida_sin_explore_vuelve_a_avisar(srv, proyecto):
+    ruta = _revision(srv, proyecto, "Hecho.\nWorkers: write/sonnet×1 (x)\nIntegrations used: none")
+    salida = srv.update_task(project="demo", id="T-001", status="in_review", result=f"Workers: {BASE}")
+    assert "⚠" in salida and "no explore worker" in salida and "skipped: explore — note: <why>" in salida
+    assert "replaced" in salida and _bloques(ruta) == 1 and f"Workers: {BASE}\n" in ruta.read_text()
+
+
+def test_correccion_con_skipped_explore_no_avisa(srv, proyecto):
+    ruta = _revision(srv, proyecto, "Hecho.\nWorkers: write/sonnet×1 (x)\nIntegrations used: none")
+    salida = srv.update_task(project="demo", id="T-001", status="in_review",
+                             result=f"Workers: {BASE}, skipped: explore — note: x")
+    assert "⚠" not in salida and "replaced" in salida and _bloques(ruta) == 1
+
+
+def test_correccion_invalida_avisa_linea_invalida(srv, proyecto):
+    # an invalid line alone is kept as a new block (existing behaviour); the invalid-line warning is returned
+    _revision(srv, proyecto, "Hecho.\nWorkers: write/sonnet×1 (x)")
+    salida = srv.update_task(project="demo", id="T-001", status="in_review", result="Workers: write/sonnet")
+    assert "⚠" in salida and "is invalid" in salida

@@ -15,7 +15,7 @@ from ratifact.informe_memoria import (_carpeta, _duracion, _memoria, _porcentaje
 from ratifact.plurales import contar
 from ratifact.registros import _normalizar_id
 
-SIN_BUILD = "no build"
+SIN_BUILD = "no build"       # internal key of the build-less group; shown as "without build"
 
 
 def _instante(at: dt.datetime) -> dt.datetime:
@@ -43,7 +43,7 @@ def _lineas_por_build(builds: dict[str, dict]) -> list[str]:
     def orden(item):
         nombre, b = item
         return (nombre == SIN_BUILD, b["at"] is None, b["at"] or dt.datetime.max.replace(tzinfo=dt.timezone.utc), nombre)
-    return [f"    per build {nombre}: {contar(b['tareas'], 'task')} · {b['delegadas']} delegated · rework "
+    return [f"    {'without build' if nombre == SIN_BUILD else 'per build ' + nombre}: {contar(b['tareas'], 'task')} · {b['delegadas']} delegated · rework "
             f"{_porcentaje(b['rework'], b['con_cliente'])}" for nombre, b in sorted(builds.items(), key=orden)]
 
 
@@ -57,9 +57,9 @@ def _proyecto(nombre: str, mem, desde: dt.datetime) -> list[str]:
     transiciones = _transiciones(mem) if con else {}
     requeridas = cumplen = escaladas = 0
     grupos = {"delegated": ([], []), "not delegated": ([], [])}
-    delegadas = con_rework = sin_explore = 0
+    delegadas = medibles = con_rework = sin_explore = 0
     reenvios: dict[str, int] = {}
-    clientes: dict[str, dict] = {}       # tasks, required, compliant, delegated, with rework
+    clientes: dict[str, dict] = {}       # tasks, required, compliant, measurable (delegated with client=), with rework
     builds: dict[str, dict] = {}         # tasks, delegated, with_client (delegated with `client=`), rework, earliest at
     for meta, cuerpo, archivo in con:
         routing = meta["routing"]
@@ -71,7 +71,7 @@ def _proyecto(nombre: str, mem, desde: dt.datetime) -> list[str]:
         requeridas += requerida
         escaladas += bool(trabajadores and trabajadores.escalados)
         cliente = clientes.setdefault(cliente_de_routing(routing),
-                                      dict(tareas=0, requeridas=0, cumplen=0, delegadas=0, rework=0))
+                                      dict(tareas=0, requeridas=0, cumplen=0, medibles=0, rework=0))
         at = at_de_routing(routing)
         build = builds.setdefault(build_de_routing(routing) or SIN_BUILD,
                                   dict(tareas=0, delegadas=0, con_cliente=0, rework=0, at=None))
@@ -84,15 +84,16 @@ def _proyecto(nombre: str, mem, desde: dt.datetime) -> list[str]:
             cliente["cumplen"] += delegada
         if delegada:
             delegadas += 1
-            cliente["delegadas"] += 1
             build["delegadas"] += 1
             sin_explore += "explore" in valida.omitidos
             if re.search(r"(?:^|\s)client=", routing):       # without it the rework was not recorded yet
+                medibles += 1
+                cliente["medibles"] += 1
                 build["con_cliente"] += 1
-                build["rework"] += bool(valida.reenvios)
-            if valida.reenvios:
-                con_rework += 1
-                cliente["rework"] += 1
+                rework = bool(valida.reenvios)
+                con_rework += rework
+                cliente["rework"] += rework
+                build["rework"] += rework
             for rol, n in valida.reenvios.items():
                 reenvios[rol] = reenvios.get(rol, 0) + n
         revisiones, horas = grupos["delegated" if delegada else "not delegated"]
@@ -106,17 +107,18 @@ def _proyecto(nombre: str, mem, desde: dt.datetime) -> list[str]:
     for grupo, (revisiones, horas) in grupos.items():
         lineas.append(f"    {grupo}: {contar(len(revisiones), 'task')} · reviews (changes_requested) average "
                       f"{_promedio(revisiones)} · in_progress → in_review average {_promedio(horas)} h")
-        if grupo == "not delegated":
+        if grupo == "not delegated" and revisiones:
             lineas.append("    not delegated: rework not measured (no verifier)")
     total = ", ".join(f"{r}×{n}" for r, n in reenvios.items()) or "0"
-    lineas.append(f"    rework: with rework {con_rework} of {delegadas} delegated · rate "
-                  f"{_porcentaje(con_rework, delegadas)} · resends {total} · escalations {escaladas}")
+    rework = (f"with rework {con_rework} of {medibles} measurable delegated · rate {_porcentaje(con_rework, medibles)}"
+              if medibles else "—")
+    lineas.append(f"    rework{'' if rework == '—' else ':'} {rework} · resends {total} · escalations {escaladas}")
     lineas.append(f"    explore skipped {sin_explore} of {delegadas} delegated")
     lineas += _lineas_por_build(builds)
     for nombre_cliente, c in sorted(clientes.items()):
         lineas.append(f"    per client {nombre_cliente}: {contar(c['tareas'], 'task')} · compliance "
                       f"{_porcentaje(c['cumplen'], c['requeridas'])} · rework "
-                      f"{_porcentaje(c['rework'], c['delegadas'])}")
+                      f"{_porcentaje(c['rework'], c['medibles'])}")
     return lineas
 
 

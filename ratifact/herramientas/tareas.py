@@ -232,7 +232,7 @@ def update_task(project: str, id: str, status: str, result: str = "", commit: st
                 partes = (bloque_idioma(_idioma_contenido(_mem(proyecto))), _integraciones._guia_en_curso(proyecto),
                           _modelos.bloque(entrada), _delegacion.bloque(entrada, meta))
                 guia = "\n\n".join(p for p in partes if p)
-            if nuevo == "in_review" and not correccion:   # corregir solo la línea no repite el aviso blando
+            if nuevo == "in_review":   # also re-evaluated on a Workers-line-only correction
                 politica = (_delegacion.politica_de_routing(meta.get("routing", ""))
                             or _delegacion.efectiva(entrada, meta)[0])
                 guia = _delegacion.aviso_in_review(politica, resultado)

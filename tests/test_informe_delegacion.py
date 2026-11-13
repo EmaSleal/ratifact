@@ -39,11 +39,11 @@ def _tres_builds(srv, mem):
 
 def test_desglose_por_build_ordenado_por_at(srv, proyecto):
     lineas = _tres_builds(srv, proyecto["mem"])
-    por_build = [l for l in lineas if l.startswith("    per build ")]
+    por_build = [l for l in lineas if l.startswith(("    per build ", "    without build"))]
     assert por_build == [
         "    per build 1.0.0+zzzzzzz: 1 task · 1 delegated · rework —",
         "    per build 1.0.0+aaaaaaa: 2 tasks · 2 delegated · rework 50 %",
-        "    per build no build: 1 task · 0 delegated · rework —",
+        "    without build: 1 task · 0 delegated · rework —",
     ], por_build
 
 
@@ -55,10 +55,42 @@ def test_omisiones_de_explore_y_grupo_no_delegado(srv, proyecto):
     assert sum("rework not measured" in l for l in lineas) == 1
 
 
+def test_tasa_solo_sobre_delegadas_con_client(srv, proyecto):
+    mem = proyecto["mem"]
+    _tarea_con(srv, mem, "T-001", f"{BASE} · at={HOY}T09:00-06:00 · client=a/1",
+               "Workers: write/sonnet×1, verify/sonnet×1, rework: write×1")
+    _tarea_con(srv, mem, "T-002", f"{BASE} · at={HOY}T09:10-06:00 · client=a/1", "Workers: write/sonnet×1, verify/sonnet×1")
+    for n in ("T-003", "T-004"):       # delegated, no client=: not measurable
+        _tarea_con(srv, mem, n, f"{BASE} · at={HOY}T09:20-06:00", "Workers: write/sonnet×1, verify/sonnet×1")
+    from ratifact.informe_delegacion import indicador_delegacion
+    lineas = indicador_delegacion(DESDE(), "demo")
+    assert any(l.startswith("    rework: with rework 1 of 2 measurable delegated · rate 50 % · ") for l in lineas)
+    assert "    per client a/1: 2 tasks · compliance 100 % · rework 50 %" in lineas
+    assert "    per client unknown: 2 tasks · compliance 100 % · rework —" in lineas
+
+
+def test_proyecto_sin_tareas_medibles_muestra_guion(srv, proyecto):
+    _tarea_con(srv, proyecto["mem"], "T-001", f"{BASE} · at={HOY}T09:00-06:00", "Workers: write/sonnet×1, verify/sonnet×1")
+    from ratifact.informe_delegacion import indicador_delegacion
+    lineas = indicador_delegacion(DESDE(), "demo")
+    assert any(l.startswith("    rework — · resends ") for l in lineas)
+    assert not any("measurable" in l for l in lineas)
+
+
+def test_linea_no_delegado_solo_con_tareas_no_delegadas(srv, proyecto):
+    _tarea_con(srv, proyecto["mem"], "T-001", f"{BASE} · at={HOY}T09:00-06:00 · client=a/1",
+               "Workers: write/sonnet×1, verify/sonnet×1")
+    from ratifact.informe_delegacion import indicador_delegacion
+    texto = "\n".join(indicador_delegacion(DESDE(), "demo"))
+    assert "rework not measured" not in texto and "per build no build" not in texto
+    _tarea_con(srv, proyecto["mem"], "T-002", f"{BASE} · at={HOY}T09:30-06:00 · client=a/1", "Workers: none — reason: tiny")
+    assert "rework not measured (no verifier)" in "\n".join(indicador_delegacion(DESDE(), "demo"))
+
+
 def test_salida_existente_sin_cambios(srv, proyecto):
     lineas = _tres_builds(srv, proyecto["mem"])
     assert lineas[0].startswith("  demo: 4 tasks with routing · required 4 · with workers 3 · compliance 75 %")
-    assert any(l.startswith("    rework: with rework 2 of 3 delegated · rate 67 %") for l in lineas)
+    assert any(l.startswith("    rework: with rework 1 of 2 measurable delegated · rate 50 %") for l in lineas)
     assert any(l.startswith("    per client claude-code/2: 2 tasks") for l in lineas)
 
 
