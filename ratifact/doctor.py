@@ -6,20 +6,17 @@ salida 0 si no hay nada pendiente, 1 si hay acciones. No escribe nada."""
 from __future__ import annotations
 
 import os
-import platform
-import subprocess
-import sys
 from pathlib import Path
 from typing import Callable
 
-from ratifact import procesos as procesos_mod
 from ratifact import __version__, build, delegacion, modelos, procesos, retirado, rutas
 from ratifact import config as _cfg
 from ratifact.config import _ruta_config
 from ratifact.esquema import VERSION_ESQUEMA
+from ratifact.doctor_plataforma import _es_wsl, _plataforma
+from ratifact.doctor_vivos import _listar, _servidores, _servidores_vivos, _vivos
 from ratifact.instalar_extras import describir_rutas, planificar_enlaces
-from ratifact.instalacion import (Proceso, mensaje_sugerencia, procesos_servidor, separar_procesos,
-                                  sugerencias_config)
+from ratifact.instalacion import Proceso, mensaje_sugerencia, procesos_servidor, sugerencias_config
 from ratifact.upgrade import describir, planificar
 
 SUFIJOS_ENTORNO = ("CONFIG", "LOG", "BASE")
@@ -56,63 +53,6 @@ def _fuente(paquete: Path | None, acciones: list[str], recibo: Path | None = Non
                         "then restart the clients")
         return [f"Source: {fuente} · source newer than the installation: reinstall"]
     return [f"Source: {fuente} · same as the installation"]
-
-
-def _listar(paquete: Path, vivos: Callable[[], list[procesos.ProcesoVivo]] | None):
-    """(process list, error text): the list is None when it cannot be obtained (platform without `ps`, etc.)."""
-    try:
-        return (vivos() if vivos else procesos.procesos_vivos(paquete)), ""
-    except (OSError, subprocess.SubprocessError) as e:
-        return None, str(e)
-
-
-def _vivos(paquete: Path | None, lista: list[procesos.ProcesoVivo] | None, error: str = "") -> list[str]:
-    """ADR-037 §5 and ADR-038: servers are the `ratifact serve` processes with a PID record; a wrapper (Claude Desktop
-    on Linux) is shown inside its server's entry; one without a record is listed apart and not counted. Read only."""
-    paquete = paquete or build.PAQUETE
-    if lista is None:
-        return [f"Running `ratifact serve` processes: cannot be listed ({error})"]
-    ins = procesos.modificacion_instalacion(paquete)
-    cuando = f" (installation modified {ins:%Y-%m-%d %H:%M:%S})" if ins else ""
-    servidores = [p for p in lista if p.registrado]
-    sin_registro = [p for p in lista if not p.registrado and not p.es_envoltorio]
-    if not servidores and not sin_registro:
-        return [f"Running `ratifact serve` processes: none{cuando}"]
-    lineas = [f"Running `ratifact serve` servers: {len(servidores)}{cuando}" + (":" if servidores else "")]
-    for p in servidores:
-        marca = {procesos.ANTERIOR: f" ⚠ started BEFORE the installation and runs different content (ratifact {p.build}): "
-                                 "restart its client",
-                 procesos.MISMO: f" · started before the reinstallation, same content (ratifact {p.build}): nothing to do"
-                 }.get(p.estado, "")
-        envoltorio = f" (wrapper {p.envoltorio.pid}, {p.envoltorio.padre})" if p.envoltorio else ""
-        lineas.append(f"  PID {p.pid} · started {p.inicio:%Y-%m-%d %H:%M:%S} · parent {p.padre}{envoltorio}{marca}")
-    if sin_registro:
-        lineas.append("Unregistered processes (possible server from before PID records, or wrapper); "
-                      "not counted as servers:")
-        for p in sin_registro:
-            lineas.append(f"  PID {p.pid} · started {p.inicio:%Y-%m-%d %H:%M:%S} · parent {p.padre}")
-    return lineas
-
-
-def _osrelease() -> str:
-    try:
-        return Path("/proc/sys/kernel/osrelease").read_text(encoding="utf-8")
-    except OSError:
-        return platform.release()
-
-
-def _es_wsl() -> bool:
-    return sys.platform.startswith("linux") and "microsoft" in _osrelease().lower()
-
-
-def _plataforma() -> list[str]:
-    """ADR-012: Windows is supported only through WSL. Informational only: it never adds a pending action."""
-    if sys.platform == "win32":
-        return ["⚠ Native Windows is not a supported platform: install ratifact inside WSL2, with the "
-                "repositories on the WSL filesystem (not under /mnt/c). The rest of the diagnosis follows."]
-    if _es_wsl():
-        return ["Running inside WSL: supported; keep the repositories on the WSL filesystem"]
-    return []
 
 
 def _config(acciones: list[str]) -> list[str]:
@@ -206,16 +146,6 @@ def _settings(config: Path, acciones: list[str]) -> list[str]:
             + f" · delegation: {politica or delegacion.DEFECTO + ' (default)'}"]
 
 
-def _servidores(plan, procesos: list[Proceso], lista: list[procesos_mod.ProcesoVivo] | None = None) -> list[str]:
-    """Same criterion as the servers count: only PIDs with a record. Without the process list, unchanged."""
-    propios, otros = separar_procesos(procesos, plan.inst.config)
-    if lista is not None:
-        registrados = {p.pid for p in lista if p.registrado}
-        propios = [p for p in propios if p.pid in registrados]
-    return [f"Running servers with this configuration: {', '.join(str(p.pid) for p in propios) or 'none'}"
-            + (f" · with other configurations (ignored): {len(otros)}" if otros else "")]
-
-
 def _clientes(acciones: list[str], paquete: Path | None = None) -> list[str]:
     """configured with ratifact / old configuration / not configured / not found, per client (T-013)."""
     from ratifact import clientes as cl
@@ -253,14 +183,6 @@ def _enlaces(encontrados: set[str], acciones: list[str], paquete: Path | None) -
     estado = "ok" if not (otros or faltan or reales) else (
         f"{len(faltan)} missing, {len(otros)} pointing elsewhere or broken, {len(reales)} blocked by a real file/folder")
     return ([f"/run-task links: {estado}"] if enlaces else []) + describir_rutas(Path.home(), encontrados)
-
-
-def _servidores_vivos(procesos: Callable[[], list[Proceso]]) -> list[Proceso]:
-    """The cmdline-based listing, which can fail where there is no /proc nor `ps` (native Windows): then, none."""
-    try:
-        return procesos()
-    except (OSError, subprocess.SubprocessError):
-        return []
 
 
 def informe(procesos: Callable[[], list[Proceso]] = procesos_servidor, paquete: Path | None = None,

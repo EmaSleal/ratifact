@@ -271,7 +271,7 @@ def test_report_imprime_la_seccion(srv, proyecto, entorno, monkeypatch, capsys):
     _correr(monkeypatch, "--log", str(log))
     salida = capsys.readouterr().out
     seccion = salida.split("Delegation: tasks with `routing:`")[1]
-    assert "demo: 1 tasks with routing · required 1 · with workers 0 · compliance 0 %" in seccion
+    assert "demo: 1 task with routing · required 1 · with workers 0 · compliance 0 %" in seccion
 
 
 # ───────────────────────── criterio 14: doctor ─────────────────────────
@@ -315,3 +315,19 @@ def test_transiciones_acepta_fechas_utc_con_z(monkeypatch, tmp_path):
     t = informe_memoria._transiciones(tmp_path)["T-001"]
     assert [e for _, e in t] == ["in_progress", "in_review"]
     assert t[0][0].utcoffset() == dt.timedelta(0)
+
+
+def test_bloque_required_adr045_conserva_lineas_y_agrega_las_nuevas(srv, proyecto):
+    # T-023: las lineas nuevas (explore omitible, verify de respaldo, formato con skipped) no quitan las existentes.
+    bloque = _en_curso(srv)
+    bloque = bloque[bloque.index("Delegation (required"):]
+    assert "skipped: explore" in bloque and "Verification is never skipped" in bloque
+    assert "Exploration runs in an explore worker (model: session model)" in bloque
+
+
+def test_skill_y_docs_documentan_skipped_explore():
+    from conftest import RAIZ_REPO
+    for ruta in (RAIZ_REPO / "ratifact" / "skills" / "run-task" / "SKILL.md", RAIZ_REPO / "README.md",
+                 RAIZ_REPO / "LEEME.md", RAIZ_REPO / "docs" / "optional-integrations.md"):
+        texto = ruta.read_text(encoding="utf-8")
+        assert "skipped: explore" in texto and "skipped: explore — note:" in texto, ruta

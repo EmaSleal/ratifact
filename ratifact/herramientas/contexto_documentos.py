@@ -14,6 +14,7 @@ from ratifact.config import (CARPETAS_IGNORADAS, EXT_TEXTO, LIMITE_INDICE, LIMIT
                              _aviso_alias, _es_repo, _mem, _proyectos, _raiz, _repos, _ruta_segura, _traducir_alias,
                              _valor)
 from ratifact.esquema import _bloqueo, _idioma_contenido, _version_esquema
+from ratifact.idioma import linea_contenido
 from ratifact.integraciones import registro as _integraciones
 from ratifact.listado import _listado
 from ratifact.registros import _clave_id, _commit, _escribir_atomico, _leer_registro, _resumen_tareas
@@ -100,9 +101,7 @@ def get_context(project: str) -> str:
         if aviso:
             partes.append(aviso)
         idioma = _idioma_contenido(mem)
-        partes.append(f"Content language: {idioma} — write the content of the records you save (decisions, pending "
-                      "items, tasks, sessions, INDEX) in this language; the conversation stays in the user's "
-                      "language.")
+        partes.append(linea_contenido(idioma))
         integraciones = _integraciones._bloque_contexto(proyecto)
         if integraciones:
             partes.append(integraciones)

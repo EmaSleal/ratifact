@@ -16,7 +16,9 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from ratifact.config import _entorno
-from ratifact.informe_memoria import higiene_pendientes, indicador_decisiones, indicador_delegacion
+from ratifact.informe_delegacion import indicador_delegacion
+from ratifact.informe_memoria import higiene_pendientes, indicador_decisiones
+from ratifact.plurales import contar
 from ratifact.rutas import log_por_defecto
 from ratifact.vocabulario import HERRAMIENTAS_V0
 
@@ -52,7 +54,7 @@ def tamano_contexto(filas: list[dict]) -> list[str]:
         p50, maximo = percentil(tam, 0.5), tam[-1]
         aviso = f"  ⚠ > {TOKENS_ARRANQUE:,} tokens" if p50 / 4 > TOKENS_ARRANQUE else ""
         lineas.append(f"  {nombre}: p50 {p50} characters (~{p50 // 4} tokens) · max {maximo} (~{maximo // 4} tokens) "
-                      f"· {len(tam)} calls{aviso}")
+                      f"· {contar(len(tam), 'call')}{aviso}")
     return lineas
 
 
@@ -63,7 +65,7 @@ def usos_alias(filas: list[dict]) -> list[str]:
     for f in filas:
         if f.get("alias_ruta"):
             por[f.get("proyecto")][f["alias_ruta"]] += 1
-    return [f"  {nombre}: {sum(c.values())} uses · " + ", ".join(f"{r} ×{n}" for r, n in c.most_common(3))
+    return [f"  {nombre}: {contar(sum(c.values()), 'use')} · " + ", ".join(f"{r} ×{n}" for r, n in c.most_common(3))
             for nombre, c in sorted(por.items(), key=lambda kv: str(kv[0]))]
 
 
@@ -91,7 +93,7 @@ def main(argv: list[str] | None = None, a: argparse.Namespace | None = None) -> 
         print("No calls in the period.")
         return
 
-    print(f"Period: last {a.dias} days · {len(filas)} calls\n")
+    print(f"Period: last {contar(a.dias, 'day')} · {contar(len(filas), 'call')}\n")
     por = defaultdict(list)
     for f in filas:
         por[herramienta(f)].append(f)
@@ -150,7 +152,7 @@ def main(argv: list[str] | None = None, a: argparse.Namespace | None = None) -> 
                   for f in por.get(nombre, [])]
     duplicados = sum(1 for f in creaciones if f.get("duplicado"))
     if creaciones:
-        print(f"- Idempotent creations: {len(creaciones)} calls · duplicates detected "
+        print(f"- Idempotent creations: {contar(len(creaciones), 'call')} · duplicates detected "
               f"(retry with no effect): {duplicados}")
     internos = [f for f in filas if f["error"] and f.get("tipo_error") == "interno"]
     rechazos = [f for f in filas if f["error"] and f.get("tipo_error") != "interno"]
@@ -163,7 +165,8 @@ def main(argv: list[str] | None = None, a: argparse.Namespace | None = None) -> 
     corridos = (dt.datetime.now() - primera).days if primera else 0
     cumple = len(filas) >= 300 and tasa < 1 and a.dias >= 14 and corridos >= 14
     print(f"- Real-use criterion for 1.0 (≥300 calls, <1 % internal failures, 14 elapsed days of telemetry): "
-          f"{len(filas)} calls · {corridos} elapsed days since the first record · {len(dias)} days with use "
+          f"{contar(len(filas), 'call')} · {contar(corridos, 'elapsed day')} since the first record · "
+          f"{contar(len(dias), 'day')} with use "
           f"→ {'MET' if cumple else 'not yet'}")
     alias = usos_alias(filas)
     print("- v1 paths translated (alias, removed in 1.1): " + ("none" if not alias else ""))

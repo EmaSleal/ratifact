@@ -72,7 +72,7 @@ task that touches security, is cross-cutting, or depends on diagnosing a cause t
   names): `Workers: explore/haiku×1, write/sonnet×2, verify/sonnet×1` (plus `escalated: write`), or
   `Workers: none — reason: <why>`. With `required`, `update_task(..., "in_review")` without a valid `Workers:` line
   still changes the status but answers with a warning.
-- Extended format: `Workers: <role>/<model>×<n>, …[, rework: <role>×<n>, …][, escalated: <role>][ — note: <free text>]`.
+- Extended format: `Workers: <role>/<model>×<n>, …[, rework: <role>×<n>, …][, escalated: <role>][, skipped: explore][ — note: <free text>]`.
   `<role>/<model>×<n>` counts initial briefs only, even with several workers of the same role in parallel (two parallel
   writers are `Workers: write/sonnet×2`); `rework: <role>×<n>` counts re-sends of that role caused by a defect found by
   the verifier or by the orchestrator's diff review (the role must appear among the workers, n ≥ 1). A note starts at
@@ -81,6 +81,14 @@ task that touches security, is cross-cutting, or depends on diagnosing a cause t
   separates nothing and is an invalid token. The parser ignores the note's text. No parentheses: rework goes in `rework:`, comments in `— note:`. Example:
   `Workers: explore/haiku×1, write/sonnet×1, verify/sonnet×1, rework: write×1 — note: diff review found a missing test`.
   Lines in the earlier format (without `rework:` or a note) stay valid.
+  Exploration may be skipped only when the main session already explored the task's files in this session: declare it
+  with `skipped: explore` in the head of the line and put the reason in the note, which is then required
+  (`Workers: write/sonnet×1, verify/sonnet×1, skipped: explore — note: already explored while planning`; without the
+  note, or together with an explore worker, the line is invalid; write and verify can never be skipped). If the verify
+  model is not available (usage limit or API error), the verification is re-run in a new verify worker with another
+  available model other than the writer's, listed in `Workers:` with its own role/model and the reason in the note; it
+  is never skipped. With `required`, a valid line with neither an explore worker nor `skipped: explore` gets a soft
+  warning on `in_review`.
 - Fixing a line without duplicating: if the warning says the line is invalid it proposes a corrected one when it can
   derive it; sending only that line with `update_task(..., "in_review")` replaces the `Workers:` line of the latest
   result block (or appends it there) instead of creating a new block.

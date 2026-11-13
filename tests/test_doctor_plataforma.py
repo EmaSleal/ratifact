@@ -5,7 +5,7 @@ import pytest
 
 from test_upgrade import hogar, vieja  # noqa: F401,F811  (fixtures)
 
-from ratifact import doctor
+from ratifact import doctor, doctor_plataforma
 
 
 @pytest.fixture
@@ -16,8 +16,8 @@ def paquete(tmp_path):
 
 
 def _doctor(paquete, monkeypatch, plataforma, osrelease="6.1.0-generic"):
-    monkeypatch.setattr(doctor, "sys", SimpleNamespace(platform=plataforma))   # not the global: shutil.which reads it
-    monkeypatch.setattr(doctor, "_osrelease", lambda: osrelease)
+    monkeypatch.setattr(doctor_plataforma, "sys", SimpleNamespace(platform=plataforma))   # not the global: shutil.which reads it
+    monkeypatch.setattr(doctor_plataforma, "_osrelease", lambda: osrelease)
     return doctor.informe(procesos=lambda: [], paquete=paquete, vivos=lambda: [])
 
 

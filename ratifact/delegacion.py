@@ -76,14 +76,20 @@ def bloque(entrada: dict, tarea: dict | None = None) -> str:
     if politica == "required":
         lineas = [f"Delegation (required, set by {origen} policy; this is an instruction, not a suggestion):",
                   "- You, the main session, orchestrate: you do not write the code yourself.",
-                  f"- Exploration runs in an explore worker (model: {m['explore']}).",
+                  f"- Exploration runs in an explore worker (model: {m['explore']}), unless the main session already "
+                  "explored the task's files in this same session: then declare `skipped: explore` in Workers and "
+                  "give the reason in `— note:`.",
                   f"- Implementation runs in write workers (model: {m['write']}).",
                   f"- Verification runs in a verify worker that did not see the implementation (model: {m['verify']}).",
                   "- Every brief carries the full task spec (criteria, amendments, out of scope), not a summary.",
+                  "- If the verify model is not available (usage limit or API error), re-run the verification in a "
+                  "new verify worker with another available model other than the writer's, declare its role/model in "
+                  "Workers and give the reason in the note. Verification is never skipped.",
                   "- Before update_task(in_review) you review the complete diff yourself.",
                   "- If a writer fails verification twice, you take over the implementation and declare it as "
                   "`escalated: write`.",
-                  "- In the result, report `Workers: <role>/<model>×<n>, …` (plus `escalated: write` if it applies)."]
+                  "- In the result, report `Workers: <role>/<model>×<n>, …` (plus `escalated: write` if it applies, "
+                  "and `skipped: explore — note: <why>` if you skipped exploration)."]
     elif politica == "suggested":
         lineas = [f"Delegation (suggested, set by {origen} policy): you may delegate exploration to an explore worker "
                   f"({m['explore']}), implementation to write workers ({m['write']}) and verification to a verify "

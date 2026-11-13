@@ -38,7 +38,8 @@ def test_sin_configuracion_la_respuesta_es_identica(srv, proyecto):
     srv.update_project(name="demo", delegation="off")
     salida = _en_curso(srv)
     sha = re.match(r"T-001 → in_progress · commit (\S+)", salida).group(1)
-    assert salida == f"T-001 → in_progress · commit {sha}\n\n{registro._guia_en_curso('demo')}"
+    from ratifact.idioma import bloque_idioma    # T-023: the language block comes first, nothing else is added
+    assert salida == f"T-001 → in_progress · commit {sha}\n\n{bloque_idioma('en')}\n\n{registro._guia_en_curso('demo')}"
     assert "Model routing" not in salida
 
 

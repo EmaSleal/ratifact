@@ -300,8 +300,8 @@ def test_report_retrabajo_y_desglose_por_cliente(srv, proyecto, entorno):
     assert "    rework: with rework 3 of 4 delegated · rate 75 % · resends write×4, verify×1 · escalations 0" \
         in lineas
     assert "    per client claude-code/2: 3 tasks · compliance 100 % · rework 67 %" in lineas
-    assert "    per client codex/0.9: 1 tasks · compliance 0 % · rework —" in lineas
-    assert "    per client unknown: 1 tasks · compliance 100 % · rework 100 %" in lineas
+    assert "    per client codex/0.9: 1 task · compliance 0 % · rework —" in lineas
+    assert "    per client unknown: 1 task · compliance 100 % · rework 100 %" in lineas
 
 
 def test_report_cuenta_la_ultima_linea_valida_aunque_haya_una_invalida_despues(srv, proyecto):
@@ -311,7 +311,7 @@ def test_report_cuenta_la_ultima_linea_valida_aunque_haya_una_invalida_despues(s
                     result="Workers: write/sonnet×1, rework: write×1, escalated: write\nWorkers: write/sonnet×1 (x)")
     lineas = indicador_delegacion(dt.datetime.now() - dt.timedelta(days=7), "demo")
     assert "required 1 · with workers 1 · compliance 100 % · escalations 1" in lineas[0]
-    assert lineas[1].startswith("    delegated: 1 tasks")
+    assert lineas[1].startswith("    delegated: 1 task")
     assert "    rework: with rework 1 of 1 delegated · rate 100 % · resends write×1 · escalations 1" in lineas
 
 

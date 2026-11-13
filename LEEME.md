@@ -152,7 +152,7 @@ transversal o depende de diagnosticar una causa que la especificación aún no c
   `Workers: explore/haiku×1, write/sonnet×2, verify/sonnet×1` (más `escalated: write` si corresponde) o
   `Workers: none — reason: <motivo>`. Con `required`, `update_task(..., "in_review")` sin una línea Workers válida
   cambia el estado igual pero responde con un aviso.
-- Formato ampliado: `Workers: <rol>/<modelo>×<n>, …[, rework: <rol>×<n>, …][, escalated: <rol>][ — note: <texto libre>]`.
+- Formato ampliado: `Workers: <rol>/<modelo>×<n>, …[, rework: <rol>×<n>, …][, escalated: <rol>][, skipped: explore][ — note: <texto libre>]`.
   `<rol>/<modelo>×<n>` cuenta solo los encargos iniciales, incluso con varios trabajadores del mismo rol en paralelo (dos
   escritores en paralelo son `Workers: write/sonnet×2`); `rework: <rol>×<n>` cuenta los reenvíos de ese rol causados por
   un defecto que encontró el verificador o la revisión del diff del orquestador (el rol debe figurar entre los
@@ -161,6 +161,14 @@ transversal o depende de diagnosticar una causa que la especificación aún no c
   (`Workers: write/sonnet×1 - resumed once`) no separa nada y es un token inválido. El parser ignora el texto de la nota. Sin paréntesis: el retrabajo va en
   `rework:`, los comentarios en `— note:`. Ejemplo:
   `Workers: explore/haiku×1, write/sonnet×1, verify/sonnet×1, rework: write×1 — note: diff review found a missing test`.
+  La exploración solo puede omitirse si la sesión principal ya exploró los archivos de la tarea en esa misma sesión: se
+  declara con `skipped: explore` en la cabeza de la línea y el motivo va en la nota, que entonces es obligatoria
+  (`Workers: write/sonnet×1, verify/sonnet×1, skipped: explore — note: already explored while planning`; sin nota, o
+  junto a un trabajador explore, la línea es inválida; write y verify nunca pueden omitirse). Si el modelo de verify no
+  está disponible (límite de uso o error de la API), la verificación se relanza en un trabajador verify nuevo con otro
+  modelo disponible que no sea el del escritor, indicado en `Workers:` con su rol/modelo y el motivo en la nota; nunca se
+  omite. Con `required`, una línea válida sin trabajador explore ni `skipped: explore` recibe un aviso blando en
+  `in_review`.
   Las líneas del formato anterior (sin `rework:` ni nota) siguen siendo válidas.
 - Corrección sin duplicar: si el aviso dice que la línea es inválida, propone una corregida cuando puede derivarla;
   enviar solo esa línea con `update_task(..., "in_review")` reemplaza la línea `Workers:` del último bloque de

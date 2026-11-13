@@ -10,6 +10,7 @@ ROL_MODELO = re.compile(r"^(explore|write|verify)/([^\s,×]+)×(\d+)$")
 ESCALADO = re.compile(r"^escalated:\s*(explore|write|verify)$")
 NINGUNO = re.compile(r"^none\s*[—–-]+\s*reason:\s*(\S.*)$")
 LINEA = re.compile(r"^\s*(?:[-*]\s+)?(?:\*\*)?Workers:(?:\*\*)?\s*(.*)$")
+OMITIDO = re.compile(r"^skipped:\s*(\S+)$")
 REENVIO = re.compile(r"^rework:\s*(explore|write|verify)×(\d+)$")
 REENVIO_SEGUIDO = re.compile(r"^(explore|write|verify)×(\d+)$")
 # ADR-042: el guion ASCII (`-`, `--`) separa la nota solo si lo sigue `note:`; ` — ` y ` – ` siempre.
@@ -25,6 +26,7 @@ class Trabajadores:
     motivo: str = ""
     reenvios: dict[str, int] = field(default_factory=dict)
     nota: str = ""
+    omitidos: list[str] = field(default_factory=list)   # roles omitidos con `skipped: explore` (ADR-046)
 
     @property
     def total(self) -> int:
@@ -32,9 +34,9 @@ class Trabajadores:
 
 
 def parsear_workers(linea: str) -> Trabajadores:
-    """Parser único de la línea `Workers:` (ADR-036 §4, ampliado por ADR-041 §1). Acepta
+    """Parser único de la línea `Workers:` (ADR-036 §4, ampliado por ADR-041 §1 y ADR-046). Acepta
     `Workers: explore/haiku×1, write/sonnet×2, rework: write×1, escalated: write — note: <texto>` (rework, escalated
-    y nota opcionales, en ese orden) y `Workers: none — reason: <motivo>`. Separador de la nota (ADR-042): el canónico
+    y nota opcionales, en ese orden; también `skipped: explore`, que exige nota y no admite un trabajador explore) y `Workers: none — reason: <motivo>`. Separador de la nota (ADR-042): el canónico
     es ` — note:` (` — reason:` para `none`); también se aceptan ` - note:` / ` -- note:` (y `none - reason:`) en ASCII;
     un guion ASCII en cualquier otro lugar no separa nada (la raya ` — ` / ` – ` sí, ver NOTA). La nota, una vez separada, no se valida.
     Lanza ValueError con el motivo si está mal formada (incluido `none` sin motivo)."""
@@ -71,6 +73,13 @@ def parsear_workers(linea: str) -> Trabajadores:
                 raise ValueError(f"rework count must be at least 1 in {item!r}")
             salida.reenvios[rol] = salida.reenvios.get(rol, 0) + n
             en_lista = True
+        elif OMITIDO.match(item):
+            rol = OMITIDO.match(item).group(1)
+            if rol != "explore":
+                raise ValueError(f"`skipped: {rol}` is not allowed: only explore can be skipped (write and verify "
+                                 "always run)")
+            salida.omitidos.append(rol)
+            en_lista = False
         elif escalado:
             salida.escalados.append(escalado.group(1))
             en_lista = False
@@ -80,6 +89,11 @@ def parsear_workers(linea: str) -> Trabajadores:
     for rol in salida.reenvios:
         if rol not in {x for x, _, _ in salida.roles}:
             raise ValueError(f"`rework: {rol}` but no {rol} worker is listed")
+    if salida.omitidos:
+        if any(r == "explore" for r, _, _ in salida.roles):
+            raise ValueError("`skipped: explore` and an explore worker in the same line contradict each other")
+        if not salida.nota:
+            raise ValueError("`skipped: explore` needs the reason in the note: `… , skipped: explore — note: <why>`")
     if not salida.roles:
         raise ValueError("no worker listed (use `Workers: none — reason: <why>` if none ran)")
     return salida
@@ -154,7 +168,14 @@ def aviso_in_review(politica: str, resultado: str) -> str:
         return ""
     trabajadores, falta = workers_del_resultado(resultado)
     if trabajadores is not None:
-        return ""
+        if (not trabajadores.roles or trabajadores.omitidos
+                or any(r == "explore" for r, _, _ in trabajadores.roles)):   # `none` (sin trabajadores) no avisa
+            return ""
+        return ("⚠ Delegation was required and this `Workers:` line has no explore worker and no `skipped: explore`. "
+                "The status was changed anyway. If the main session had already explored the task's files in this "
+                "session, declare it by adding `skipped: explore — note: <why>` to the line (send only that line with "
+                'update_task(project, id, "in_review", result=<that line>)); otherwise explore runs in an explore '
+                "worker.")
     base = f"⚠ Delegation was required for this task, but {falta}. The status was changed anyway; "
     lineas = [l for l in (resultado or "").splitlines() if LINEA.match(l)]
     propuesta = proponer_workers(lineas[-1]) if lineas else None
