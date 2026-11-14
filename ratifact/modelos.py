@@ -17,6 +17,8 @@ ROLES = ("explore", "write", "verify")
 ARCHIVO = "settings.json"
 HEREDAR = "inherit"
 CLAVE = "models"
+CLAVE_TOKENS = "token_usage"
+VALORES_TOKENS = ("on", "off")
 
 
 def ruta_settings(config: Path | None = None) -> Path:
@@ -53,6 +55,15 @@ def leer_settings(config: Path | None = None) -> dict:
     if not isinstance(datos, dict):
         raise ErrorMemoria(f"{ruta} must be a JSON object like {{\"models\": {{\"explore\": \"haiku\"}}}}.")
     return datos
+
+
+def token_usage(config: Path | None = None) -> str:
+    """"on" | "off" from settings.json: absent, unreadable or invalid is "off" (never raises)."""
+    try:
+        valor = leer_settings(config).get(CLAVE_TOKENS)
+    except (ErrorMemoria, OSError):
+        return "off"
+    return valor if isinstance(valor, str) and valor in VALORES_TOKENS else "off"
 
 
 def leer_global(config: Path | None = None) -> dict[str, str]:
