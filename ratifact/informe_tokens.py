@@ -49,7 +49,7 @@ class Tarea:
     raices: list[str]
     ventanas: list[tuple[dt.datetime, dt.datetime]]
     politica: str
-    delegada: bool
+    delegada: bool | None                           # None: no valid `Workers:` line (excluded from the averages)
     uso: dict = field(default_factory=dict)         # (worker?, model) -> [in, out, cache write, cache read]
     agentes: set = field(default_factory=set)
 
@@ -204,7 +204,8 @@ def _tareas_proyecto(nombre: str, p: dict, desde: dt.datetime, ahora: dt.datetim
         raices = list({os.path.normpath(carpeta.resolve()), os.path.normpath(os.path.abspath(carpeta))})
         trabajadores = ultimo_workers_valido(cuerpo.split("\n## Result", 1)[-1])
         t = Tarea(id_, str(meta.get("branch") or ""), raices, _ventanas(transiciones.get(id_, []), ahora),
-                  politica_de_routing(meta.get("routing", "")) or "unknown", bool(trabajadores and trabajadores.total))
+                  politica_de_routing(meta.get("routing", "")) or "unknown",
+                  None if trabajadores is None else bool(trabajadores.total))
         todas.append(t)
         if meta.get("routing"):
             con.append(t)
@@ -240,6 +241,6 @@ def seccion(desde: dt.datetime, proyecto: str | None) -> list[str]:
                 continue
             lineas += [f"    {t.id} · delegation={t.politica}", f"      main session: {_desglose(t, False)}",
                        f"      workers: {contar(len(t.agentes), 'worker')} — {_desglose(t, True)}"]
-        lineas += [_promedio([t for t in con if t.delegada], "delegated"),
-                   _promedio([t for t in con if not t.delegada], "not delegated")]
+        lineas += [_promedio([t for t in con if t.delegada is True], "delegated"),
+                   _promedio([t for t in con if t.delegada is False], "not delegated")]
     return (lineas or ["  no tasks in the period"]) + [NOTA]

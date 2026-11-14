@@ -142,12 +142,15 @@ invalid value is treated as off and `ratifact doctor` reports it). With it off, 
 - Source: the local Claude Code transcripts, `$CLAUDE_CONFIG_DIR/projects` or else `~/.claude/projects`. It reads only
   metadata fields of each line (timestamp, working folder, branch, model, ids and the four token counters of `usage`),
   never the content of any message. Nothing is stored: it is computed on each run.
-- A task's usage counts the messages of the sessions that worked in the project's folder (the task's `repo` folder in
-  multi-repo projects) on the task's branch, between the task's `in_progress` and its next `in_review` (one window per
-  run). A message is counted once, and never for two tasks.
+- A task's usage counts the sessions that worked in the project's folder (the task's `repo` folder in multi-repo
+  projects) and that touched the task's branch. Of those sessions, the messages between the task's `in_progress` and
+  its next `in_review` (one window per run) count, whether they are on that branch or on another one (for example
+  main). A message is counted once, and never for two tasks.
 - Per task with `routing:` in the period: its delegation policy and, for the main session and for the workers (with
   their number), `in`, `out`, `cache write` and `cache read` per model. Per project, the average per task of output and
-  cache-read tokens for delegated and not delegated tasks, over the tasks with data. A task with no data (another
+  cache-read tokens for delegated and not delegated tasks, over the tasks with data. Only tasks whose result has a
+  valid `Workers` line enter the averages; a task without one (for example, still in progress) is listed with its
+  figures but counts in neither group. A task with no data (another
   client, or transcripts already deleted) shows `no data`.
 - It only covers Claude Code; transcripts are deleted by Claude Code after its retention period, so old tasks lose
   their data. The breakdown is per model, not per role.
