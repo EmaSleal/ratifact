@@ -15,9 +15,10 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
+from ratifact import informe_tokens, modelos
 from ratifact.config import _entorno
 from ratifact.informe_delegacion import indicador_delegacion
-from ratifact.informe_memoria import higiene_pendientes, indicador_decisiones
+from ratifact.informe_memoria import higiene_pendientes, indicador_decisiones, ruta_config
 from ratifact.plurales import contar
 from ratifact.rutas import log_por_defecto
 from ratifact.vocabulario import HERRAMIENTAS_V0
@@ -175,6 +176,14 @@ def main(argv: list[str] | None = None, a: argparse.Namespace | None = None) -> 
     print("\nDelegation: tasks with `routing:` changed in the period")
     for linea in indicador_delegacion(desde, a.proyecto):
         print(linea)
+    if modelos.token_usage(ruta_config()) == "on":
+        print("\nToken usage (Claude Code transcripts)")
+        try:
+            lineas_tokens = informe_tokens.seccion(desde, a.proyecto)
+        except Exception as e:      # the transcripts are not a public format: never make report fail
+            lineas_tokens = [f"  token usage unavailable: {type(e).__name__}"]
+        for linea in lineas_tokens:
+            print(linea)
     print("\nOpen pending items referenced by merged tasks")
     for linea in higiene_pendientes(a.proyecto):
         print(linea)

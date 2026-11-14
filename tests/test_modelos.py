@@ -158,7 +158,7 @@ def _doctor():
 
 def test_doctor_muestra_modelos_efectivos(srv, proyecto, entorno, hogar):
     texto, acciones = _doctor()
-    assert "    models: session default" in texto and "(not created; models: session default)" in texto
+    assert "    models: session default" in texto and "(not created; models: session default" in texto
     _settings(entorno, {"models": {"explore": "haiku", "write": "sonnet"}})
     srv.update_project(name="demo", models="write=opus")
     texto, acciones = _doctor()

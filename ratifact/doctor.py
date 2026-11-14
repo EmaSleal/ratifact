@@ -130,20 +130,29 @@ def _settings(config: Path, acciones: list[str]) -> list[str]:
     se modifica."""
     ruta = modelos.ruta_settings(config)
     if not ruta.is_file():
-        return [f"Settings: {ruta} (not created; models: session default)"]
+        return [f"Settings: {ruta} (not created; models: session default · token_usage: off (default))"]
     try:
         globales = modelos.leer_global(config)
     except _cfg.ErrorMemoria as e:
         acciones.append(f"settings.json: {e} Fix it by hand (ratifact never rewrites it)")
         return [f"Settings: {ruta} (INVALID)"]
-    politica = modelos.leer_settings(config).get(delegacion.CLAVE)
+    datos = modelos.leer_settings(config)
+    politica, tokens = datos.get(delegacion.CLAVE), datos.get(modelos.CLAVE_TOKENS)
+    invalido = False
     if politica is not None and politica not in delegacion.POLITICAS:
         acciones.append(f"settings.json: invalid `delegation` {politica!r} (valid: {', '.join(delegacion.POLITICAS)}). "
                         "Fix it by hand (ratifact never rewrites it)")
+        invalido = True
+    if tokens is not None and not (isinstance(tokens, str) and tokens in modelos.VALORES_TOKENS):
+        acciones.append(f"settings.json: invalid `token_usage` {tokens!r} (valid: {', '.join(modelos.VALORES_TOKENS)}; "
+                        "treated as off). Fix it by hand (ratifact never rewrites it)")
+        invalido = True
+    if invalido:
         return [f"Settings: {ruta} (INVALID)"]
     return [f"Settings: {ruta} · global models: "
             + (", ".join(f"{r}={m}" for r, m in globales.items()) or "none")
-            + f" · delegation: {politica or delegacion.DEFECTO + ' (default)'}"]
+            + f" · delegation: {politica or delegacion.DEFECTO + ' (default)'}"
+            + f" · token_usage: {tokens or 'off (default)'}"]
 
 
 def _clientes(acciones: list[str], paquete: Path | None = None) -> list[str]:
