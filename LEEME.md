@@ -146,16 +146,21 @@ reporta). Con la función apagada, `report` no abre ningún archivo de transcrip
 - Fuente: las transcripciones locales de Claude Code, `$CLAUDE_CONFIG_DIR/projects` o, si no, `~/.claude/projects`.
   Solo lee campos de metadatos de cada línea (fecha, carpeta de trabajo, rama, modelo, ids y los cuatro contadores de
   tokens de `usage`), nunca el contenido de ningún mensaje. No se guarda nada: se calcula en cada ejecución.
-- El consumo de una tarea cuenta las sesiones que trabajaron en la carpeta del proyecto (la carpeta `repo` de la
-  tarea en proyectos multi-repo) y que tocaron la rama de la tarea. De esas sesiones cuentan los mensajes entre su
-  `in_progress` y su siguiente `in_review` (una ventana por ejecución), estén en esa rama o en otra (por ejemplo
-  main). Cada mensaje se cuenta una vez y nunca para dos tareas.
+- El consumo de una tarea cuenta las sesiones del proyecto (cualquier línea cuya carpeta de trabajo sea la del
+  proyecto o esté dentro, también en proyectos multi-repo) que estaban activas en el momento en que la tarea pasó a
+  `in_progress` o a `in_review` (una línea a menos de dos minutos de ese momento). De esas sesiones cuentan los
+  mensajes entre su `in_progress` y su siguiente `in_review` (una ventana por ejecución), en cualquier rama. Si
+  varias sesiones estaban activas en el mismo momento, solo cuentan las que tienen una línea en la rama de la tarea
+  dentro de la ventana; si ninguna la tiene, la tarea se muestra como `ambiguous`. Cada mensaje se cuenta una vez y
+  nunca para dos tareas.
 - Por tarea con `routing:` del período: su política de delegación y, para la sesión principal y para los
   trabajadores (con su número), `in`, `out`, `cache write` y `cache read` por modelo. Por proyecto, el promedio por
-  tarea de tokens de salida y de lectura de caché de las tareas delegadas y no delegadas, sobre las tareas con datos. Solo entran en
+  tarea de tokens de salida y de lectura de caché de las tareas delegadas y no delegadas, sobre las tareas con datos, con la mediana por tarea en una segunda línea.
+  Una tarea cuyas ventanas suman más de 8 horas lleva el aviso `long window` (puede incluir otro trabajo de la misma
+  sesión); se muestra y cuenta. Solo entran en
   los promedios las tareas con una línea `Workers` válida en su resultado; una tarea sin ella (por ejemplo, en curso)
   se muestra con sus cifras pero no cuenta en ningún grupo.
-  Una tarea sin datos (otro cliente, o transcripciones ya borradas) muestra `no data`.
+  Una tarea sin datos (otro cliente, o transcripciones ya borradas) muestra `no data`; una tarea `ambiguous` queda fuera de los resúmenes.
 - Solo cubre Claude Code; Claude Code borra las transcripciones pasado su período de retención, así que las tareas
   viejas pierden sus datos. El desglose es por modelo, no por rol.
 

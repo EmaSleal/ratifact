@@ -60,6 +60,11 @@ def _l(min_: float, cwd, rama: str, modelo: str = "claude-opus", mid: str | None
     return d
 
 
+def _a(min_: float, cwd, rama: str = "main") -> dict:
+    """Line without usage: only activity (anchors a session near a transition)."""
+    return {"timestamp": _en(min_).strftime("%Y-%m-%dT%H:%M:%S.123Z"), "cwd": str(cwd), "gitBranch": rama}
+
+
 def _escribir(ruta: Path, lineas: list) -> Path:
     ruta.parent.mkdir(parents=True, exist_ok=True)
     ruta.write_text("".join((l if isinstance(l, str) else json.dumps(l)) + "\n" for l in lineas), encoding="utf-8")
@@ -195,13 +200,14 @@ def test_atribucion_a_b_c(srv, proyecto, entorno, claude, monkeypatch, capsys):
     rama, cwd = _rama(proyecto, "T-001"), proyecto["repo"]
     otro = entorno["tmp"] / "otro-proyecto"
     _escribir(claude / "dentro.jsonl", [
+        _a(10, cwd, "main"),                              # anchor at the window start (no usage)
         _l(0, cwd, "main", mid="antes", sal=1000),        # (b-like) before the window, on main
         _l(20, cwd / "sub", "main", mid="a", sal=20),     # (a) main, inside the window, session also has the branch; cwd below the project
         _l(30, cwd, rama, mid="b", sal=30),
         _l(90, cwd, rama, mid="fuera", sal=2000),         # (b) on the branch but after the window
     ])
-    _escribir(claude / "ajena.jsonl", [_l(20, otro, rama, mid="c", sal=4000)])      # (c) another cwd, same branch
-    _escribir(claude / "sinrama.jsonl", [_l(20, cwd, "main", mid="d", sal=8000)])   # no line with the task branch
+    _escribir(claude / "ajena.jsonl", [_a(10, otro, rama), _l(20, otro, rama, mid="c", sal=4000)])   # (c) another cwd, anchored
+    _escribir(claude / "sinanclaje.jsonl", [_l(20, cwd, "main", mid="d", sal=8000)])  # in the project but no line near a transition
     _activar(entorno)
     assert "main session: claude-opus: in 2 · out 50 · cache write 0 · cache read 0" in _seccion(entorno, capsys)
 
@@ -212,7 +218,7 @@ def test_dos_ejecuciones_suman_ambas_ventanas(srv, proyecto, entorno, claude, mo
     srv.update_task(project="demo", id="T-001", status="changes_requested")
     _ejecutar(srv, monkeypatch, "T-001", 40, 50, crear=False)
     rama, cwd = _rama(proyecto, "T-001"), proyecto["repo"]
-    _escribir(claude / "s.jsonl", [_l(15, cwd, rama, mid="1", sal=1), _l(30, cwd, rama, mid="2", sal=100),
+    _escribir(claude / "s.jsonl", [_a(10, cwd, rama), _a(40, cwd, rama), _l(15, cwd, rama, mid="1", sal=1), _l(30, cwd, rama, mid="2", sal=100),
                                    _l(45, cwd, rama, mid="3", sal=10), _l(55, cwd, rama, mid="4", sal=1000)])
     _activar(entorno)
     assert "out 11 ·" in _seccion(entorno, capsys)
@@ -223,7 +229,7 @@ def test_ventana_sin_in_review_termina_ahora(srv, proyecto, entorno, claude, mon
     monkeypatch.setenv("GIT_COMMITTER_DATE", _en(10).isoformat())
     srv.update_task(project="demo", id="T-001", status="in_progress")
     rama, cwd = _rama(proyecto, "T-001"), proyecto["repo"]
-    _escribir(claude / "s.jsonl", [_l(500, cwd, rama, sal=3)])
+    _escribir(claude / "s.jsonl", [_a(10, cwd, rama), _l(500, cwd, rama, sal=3)])
     _activar(entorno)
     assert "out 3 ·" in _seccion(entorno, capsys)
 
@@ -235,6 +241,7 @@ def test_solape_gana_la_rama_y_si_no_la_ventana_mas_reciente(srv, proyecto, ento
     _ejecutar(srv, monkeypatch, "T-002", 50, 120)
     r1, r2, cwd = _rama(proyecto, "T-001"), _rama(proyecto, "T-002"), proyecto["repo"]
     _escribir(claude / "s.jsonl", [
+        _a(10, cwd, r1), _a(50, cwd, r2),
         _l(20, cwd, r1, mid="solo1", sal=1),             # only T-001 window
         _l(60, cwd, r1, mid="rama1", sal=10),            # both windows, branch of T-001
         _l(70, cwd, r2, mid="rama2", sal=100),           # both windows, branch of T-002
@@ -257,7 +264,7 @@ def test_seccion_exacta(srv, proyecto, entorno, claude, monkeypatch, capsys):
     _ejecutar(srv, monkeypatch, "T-003", 130, 140, resultado=NADA)      # not delegated, no data
     r, cwd = _rama(proyecto, "T-001"), proyecto["repo"]
     sub = claude / "s1" / "subagents"
-    _escribir(claude / "s1.jsonl", [_l(15, cwd, r, ent=1200, sal=3400, cw=500, cr=1234567),
+    _escribir(claude / "s1.jsonl", [_a(10, cwd, r), _l(15, cwd, r, ent=1200, sal=3400, cw=500, cr=1234567),
                                     _l(16, cwd, r, modelo="claude-haiku", mid="m2", rid="r2", sal=1)])
     _escribir(sub / "agent-a1.jsonl", [_l(20, cwd, r, modelo="claude-sonnet", mid="w1", rid="q1", sal=2000, cr=10000,
                                            lado=True, agente="a1")])
@@ -280,6 +287,7 @@ def test_seccion_exacta(srv, proyecto, entorno, claude, monkeypatch, capsys):
         "    T-003 · delegation=required: no data",
         "    delegated: 1 of 2 tasks with data · average per task — main session: out 3,401 · cache read 1,234,567; "
         "workers: out 3,000 · cache read 13,000",
+        "      median per task — main session: out 3,401 · cache read 1,234,567; workers: out 3,000 · cache read 13,000",
         "    not delegated: —",
         NOTA, ""])
 
@@ -291,7 +299,7 @@ def test_promedios_y_singular(srv, proyecto, entorno, claude, monkeypatch, capsy
     cwd = proyecto["repo"]
     for n, (id_, minu, sal) in enumerate((("T-001", 15, 10), ("T-002", 35, 7), ("T-003", 55, 4))):
         r = _rama(proyecto, id_)
-        _escribir(claude / f"s{n}.jsonl", [_l(minu, cwd, r, mid=f"a{n}", sal=sal, cr=100 * (n + 1))])
+        _escribir(claude / f"s{n}.jsonl", [_a(minu - 5, cwd, r), _l(minu, cwd, r, mid=f"a{n}", sal=sal, cr=100 * (n + 1))])
     _escribir(claude / "s1" / "subagents" / "agent-x.jsonl",
               [_l(36, cwd, _rama(proyecto, "T-002"), mid="w", rid="q", sal=40, cr=2, lado=True, agente="x")])
     _activar(entorno)
