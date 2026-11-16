@@ -17,8 +17,8 @@ from ratifact.config import MEM, ErrorMemoria, _mem
 from ratifact.esquema import _bloqueo, _idioma_contenido
 from ratifact.idioma import bloque_idioma
 from ratifact.registros import (MARCA_DUPLICADO, VENTANA_IDEMPOTENCIA_MINUTOS, _buscar_registro, _commit,
-                                _escribir_registro, _hoy, _leer_registro)
-from ratifact.vocabulario import TAREAS
+                                _escribir_registro, _hoy, _leer_registro, _normalizar_id)
+from ratifact.vocabulario import DECISIONES, TAREAS
 
 ESTADOS_AMPLIABLES = ("todo", "changes_requested")
 SECCION_ENMIENDAS = "## Amendments"
@@ -151,13 +151,36 @@ def _relevante(estado: str, bloques: list[tuple[str, int, int]]) -> tuple[str, i
     return None
 
 
+def _decisiones_vigentes(mem, lineas: list[str]) -> list[str]:
+    """Renderiza estados actuales en el brief sin modificar las líneas persistidas."""
+    salida = lineas.copy()
+    inicio = next((i for i, linea in enumerate(salida) if linea.strip() == "## Applicable decisions"), None)
+    if inicio is None:
+        return salida
+    fin = next((i for i in range(inicio + 1, len(salida)) if salida[i].startswith("## ")), len(salida))
+    ids = [parte.strip() for parte in ",".join(salida[inicio + 1:fin]).split(",") if parte.strip()]
+    if not ids:
+        return salida
+    actuales = []
+    for id_ in ids:
+        try:
+            ruta = _buscar_registro(mem / DECISIONES, id_)
+        except ErrorMemoria:
+            actuales.append(f"{id_} (missing)")
+            continue
+        meta, _ = _leer_registro(ruta)
+        actuales.append(f"{_normalizar_id(id_)} ({meta.get('status', 'unknown')})")
+    return salida[:inicio + 1] + [", ".join(actuales)] + salida[fin:]
+
+
 @herramienta
 def read_task(project: str, id: str) -> str:
     """Working brief of a task, instead of reading the whole file: the frontmatter, the full spec (Goal, Acceptance
     criteria, Resolves, Applicable decisions, Files involved, Out of scope, Notes, Amendments, How to verify), every
-    Amendment block, the block relevant to the status in full (changes_requested → latest Review; in_review or
-    failed → latest Result block; in_progress → the latest Review it answers) and a one-line index (heading · line
-    range · size) of every other Result/Review block, readable with read_document and that range."""
+    Amendment block, and the block relevant to the status in full (changes_requested → latest Review; in_review or
+    failed → latest Result block; in_progress → the latest Review it answers). Applicable decisions show each
+    decision's current status at read time. The brief also indexes every other Result/Review block (heading · line
+    range · size), readable with read_document and that range."""
     def f():
         ruta = _buscar_registro(_mem(project) / TAREAS, id)
         relativa = f"{MEM}/{ruta.relative_to(_mem(project)).as_posix()}"
@@ -166,7 +189,8 @@ def read_task(project: str, id: str) -> str:
         cuerpo_desde = _fin_frontmatter(lineas)
         fin_spec = next((i for i in range(cuerpo_desde, len(lineas)) if lineas[i].strip() in SECCIONES_RESULTADO),
                         len(lineas))
-        partes = [f"(→ {relativa})\n" + "\n".join(lineas[:fin_spec]).rstrip(),
+        spec = _decisiones_vigentes(_mem(project), lineas[:fin_spec])
+        partes = [f"(→ {relativa})\n" + "\n".join(spec).rstrip(),
                   bloque_idioma(_idioma_contenido(_mem(project)))]
         bloques = _bloques(lineas, fin_spec + 1)
         elegido = _relevante(meta.get("status", ""), bloques)

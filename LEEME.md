@@ -275,7 +275,8 @@ commit por enmienda; al menos uno de los dos campos; una enmienda idéntica dent
 no se escribe de nuevo.
 
 `read_task(project, id)`: brief de trabajo de una tarea en lugar del archivo completo: frontmatter, spec
-completa (con las enmiendas), el bloque relevante según el estado (`changes_requested` → la última Review;
+completa (con las enmiendas), estado vigente de cada decisión aplicable al momento de leer (sin modificar la tarea),
+el bloque relevante según el estado (`changes_requested` → la última Review;
 `in_review`/`failed` → el último resultado; `in_progress` → la última Review si es el último bloque) y un índice de una
 línea (título · rango de líneas · tamaño) de los demás bloques Result/Review, legibles con `read_document` y ese rango.
 

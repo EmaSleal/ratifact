@@ -67,6 +67,32 @@ def _validar_decisiones(proyecto: str, decisiones: str) -> str:
     return ", ".join(ids)
 
 
+def _avisos_decisiones(proyecto: str, decisiones: str) -> str:
+    """Informa estados no aceptados sin cambiar el formato guardado en la tarea."""
+    avisos = []
+    for id_ in decisiones.split(", ") if decisiones else ():
+        meta, _ = _leer_registro(_buscar_registro(_mem(proyecto) / DECISIONES, id_))
+        estado = meta.get("status", "unknown")
+        if estado == "accepted":
+            continue
+        if estado == "proposed":
+            avisos.append(f"⚠ {id_} is proposed; the coding agent will treat it as a reference, not as a rule. "
+                          "Accept it before starting or clarify in the task notes how to treat it.")
+        elif estado == "superseded":
+            reemplazo = meta.get("superseded_by", "")
+            if reemplazo:
+                try:
+                    reemplazo = _normalizar_id(reemplazo)
+                except ErrorMemoria:
+                    pass
+                avisos.append(f"⚠ {id_} is superseded by {reemplazo}; do not treat it as current guidance.")
+            else:
+                avisos.append(f"⚠ {id_} is superseded; do not treat it as current guidance.")
+        else:
+            avisos.append(f"⚠ {id_} is {estado}; it is not applicable as current guidance and must not be treated as a rule.")
+    return "\n".join(avisos)
+
+
 def _validar_resuelve(proyecto: str, resuelve: str) -> list[tuple[str, bool]]:
     """`resuelve` de registrar_tarea (ADR-027): cada id debe existir y estar abierto; si no, ErrorMemoria con todos los
     inválidos (y no se escribe nada)."""
@@ -88,7 +114,8 @@ def create_task(project: str, title: str, goal: str, acceptance_criteria: str, d
     In multi-repo projects, `repo` (required) is the folder where the work happens; in single-repo projects it is
     ignored (the response says so).
     It must be self-contained: the coding agent runs it without this chat. `acceptance_criteria`: a verifiable list
-    (tests that must pass, observable behavior). `decisions`: applicable ADR ids. `files`: paths likely to be
+    (tests that must pass, observable behavior). `decisions`: applicable ADR ids; non-accepted decisions are identified
+    in the response without preventing task creation. `files`: paths likely to be
     touched. The user runs it with /run-task T-NNN.
     `resolves`: pending items the task resolves, comma-separated, each optionally with "(partial)" (e.g.
     "P-036, P-037 (partial)"); they must exist and be open. Stored in the task ("Resolves" section); when the task is
@@ -151,8 +178,10 @@ def create_task(project: str, title: str, goal: str, acceptance_criteria: str, d
             _escribir_registro(ruta, meta, "\n\n".join(secciones))
             sha = _commit(proyecto, [ruta], f"{id_} {titulo} (todo)")
             linea = _integraciones._linea_integraciones(proyecto)
-            return (f"{id_} created · suggested branch {meta['branch']} · commit {sha}\nRun it with: /run-task {id_}"
-                    + nota + (f"\n{linea}" if linea else ""))
+            respuesta = (f"{id_} created · suggested branch {meta['branch']} · commit {sha}\nRun it with: /run-task {id_}"
+                         + nota + (f"\n{linea}" if linea else ""))
+            avisos = _avisos_decisiones(proyecto, decisiones_norm)
+            return respuesta + (f"\n{avisos}" if avisos else "")
     return _ejecutar(f)
 
 

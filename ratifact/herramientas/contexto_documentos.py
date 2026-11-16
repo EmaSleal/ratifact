@@ -2,11 +2,13 @@
 update_index."""
 from __future__ import annotations
 
+import datetime as _dt
 import os
 import subprocess
 from pathlib import Path
 
 from ratifact import build as _build
+from ratifact import registros as _registros
 from ratifact.app import _ejecutar, herramienta
 from ratifact.busqueda import _resultados
 from ratifact.catalogo import _bloque_pendientes, _es_carpeta_de_registros, _linea, _registros_en, _resolver_id
@@ -43,6 +45,47 @@ def list_projects() -> str:
 
 
 UMBRAL_INDICE = 5   # cambios en la memoria tras los cuales INDEX.md se considera desactualizado
+UMBRAL_ANTIGUEDAD_PROPUESTA_DIAS = 14
+MAX_PROPUESTAS_ANTIGUAS_A_DECIDIR = 3
+
+
+def _propuestas_con_antiguedad(mem: Path) -> list[tuple[str, _dt.date | None]]:
+    """Devuelve propuestas de más antiguas a más nuevas; las fechas inválidas quedan al final."""
+    propuestas = []
+    for ruta in (mem / DECISIONES).glob("ADR-*.md"):
+        meta, _ = _leer_registro(ruta)
+        if meta.get("status") != "proposed":
+            continue
+        id_ = "-".join(ruta.stem.split("-", 2)[:2])
+        try:
+            fecha = _dt.date.fromisoformat(str(meta.get("date", "")))
+        except ValueError:
+            fecha = None
+        propuestas.append((id_, fecha))
+    return sorted(propuestas, key=lambda p: (p[1] is None, p[1] or _dt.date.max, _clave_id(p[0])))
+
+
+def _linea_propuestas(mem: Path) -> str:
+    """Renderiza la antigüedad y la sugerencia de decisión por lote, sin alterar los ADR."""
+    propuestas = _propuestas_con_antiguedad(mem)
+    if not propuestas:
+        return ""
+    hoy = _registros._ahora().date()
+    elementos, antiguas = [], []
+    for id_, fecha in propuestas:
+        if fecha is None:
+            elementos.append(id_)
+            continue
+        dias = (hoy - fecha).days
+        elementos.append(f"{id_} ({'today' if dias == 0 else f'{dias} d'})")
+        if dias >= UMBRAL_ANTIGUEDAD_PROPUESTA_DIAS:
+            antiguas.append(id_)
+    linea = "Proposed decisions awaiting the user's acceptance: " + ", ".join(elementos)
+    if antiguas:
+        lote = ", ".join(antiguas[:MAX_PROPUESTAS_ANTIGUAS_A_DECIDIR])
+        linea += (f"\nOffer the user to decide the {len(antiguas[:MAX_PROPUESTAS_ANTIGUAS_A_DECIDIR])} "
+                  f"oldest proposals: {lote}")
+    return linea
 
 
 def _aviso_indice(proyecto: str) -> str:
@@ -71,6 +114,7 @@ def get_context(project: str) -> str:
     The first line is `ratifact <build>` (version + content hash of the running server). Below it, a ⚠ line when
     this server process is older than the installation on disk (restart the client) or when the local source it was
     installed from is newer than the installation (reinstall).
+    Proposed decisions are listed with their age and oldest items are flagged for a small decision batch.
     At the end, if optional integrations are active (codegraph, gentle-ai, engram…), one line listing them and their
     planning guidance; that guidance is conditional: follow it only if you have their tools."""
     proyecto = project
@@ -89,11 +133,9 @@ def get_context(project: str) -> str:
         indice = mem / "INDEX.md"
         partes.append(indice.read_text(encoding="utf-8") if indice.exists() else "(INDEX.md does not exist)")
         partes.append(_bloque_pendientes(proyecto))     # ADR-026: del catálogo, no abiertas.md
-        propuestas = ["-".join(p.stem.split("-", 2)[:2]) for p in (mem / DECISIONES).glob("ADR-*.md")
-                      if _leer_registro(p)[0].get("status") == "proposed"]
-        if propuestas:
-            partes.append("Proposed decisions awaiting the user's acceptance: "
-                          + ", ".join(sorted(propuestas, key=_clave_id)))
+        linea_propuestas = _linea_propuestas(mem)
+        if linea_propuestas:
+            partes.append(linea_propuestas)
         tareas = _resumen_tareas(proyecto)
         if tareas:
             partes.append("# Active code tasks\n" + "\n".join(tareas))
