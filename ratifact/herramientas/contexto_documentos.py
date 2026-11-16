@@ -2,7 +2,6 @@
 update_index."""
 from __future__ import annotations
 
-import datetime as _dt
 import os
 import subprocess
 from pathlib import Path
@@ -16,11 +15,12 @@ from ratifact.config import (CARPETAS_IGNORADAS, EXT_TEXTO, LIMITE_INDICE, LIMIT
                              _aviso_alias, _es_repo, _mem, _proyectos, _raiz, _repos, _ruta_segura, _traducir_alias,
                              _valor)
 from ratifact.esquema import _bloqueo, _idioma_contenido, _version_esquema
+from ratifact.herramientas.decisiones_visibilidad import _linea_propuestas
 from ratifact.idioma import linea_contenido
 from ratifact.integraciones import registro as _integraciones
 from ratifact.listado import _listado
-from ratifact.registros import _clave_id, _commit, _escribir_atomico, _leer_registro, _resumen_tareas
-from ratifact.vocabulario import DECISIONES, MODOS_V0
+from ratifact.registros import _commit, _escribir_atomico, _leer_registro, _resumen_tareas
+from ratifact.vocabulario import MODOS_V0
 
 
 # ───────────────────────── herramientas ─────────────────────────
@@ -45,49 +45,6 @@ def list_projects() -> str:
 
 
 UMBRAL_INDICE = 5   # cambios en la memoria tras los cuales INDEX.md se considera desactualizado
-UMBRAL_ANTIGUEDAD_PROPUESTA_DIAS = 14
-MAX_PROPUESTAS_ANTIGUAS_A_DECIDIR = 3
-
-
-def _propuestas_con_antiguedad(mem: Path) -> list[tuple[str, _dt.date | None]]:
-    """Devuelve propuestas de más antiguas a más nuevas; las fechas inválidas quedan al final."""
-    propuestas = []
-    for ruta in (mem / DECISIONES).glob("ADR-*.md"):
-        meta, _ = _leer_registro(ruta)
-        if meta.get("status") != "proposed":
-            continue
-        id_ = "-".join(ruta.stem.split("-", 2)[:2])
-        try:
-            fecha = _dt.date.fromisoformat(str(meta.get("date", "")))
-        except ValueError:
-            fecha = None
-        propuestas.append((id_, fecha))
-    return sorted(propuestas, key=lambda p: (p[1] is None, p[1] or _dt.date.max, _clave_id(p[0])))
-
-
-def _linea_propuestas(mem: Path) -> str:
-    """Renderiza la antigüedad y la sugerencia de decisión por lote, sin alterar los ADR."""
-    propuestas = _propuestas_con_antiguedad(mem)
-    if not propuestas:
-        return ""
-    hoy = _registros._ahora().date()
-    elementos, antiguas = [], []
-    for id_, fecha in propuestas:
-        if fecha is None:
-            elementos.append(id_)
-            continue
-        dias = (hoy - fecha).days
-        elementos.append(f"{id_} ({'today' if dias == 0 else f'{dias} d'})")
-        if dias >= UMBRAL_ANTIGUEDAD_PROPUESTA_DIAS:
-            antiguas.append(id_)
-    linea = "Proposed decisions awaiting the user's acceptance: " + ", ".join(elementos)
-    if antiguas:
-        lote = ", ".join(antiguas[:MAX_PROPUESTAS_ANTIGUAS_A_DECIDIR])
-        linea += (f"\nOffer the user to decide the {len(antiguas[:MAX_PROPUESTAS_ANTIGUAS_A_DECIDIR])} "
-                  f"oldest proposals: {lote}")
-    return linea
-
-
 def _aviso_indice(proyecto: str) -> str:
     """Si INDEX.md quedó atrás respecto de la memoria, lo dice explícitamente al cargar contexto."""
     mem = _mem(proyecto)

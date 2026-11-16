@@ -13,6 +13,7 @@ from ratifact.app import _ejecutar, herramienta
 from ratifact.catalogo import _registros_en
 from ratifact.config import ErrorMemoria, _mem, _proyectos, _repos, _valor
 from ratifact.esquema import _bloqueo, _idioma_contenido
+from ratifact.herramientas.decisiones_visibilidad import _avisos_decisiones
 from ratifact.idioma import bloque_idioma
 from ratifact.integraciones import registro as _integraciones
 from ratifact.registros import (_buscar_registro, _commit, _duplicado_reciente, _escribir_registro, _hoy,
@@ -65,32 +66,6 @@ def _validar_decisiones(proyecto: str, decisiones: str) -> str:
         verbo = "does" if len(faltan) == 1 else "do"
         raise ErrorMemoria(f"Invalid `decisions`: {', '.join(faltan)} ({verbo} not exist); nothing was created.")
     return ", ".join(ids)
-
-
-def _avisos_decisiones(proyecto: str, decisiones: str) -> str:
-    """Informa estados no aceptados sin cambiar el formato guardado en la tarea."""
-    avisos = []
-    for id_ in decisiones.split(", ") if decisiones else ():
-        meta, _ = _leer_registro(_buscar_registro(_mem(proyecto) / DECISIONES, id_))
-        estado = meta.get("status", "unknown")
-        if estado == "accepted":
-            continue
-        if estado == "proposed":
-            avisos.append(f"⚠ {id_} is proposed; the coding agent will treat it as a reference, not as a rule. "
-                          "Accept it before starting or clarify in the task notes how to treat it.")
-        elif estado == "superseded":
-            reemplazo = meta.get("superseded_by", "")
-            if reemplazo:
-                try:
-                    reemplazo = _normalizar_id(reemplazo)
-                except ErrorMemoria:
-                    pass
-                avisos.append(f"⚠ {id_} is superseded by {reemplazo}; do not treat it as current guidance.")
-            else:
-                avisos.append(f"⚠ {id_} is superseded; do not treat it as current guidance.")
-        else:
-            avisos.append(f"⚠ {id_} is {estado}; it is not applicable as current guidance and must not be treated as a rule.")
-    return "\n".join(avisos)
 
 
 def _validar_resuelve(proyecto: str, resuelve: str) -> list[tuple[str, bool]]:

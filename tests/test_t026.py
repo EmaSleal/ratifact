@@ -1,5 +1,6 @@
 """T-026: expose decision age and current lifecycle status without changing task records."""
 import datetime as dt
+import re
 
 from conftest import log_git
 from ratifact import registros
@@ -29,7 +30,7 @@ def test_get_context_shows_age_orders_by_date_and_suggests_oldest_batch(srv, pro
 
     assert linea == ("Proposed decisions awaiting the user's acceptance: ADR-004 (41 d), ADR-002 (14 d), "
                      "ADR-010 (14 d), ADR-003 (13 d), ADR-001 (today)")
-    assert "offer the user to decide the 3 oldest proposals: ADR-004, ADR-002, ADR-010" in salida
+    assert "Offer the user to decide the 3 oldest proposals: ADR-004, ADR-002, ADR-010" in salida
 
 
 def test_get_context_no_age_suffix_for_invalid_date_and_no_old_proposal_notice(srv, proyecto, monkeypatch):
@@ -53,8 +54,8 @@ def test_get_context_five_old_proposals_recommends_only_three_and_no_proposals_o
 
     salida = srv.get_context(project="demo")
 
-    assert "offer the user to decide the 3 oldest proposals: ADR-001, ADR-002, ADR-003" in salida
-    assert "ADR-004, ADR-005" not in next(l for l in salida.splitlines() if "offer the user" in l)
+    assert "Offer the user to decide the 3 oldest proposals: ADR-001, ADR-002, ADR-003" in salida
+    assert "ADR-004, ADR-005" not in next(l for l in salida.splitlines() if "Offer the user" in l)
     for path in (proyecto["mem"] / "decisions").glob("*.md"):
         path.unlink()
     assert not any(l.startswith("Proposed decisions awaiting") for l in srv.get_context(project="demo").splitlines())
@@ -67,7 +68,7 @@ def test_get_context_names_all_old_proposals_when_fewer_than_batch_limit(srv, pr
 
     salida = srv.get_context(project="demo")
 
-    assert "offer the user to decide the 1 oldest proposals: ADR-001" in salida
+    assert "Offer the user to decide the 1 oldest proposals: ADR-001" in salida
 
 
 def test_create_task_warns_for_each_nonaccepted_decision_but_keeps_stored_format(srv, proyecto):
@@ -82,7 +83,7 @@ def test_create_task_warns_for_each_nonaccepted_decision_but_keeps_stored_format
                              decisions="ADR-001, ADR-002, ADR-003, ADR-004, ADR-006")
 
     assert "ADR-002 is proposed" in salida and "reference, not as a rule" in salida
-    assert "accept it before starting" in salida and "clarify in the task notes" in salida
+    assert "Accept it before starting" in salida and "clarify in the task notes" in salida
     assert "ADR-003 is rejected" in salida and "not applicable" in salida
     assert "ADR-004 is superseded by ADR-005" in salida
     assert "ADR-006 is superseded;" in salida
@@ -105,8 +106,18 @@ def test_create_task_all_accepted_has_no_warning_and_read_task_status_is_live(sr
     assert "ADR-001 (accepted)" in brief
     assert task.read_bytes() == original
     assert log_git(proyecto["mem"]) == committed
-    assert "not accepted" not in srv.create_task(project="demo", title="Accepted", goal="g",
-                                                  acceptance_criteria="- c", decisions="ADR-001")
+
+    without_decisions = srv.create_task(project="demo", title="No decisions", goal="g",
+                                        acceptance_criteria="- c")
+    with_accepted_decision = srv.create_task(project="demo", title="Accepted", goal="g",
+                                             acceptance_criteria="- c", decisions="ADR-001")
+
+    def normalize_task_response(response):
+        response = re.sub(r"T-\d+", "T-ID", response)
+        response = re.sub(r"t-\d+-[a-z0-9-]+", "task-branch", response)
+        return re.sub(r"commit [0-9a-f]+", "commit HASH", response)
+
+    assert normalize_task_response(with_accepted_decision) == normalize_task_response(without_decisions)
 
 
 def test_read_task_marks_missing_decision_and_handles_absent_section(srv, proyecto):
