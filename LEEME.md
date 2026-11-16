@@ -22,7 +22,7 @@ ejecutable `~/.local/bin/ratifact`; después de cada integración en main: `uv t
 | Subcomando | Qué hace |
 |---|---|
 | `ratifact serve` | Servidor MCP por stdio (lo que lanzan los clientes). `servidor.py` es un envoltorio de esto hasta 1.1. |
-| `ratifact install [--apply] [--client NOMBRE]` | Configura los clientes MCP que encuentra (Claude Desktop, Claude Code, Pi, Codex (experimental)) y enlaza `/run-task` (sección 1). Sin `--apply` solo muestra el plan. |
+| `ratifact install [--apply] [--client NOMBRE]` | Configura los clientes MCP que encuentra (Claude Desktop, Claude Code, Pi, Codex) y enlaza `/run-task` (sección 1). Sin `--apply` solo muestra el plan. |
 | `ratifact report [--days N] [--project P] [--log RUTA]` | Resumen del uso (sección 7). `analizar_uso.py` es un envoltorio hasta 1.1 (acepta `--dias`/`--proyecto`). |
 | `ratifact doctor` | Solo lectura: versión y de dónde corre (instalación fija o copia de trabajo, con aviso), configuración usada y grafía de sus claves, por proyecto código, memoria (ruta, esquema, `.memorias/` viejo o `.ratifact/` nuevo, estado git) e integraciones detectadas, log, variables `MEMORIA_PROYECTOS_*` y acciones pendientes, el estado de cada cliente (configurado con ratifact / configuración vieja / sin configurar / no encontrado), el build, si la fuente local es más nueva que la instalación y los procesos `ratifact serve` vivos, marcando los anteriores a la instalación. Sale con 0 si no hay nada pendiente, 1 si hay acciones. Si no existe la configuración por defecto pero hay servidores corriendo con `RATIFACT_CONFIG`/`MEMORIA_PROYECTOS_CONFIG` o un `projects.json` junto al repositorio de origen, sugiere el comando exacto (`RATIFACT_CONFIG=<ruta> ratifact upgrade`). |
 | `ratifact upgrade` | Paso explícito, con todos los clientes cerrados. Sin opciones solo muestra el plan; `--apply` lo ejecuta: migra a v2 las memorias v1, mueve `<base>/.memorias/<p>` a `<base>/.ratifact/<p>` (las rutas propias nunca se mueven), escribe `~/.config/ratifact/projects.json` con claves en inglés y renombra el viejo a `projects.json.bak-v1`, regenera las vistas y copia el log viejo. Aborta si hay un servidor corriendo con esa configuración, un `.lock` tomado o una memoria con cambios sin commit (cabecera "Aborted — nothing was changed:", el plan y los motivos; código de salida 1); idempotente; si un paso falla, lo revierte. |
@@ -38,7 +38,7 @@ ratifact install --apply    # lo hace, con respaldo de cada archivo
 
 Configura los clientes que encuentra: Claude Desktop (`~/.config/Claude/claude_desktop_config.json`; en macOS
 `~/Library/Application Support/Claude/claude_desktop_config.json`), Claude Code (`claude mcp add --scope user` si existe
-el comando `claude`; si no, `~/.claude.json`), Pi (`~/.pi/agent/mcp.json`) y Codex, experimental (`~/.codex/config.toml`). Cada uno
+el comando `claude`; si no, `~/.claude.json`), Pi (`~/.pi/agent/mcp.json`) y Codex (`~/.codex/config.toml`). Cada uno
 queda con el servidor `ratifact`, comando = ruta absoluta del ejecutable instalado, `args ["serve"]` y sin variables de
 entorno; el resto del archivo (otros MCP, preferencias) queda idéntico. Antes de escribir guarda
 `<archivo>.bak-ratifact-<fecha>` junto al archivo (los archivos dentro de un proyecto —`CLAUDE.md`, `AGENTS.md`,
@@ -46,8 +46,8 @@ entorno; el resto del archivo (otros MCP, preferencias) queda idéntico. Antes d
 repositorio; un archivo que no se reescribe no tiene respaldo), valida el resultado volviéndolo a parsear y reemplaza el original de forma atómica; un
 archivo inválido (p. ej. una coma de más en el JSON) se informa y no se toca. Un cliente no instalado se informa y se
 salta; `--client claude-desktop|claude-code|pi|codex` limita a uno. Un segundo `--apply` no cambia nada y lo dice.
-Codex es experimental: `ratifact install` lo configura y las herramientas MCP responden, pero aún no se ha
-validado una ejecución completa de `/run-task` (`$run-task` en Codex).
+La ejecución completa de `/run-task` (`$run-task` en Codex) está validada con Codex CLI; vea "Limitaciones conocidas en
+Codex" (sección 14).
 
 Además: reemplaza la entrada vieja `memoria-proyectos` (nunca quedan las dos), renombra los permisos de Claude Code
 `mcp__memoria-proyectos__<herramienta>` → `mcp__ratifact__<herramienta>` (en `~/.claude/settings.json` y en el
@@ -128,6 +128,13 @@ cliente que no permite elegir el modelo de sub-agentes lo ignora, y los roles si
 configuración la respuesta no cambia. Un `settings.json` inválido no rompe ninguna herramienta (se ignora con un
 aviso en ese bloque) y `ratifact doctor` lo reporta sin modificarlo; doctor muestra además los modelos efectivos de
 cada proyecto (o `models: session default`).
+
+Los modelos de `settings.json` son un único valor para todos los clientes. En un cliente que no ofrece esos modelos
+(por ejemplo Codex, cuando son alias de otro cliente), los roles corren en el modelo de la sesión. Una tarea guarda dos
+cosas distintas: su campo `routing` guarda lo pedido y la línea Workers guarda lo que realmente se usó. Cuando todos
+los roles corren en el mismo modelo no hay verificación en un modelo distinto, así que no se cumple la verificación de
+respaldo en otro modelo; en Codex ese fue el caso observado. ratifact no avisa de esto en tiempo de ejecución.
+
 No cubre renombrar un proyecto ni mover la ubicación de su memoria (`.ratifact/<nombre>` o la clave `"memoria"`):
 para eso edite `projects.json` a mano y mueva la carpeta con `git mv`/`mv` según corresponda.
 
@@ -406,9 +413,11 @@ Para desarrolladores: un cambio de formato sube `VERSION_ESQUEMA` y agrega la fu
 (con los mismos resguardos: repo limpio, tag `pre-vN`, un commit y vuelta atrás), con su prueba en
 `tests/test_esquema.py`; la de v2 está en `ratifact/migracion_v2.py` y `tests/test_migracion_v2.py`.
 
-## 14. Codex, experimental (CLI, extensión de IDE y app de escritorio)
+## 14. Codex (CLI, extensión de IDE y app de escritorio)
 
-Las tres comparten `~/.codex/config.toml`; lo configura `ratifact install --apply` (sección 1) con una edición acotada:
+Las tres comparten `~/.codex/config.toml`. La ejecución completa de `/run-task` está validada con Codex CLI; no se
+validó en la extensión de IDE ni en la app de escritorio. Lo configura `ratifact install --apply` (sección 1) con una
+edición acotada:
 solo reescribe las tablas `[mcp_servers.memoria-proyectos]`/`[mcp_servers.ratifact]` y sus subtablas (borra la `.env`,
 renombra las `.tools.<herramienta>` con su `approval_mode`) y deja el resto del archivo byte por byte. Queda:
 
@@ -426,6 +435,37 @@ Codex eliminó los comandos personalizados (`~/.codex/prompts`) en marzo de 2026
 de forma nativa, pero solo desde la raíz del repo git hacia abajo: en proyectos de varios repos ponga el bloque en la
 carpeta raíz (si abre Codex ahí) y en el `AGENTS.md` de cada repo. Si hay otra memoria de agente instalada (engram),
 el servidor declara en sus instrucciones MCP que ratifact es la fuente de verdad del proyecto.
+
+### Limitaciones conocidas en Codex
+
+**Sandbox.** Codex ejecuta los comandos en un sandbox que restringe la red y la escritura fuera del proyecto. Un
+comando de verificación que descarga dependencias (por ejemplo `uv run --with ...`) puede no arrancar. El síntoma
+típico es un error de resolución de nombres (DNS) hacia el índice de paquetes, o una caché de paquetes en solo
+lectura.
+
+El perfil de permisos con el que corre Codex necesita acceso de red y escritura en la caché del gestor de paquetes.
+Ejemplo para `~/.codex/config.toml` (comprobado con Codex CLI 0.169; los nombres de las claves pueden cambiar entre
+versiones), donde la entrada de `filesystem` es la ruta absoluta de la caché de su gestor de paquetes (escríbala
+absoluta, sin `~`), aquí la de uv:
+
+```toml
+[permissions.<profile>.network]
+enabled = true
+
+[permissions.<profile>.filesystem]
+"/home/<user>/.cache/uv" = "write"
+```
+
+`codex sandbox <comando>` ejecuta un comando dentro del sandbox, y con `-c` se prueba un cambio de permisos antes de
+aplicarlo. Activar la red la abre por completo en esa configuración: una lista de dominios permitidos no la limitó en
+la comprobación. No se recomienda desactivar el sandbox como configuración general.
+
+Un proyecto cuyas pruebas usan Docker o Testcontainers necesita además acceso al socket de Docker. Permitirlo equivale
+a control total sobre el daemon de Docker. Esa combinación con el sandbox activo no ha sido comprobada por el
+proyecto.
+
+**Modelos por rol.** Los modelos de `settings.json` son un único valor para todos los clientes, y un cliente que no
+los ofrece corre los roles en el modelo de la sesión (vea "Modelos por rol" en la sección 4).
 
 ## 15. Idempotencia de creación
 
@@ -462,7 +502,7 @@ vive en `ratifact/`; ningún módulo supera 300 líneas y no hay importaciones c
 |---|---|
 | `ratifact/cli.py` | Comando `ratifact` (`serve`, `install`, `report`, `doctor`, `upgrade`, `--version`); `servidor()` carga herramientas y prompts. |
 | `ratifact/instalar.py`, `ratifact/instalar_extras.py` | `ratifact install`: plan y ejecución; permisos de Claude Code, bloque de CLAUDE.md/AGENTS.md y enlaces de `/run-task`. |
-| `ratifact/clientes.py`, `ratifact/clientes_toml.py` | Clientes MCP (Claude Desktop, Claude Code, Pi, Codex experimental): detección, estado (también para doctor) y edición de su configuración; la de Codex es una edición acotada del TOML. |
+| `ratifact/clientes.py`, `ratifact/clientes_toml.py` | Clientes MCP (Claude Desktop, Claude Code, Pi, Codex): detección, estado (también para doctor) y edición de su configuración; la de Codex es una edición acotada del TOML. |
 | `ratifact/archivos.py` | Escritura segura de archivos de otros programas: validación, respaldo `.bak-ratifact-<fecha>` y reemplazo atómico. |
 | `ratifact/skills/` | Skill `run-task`, incluida en el paquete. |
 | `ratifact/rutas.py` | Rutas sin projects.json: configuración nueva/vieja, log por defecto (XDG), copia de trabajo o instalación fija y repositorio de origen. |

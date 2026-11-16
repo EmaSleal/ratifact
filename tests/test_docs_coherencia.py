@@ -147,7 +147,7 @@ def test_descripciones_del_contrato_sin_ids_del_historial():
     assert not ofensores, ofensores
 
 
-# ── Codex figura como cliente experimental ──
+# ── Codex figura como cliente soportado (sin marca experimental) ──
 # Una enumeración de clientes soportados es una línea que nombra a Codex junto a Pi, con "client(es)" y Claude Desktop
 # en ella o en las dos anteriores (la lista puede partirse en varias líneas), o la fila de Codex de una tabla; las
 # listas de "reinicie los clientes" no declaran soporte y se excluyen.
@@ -169,17 +169,63 @@ def _enumeraciones_de_clientes(texto: str):
         yield n + 1, linea
 
 
-@pytest.mark.parametrize("nombre", ["README.md", "LEEME.md"])
-def test_codex_figura_como_experimental(nombre):
-    enumeraciones = list(_enumeraciones_de_clientes(_leer(RAIZ / nombre)))
-    assert enumeraciones, nombre
-    sin_marca = [f"{nombre}:{n}" for n, linea in enumeraciones if "experimental" not in linea]
-    assert not sin_marca, sin_marca
+def _seccion(texto: str, encabezado: str) -> str:
+    """Cuerpo de la sección que empieza en `encabezado` hasta el siguiente encabezado del mismo nivel o superior."""
+    lineas = texto.splitlines()
+    nivel = len(encabezado) - len(encabezado.lstrip("#"))
+    inicio = next((n for n, l in enumerate(lineas) if l.strip() == encabezado), None)
+    assert inicio is not None, encabezado
+    cuerpo = []
+    for linea in lineas[inicio + 1:]:
+        m = re.match(r"(#+) ", linea)
+        if m and len(m.group(1)) <= nivel:
+            break
+        cuerpo.append(linea)
+    return "\n".join(cuerpo)
+
+
+LIMITACIONES = {"README.md": "### Known limitations on Codex", "LEEME.md": "### Limitaciones conocidas en Codex"}
+ENRUTAMIENTO = {"README.md": "## Model routing", "LEEME.md": "### Modelos por rol (`settings.json`)"}
 
 
 @pytest.mark.parametrize("nombre", ["README.md", "LEEME.md"])
-def test_explica_que_significa_experimental(nombre):
+def test_codex_figura_como_cliente_soportado(nombre):
     texto = _leer(RAIZ / nombre)
-    assert "ratifact install" in texto and "$run-task" in texto
-    assert re.search(r"Codex es experimental|Codex is experimental", texto), nombre
-    assert re.search(r"experimental.{0,250}?(?:validated|validado)", texto, re.S), nombre
+    enumeraciones = list(_enumeraciones_de_clientes(texto))
+    assert enumeraciones, nombre
+    assert not [f"{nombre}:{n}" for n, l in enumeraciones if "experimental" in l.lower()]
+    con_marca = [f"{nombre}:{n}" for n, l in enumerate(texto.splitlines(), 1)
+                 if "Codex" in l and "experimental" in l.lower()]
+    assert not con_marca, con_marca
+    assert not re.search(r"Codex es experimental|Codex is experimental", texto), nombre
+    assert re.search(r"(?:validated with Codex CLI|validada con Codex CLI)", texto), nombre
+    assert not re.search(r"validated on Codex|validada en Codex", texto), nombre
+
+
+CODEX = {"README.md": "## Codex", "LEEME.md": "## 14. Codex (CLI, extensión de IDE y app de escritorio)"}
+
+
+@pytest.mark.parametrize("nombre", ["README.md", "LEEME.md"])
+def test_codex_validacion_con_codex_cli_y_ruta_absoluta(nombre):
+    texto = _leer(RAIZ / nombre)
+    assert re.search(r"(?:validated with Codex CLI|validada con Codex CLI)", _seccion(texto, CODEX[nombre])), nombre
+    bloques = re.findall(r"```toml\n(.*?)```", _seccion(texto, LIMITACIONES[nombre]), re.S)
+    assert bloques, nombre
+    for bloque in bloques:
+        assert "~" not in bloque, (nombre, bloque)
+
+
+@pytest.mark.parametrize("nombre", ["README.md", "LEEME.md"])
+def test_seccion_de_limitaciones_de_codex(nombre):
+    cuerpo = _seccion(_leer(RAIZ / nombre), LIMITACIONES[nombre])
+    for esperado in ("sandbox", "codex sandbox", "<profile>", "Docker", "0.169"):
+        assert esperado in cuerpo, (nombre, esperado)
+    assert re.search(r"network|red\b", cuerpo), nombre
+    assert "socket" in cuerpo, nombre
+
+
+@pytest.mark.parametrize("nombre", ["README.md", "LEEME.md"])
+def test_seccion_de_enrutamiento_explica_modelo_de_sesion(nombre):
+    cuerpo = _seccion(_leer(RAIZ / nombre), ENRUTAMIENTO[nombre])
+    assert re.search(r"session's model|modelo de la sesión", cuerpo), nombre
+    assert "`routing`" in cuerpo and "Workers" in cuerpo, nombre
