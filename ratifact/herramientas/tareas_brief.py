@@ -158,19 +158,30 @@ def _decisiones_vigentes(mem, lineas: list[str]) -> list[str]:
     if inicio is None:
         return salida
     fin = next((i for i in range(inicio + 1, len(salida)) if salida[i].startswith("## ")), len(salida))
-    ids = [parte.strip() for parte in ",".join(salida[inicio + 1:fin]).split(",") if parte.strip()]
-    if not ids:
+    primera = next((i for i in range(inicio + 1, fin) if salida[i].strip()), None)
+    if primera is None:
         return salida
-    actuales = []
+    ultima = next(i for i in range(fin - 1, primera - 1, -1) if salida[i].strip())
+    ids = [parte.strip() for parte in "\n".join(salida[primera:ultima + 1]).split(",")]
+    normalizados = []
     for id_ in ids:
+        try:
+            normalizado = _normalizar_id(id_)
+        except ErrorMemoria:
+            return salida
+        if not re.fullmatch(r"ADR-\d+", normalizado):
+            return salida
+        normalizados.append(normalizado)
+    actuales = []
+    for id_ in normalizados:
         try:
             ruta = _buscar_registro(mem / DECISIONES, id_)
         except ErrorMemoria:
             actuales.append(f"{id_} (missing)")
             continue
         meta, _ = _leer_registro(ruta)
-        actuales.append(f"{_normalizar_id(id_)} ({meta.get('status', 'unknown')})")
-    return salida[:inicio + 1] + [", ".join(actuales)] + salida[fin:]
+        actuales.append(f"{id_} ({meta.get('status', 'unknown')})")
+    return salida[:primera] + [", ".join(actuales)] + salida[ultima + 1:]
 
 
 @herramienta

@@ -64,11 +64,41 @@ def test_get_context_five_old_proposals_recommends_only_three_and_no_proposals_o
 def test_get_context_names_all_old_proposals_when_fewer_than_batch_limit(srv, proyecto, monkeypatch):
     monkeypatch.setattr(registros, "_ahora", lambda: dt.datetime(2026, 11, 15, 12))
     _adr(proyecto["mem"], "ADR-001", date="2026-11-01")
-    _adr(proyecto["mem"], "ADR-002", date="2026-11-02")
 
     salida = srv.get_context(project="demo")
 
-    assert "Offer the user to decide the 1 oldest proposals: ADR-001" in salida
+    assert "Offer the user to decide the oldest proposal: ADR-001" in salida
+
+
+def test_get_context_uses_plural_for_two_old_proposals(srv, proyecto, monkeypatch):
+    monkeypatch.setattr(registros, "_ahora", lambda: dt.datetime(2026, 11, 15, 12))
+    _adr(proyecto["mem"], "ADR-001", date="2026-10-31")
+    _adr(proyecto["mem"], "ADR-002", date="2026-11-01")
+
+    salida = srv.get_context(project="demo")
+
+    assert "Offer the user to decide the 2 oldest proposals: ADR-001, ADR-002" in salida
+
+
+def test_get_context_uses_plural_for_three_old_proposals(srv, proyecto, monkeypatch):
+    monkeypatch.setattr(registros, "_ahora", lambda: dt.datetime(2026, 11, 15, 12))
+    for n in range(1, 4):
+        _adr(proyecto["mem"], f"ADR-{n:03}", date=f"2026-10-{n:02}")
+
+    salida = srv.get_context(project="demo")
+
+    assert "Offer the user to decide the 3 oldest proposals: ADR-001, ADR-002, ADR-003" in salida
+
+
+def test_get_context_future_proposal_has_no_age_or_old_proposal_notice(srv, proyecto, monkeypatch):
+    monkeypatch.setattr(registros, "_ahora", lambda: dt.datetime(2026, 11, 15, 12))
+    _adr(proyecto["mem"], "ADR-001", date="2026-11-18")
+
+    salida = srv.get_context(project="demo")
+
+    assert "Proposed decisions awaiting the user's acceptance: ADR-001" in salida
+    assert "ADR-001 (-3 d)" not in salida
+    assert "Offer the user to decide" not in salida
 
 
 def test_create_task_warns_for_each_nonaccepted_decision_but_keeps_stored_format(srv, proyecto):
@@ -128,3 +158,38 @@ def test_read_task_marks_missing_decision_and_handles_absent_section(srv, proyec
 
     srv.create_task(project="demo", title="No decisions", goal="g", acceptance_criteria="- c")
     assert "Applicable decisions" not in srv.read_task(project="demo", id="T-002")
+
+
+def test_read_task_preserves_applicable_decisions_block_spacing(srv, proyecto):
+    _adr(proyecto["mem"], "ADR-001", status="accepted")
+    srv.create_task(project="demo", title="With decision", goal="g", acceptance_criteria="- c",
+                    decisions="ADR-001")
+
+    brief = srv.read_task(project="demo", id="T-001")
+
+    assert "## Applicable decisions\n\nADR-001 (accepted)\n\n## How to verify" in brief
+
+
+def test_read_task_preserves_applicable_decisions_with_free_text(srv, proyecto):
+    _adr(proyecto["mem"], "ADR-001", status="accepted")
+    srv.create_task(project="demo", title="With decision", goal="g", acceptance_criteria="- c",
+                    decisions="ADR-001")
+    task = next((proyecto["mem"] / "tasks").glob("T-*.md"))
+    task.write_text(task.read_text().replace("ADR-001\n", "ADR-001, note for reviewer\n"), encoding="utf-8")
+
+    brief = srv.read_task(project="demo", id="T-001")
+
+    assert "## Applicable decisions\n\nADR-001, note for reviewer\n\n## How to verify" in brief
+    assert "note for reviewer (missing)" not in brief
+
+
+def test_read_task_marks_only_valid_missing_decision_ids(srv, proyecto):
+    _adr(proyecto["mem"], "ADR-001", status="accepted")
+    srv.create_task(project="demo", title="With decisions", goal="g", acceptance_criteria="- c",
+                    decisions="ADR-001")
+    task = next((proyecto["mem"] / "tasks").glob("T-*.md"))
+    task.write_text(task.read_text().replace("ADR-001\n", "ADR-001, ADR-999\n"), encoding="utf-8")
+
+    brief = srv.read_task(project="demo", id="T-001")
+
+    assert "## Applicable decisions\n\nADR-001 (accepted), ADR-999 (missing)\n\n## How to verify" in brief

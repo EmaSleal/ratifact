@@ -37,7 +37,7 @@ def _linea_propuestas(mem: Path) -> str:
     hoy = _registros._ahora().date()
     elementos, antiguas = [], []
     for id_, fecha in propuestas:
-        if fecha is None:
+        if fecha is None or fecha > hoy:
             elementos.append(id_)
             continue
         dias = (hoy - fecha).days
@@ -48,7 +48,10 @@ def _linea_propuestas(mem: Path) -> str:
     if antiguas:
         lote = ", ".join(antiguas[:MAX_PROPUESTAS_ANTIGUAS_A_DECIDIR])
         cantidad = len(antiguas[:MAX_PROPUESTAS_ANTIGUAS_A_DECIDIR])
-        linea += f"\nOffer the user to decide the {cantidad} oldest proposals: {lote}"
+        if cantidad == 1:
+            linea += f"\nOffer the user to decide the oldest proposal: {lote}"
+        else:
+            linea += f"\nOffer the user to decide the {cantidad} oldest proposals: {lote}"
     return linea
 
 
