@@ -3,9 +3,8 @@
 A local [MCP](https://modelcontextprotocol.io) server that turns each repository into the persistent memory of its
 project. Decisions (ADRs), open items, code tasks and session logs live as Markdown files in a git repository of their
 own, outside the code repository, so no branch or checkout ever changes them. Any MCP client (Claude Desktop, Claude
-Code, Pi, Codex (experimental)) reads and writes the same memory through 28 tools. Codex is experimental: `ratifact
-install` configures it and the MCP tools answer, but a full `/run-task` run (`$run-task` in Codex) has not been
-validated yet.
+Code, Pi, Codex) reads and writes the same memory through 28 tools. A full `/run-task` run (`$run-task` in Codex) is
+validated on Codex; see [Known limitations on Codex](#known-limitations-on-codex).
 
 - **Decisions are ratified, not assumed.** Every decision is recorded as `proposed`; it only becomes `accepted` through
   `accept_decision`, with the user's literal words, and the client asks the user to approve that call.
@@ -32,7 +31,7 @@ ratifact install --apply      # does it, with a backup of every file it touches
 | Claude Desktop | `~/.config/Claude/claude_desktop_config.json` (macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`) |
 | Claude Code | `claude mcp add --scope user` (or `~/.claude.json` if the `claude` command is not installed) |
 | Pi | `~/.pi/agent/mcp.json` |
-| Codex (experimental) | `~/.codex/config.toml` |
+| Codex | `~/.codex/config.toml` |
 
 Each one ends with a server named `ratifact` that runs `<absolute path>/ratifact serve`, with no environment variables.
 Other servers and settings are kept identical. Before writing, the file is backed up as `<file>.bak-ratifact-<date>`
@@ -81,6 +80,39 @@ plan says to remove it by hand. The links point inside the installed package; if
 `uv tool install --reinstall` with another Python version), `ratifact doctor` reports the links as pending and
 `ratifact install --apply` fixes them.
 
+## Codex
+
+Codex (CLI, IDE extension and desktop app) is a supported client: `ratifact install --apply` configures
+`~/.codex/config.toml`, and `/run-task` runs there as `$run-task T-001`. It has two known limitations.
+
+### Known limitations on Codex
+
+**Sandbox.** Codex runs commands in a sandbox that restricts the network and writes outside the project. A
+verification command that downloads dependencies (for example `uv run --with ...`) may fail to start. The typical
+symptom is a name-resolution (DNS) error toward the package index, or a read-only package cache.
+
+The permission profile Codex runs with needs network access and write access to the package manager's cache. Example
+for `~/.codex/config.toml` (checked with Codex CLI 0.169; key names may change between versions), where the filesystem
+entry is the path of your package manager's cache, here uv's:
+
+```toml
+[permissions.<profile>.network]
+enabled = true
+
+[permissions.<profile>.filesystem]
+"~/.cache/uv" = "write"
+```
+
+`codex sandbox <command>` runs a command inside the sandbox, and `-c` lets you try a permission change before applying
+it. Enabling the network opens it completely in that configuration: a domain allow-list did not restrict it in the
+check. Disabling the sandbox is not recommended as a general setup.
+
+A project whose tests use Docker or Testcontainers also needs access to the Docker socket. Allowing it amounts to full
+control over the Docker daemon. That combination with the sandbox on has not been checked by this project.
+
+**Models per role.** The models in `settings.json` are a single value for all clients, and a client that does not
+offer them runs the roles on the session's model. See [Model routing](#model-routing).
+
 ## Commands
 
 | Command | What it does |
@@ -120,6 +152,12 @@ Per-project exceptions: `update_project("my-app", models="explore=haiku,write=so
 project's entry of `projects.json`; they win role by role and the other roles inherit the global value.
 `models="write=inherit"` removes the project's exception for that role. Unknown roles and empty values are rejected
 with the list of valid roles. Model names are free text for your client (aliases or full ids).
+
+The models in `settings.json` are a single value for all clients. In a client that does not offer those models (for
+example Codex, when they are another client's aliases), the roles run on the session's model. A task records two
+different things: its `routing` field stores what was requested, and the Workers line stores what was actually used.
+When all roles run on the same model there is no verification on a different model, so the backup verification on
+another model is not met; on Codex that was the observed case. ratifact does not warn about this at run time.
 
 When at least one role is set, `update_task(..., "in_progress")` adds a "Model routing" block (each role, its model
 and whether it comes from `global` or `project`): it is your explicit request to set that model when the agent
