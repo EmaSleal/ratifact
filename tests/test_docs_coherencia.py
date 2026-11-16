@@ -198,7 +198,21 @@ def test_codex_figura_como_cliente_soportado(nombre):
                  if "Codex" in l and "experimental" in l.lower()]
     assert not con_marca, con_marca
     assert not re.search(r"Codex es experimental|Codex is experimental", texto), nombre
-    assert re.search(r"(?:validated on Codex|validada en Codex)", texto), nombre
+    assert re.search(r"(?:validated with Codex CLI|validada con Codex CLI)", texto), nombre
+    assert not re.search(r"validated on Codex|validada en Codex", texto), nombre
+
+
+CODEX = {"README.md": "## Codex", "LEEME.md": "## 14. Codex (CLI, extensión de IDE y app de escritorio)"}
+
+
+@pytest.mark.parametrize("nombre", ["README.md", "LEEME.md"])
+def test_codex_validacion_con_codex_cli_y_ruta_absoluta(nombre):
+    texto = _leer(RAIZ / nombre)
+    assert re.search(r"(?:validated with Codex CLI|validada con Codex CLI)", _seccion(texto, CODEX[nombre])), nombre
+    bloques = re.findall(r"```toml\n(.*?)```", _seccion(texto, LIMITACIONES[nombre]), re.S)
+    assert bloques, nombre
+    for bloque in bloques:
+        assert "~" not in bloque, (nombre, bloque)
 
 
 @pytest.mark.parametrize("nombre", ["README.md", "LEEME.md"])

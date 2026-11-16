@@ -46,7 +46,7 @@ entorno; el resto del archivo (otros MCP, preferencias) queda idéntico. Antes d
 repositorio; un archivo que no se reescribe no tiene respaldo), valida el resultado volviéndolo a parsear y reemplaza el original de forma atómica; un
 archivo inválido (p. ej. una coma de más en el JSON) se informa y no se toca. Un cliente no instalado se informa y se
 salta; `--client claude-desktop|claude-code|pi|codex` limita a uno. Un segundo `--apply` no cambia nada y lo dice.
-La ejecución completa de `/run-task` (`$run-task` en Codex) está validada en Codex; vea "Limitaciones conocidas en
+La ejecución completa de `/run-task` (`$run-task` en Codex) está validada con Codex CLI; vea "Limitaciones conocidas en
 Codex" (sección 14).
 
 Además: reemplaza la entrada vieja `memoria-proyectos` (nunca quedan las dos), renombra los permisos de Claude Code
@@ -415,7 +415,9 @@ Para desarrolladores: un cambio de formato sube `VERSION_ESQUEMA` y agrega la fu
 
 ## 14. Codex (CLI, extensión de IDE y app de escritorio)
 
-Las tres comparten `~/.codex/config.toml`; lo configura `ratifact install --apply` (sección 1) con una edición acotada:
+Las tres comparten `~/.codex/config.toml`. La ejecución completa de `/run-task` está validada con Codex CLI; no se
+validó en la extensión de IDE ni en la app de escritorio. Lo configura `ratifact install --apply` (sección 1) con una
+edición acotada:
 solo reescribe las tablas `[mcp_servers.memoria-proyectos]`/`[mcp_servers.ratifact]` y sus subtablas (borra la `.env`,
 renombra las `.tools.<herramienta>` con su `approval_mode`) y deja el resto del archivo byte por byte. Queda:
 
@@ -443,14 +445,15 @@ lectura.
 
 El perfil de permisos con el que corre Codex necesita acceso de red y escritura en la caché del gestor de paquetes.
 Ejemplo para `~/.codex/config.toml` (comprobado con Codex CLI 0.169; los nombres de las claves pueden cambiar entre
-versiones), donde la entrada de `filesystem` es la ruta de la caché de su gestor de paquetes, aquí la de uv:
+versiones), donde la entrada de `filesystem` es la ruta absoluta de la caché de su gestor de paquetes (escríbala
+absoluta, sin `~`), aquí la de uv:
 
 ```toml
 [permissions.<profile>.network]
 enabled = true
 
 [permissions.<profile>.filesystem]
-"~/.cache/uv" = "write"
+"/home/<user>/.cache/uv" = "write"
 ```
 
 `codex sandbox <comando>` ejecuta un comando dentro del sandbox, y con `-c` se prueba un cambio de permisos antes de

@@ -4,7 +4,7 @@ A local [MCP](https://modelcontextprotocol.io) server that turns each repository
 project. Decisions (ADRs), open items, code tasks and session logs live as Markdown files in a git repository of their
 own, outside the code repository, so no branch or checkout ever changes them. Any MCP client (Claude Desktop, Claude
 Code, Pi, Codex) reads and writes the same memory through 28 tools. A full `/run-task` run (`$run-task` in Codex) is
-validated on Codex; see [Known limitations on Codex](#known-limitations-on-codex).
+validated with Codex CLI; see [Known limitations on Codex](#known-limitations-on-codex).
 
 - **Decisions are ratified, not assumed.** Every decision is recorded as `proposed`; it only becomes `accepted` through
   `accept_decision`, with the user's literal words, and the client asks the user to approve that call.
@@ -83,7 +83,9 @@ plan says to remove it by hand. The links point inside the installed package; if
 ## Codex
 
 Codex (CLI, IDE extension and desktop app) is a supported client: `ratifact install --apply` configures
-`~/.codex/config.toml`, and `/run-task` runs there as `$run-task T-001`. It has two known limitations.
+`~/.codex/config.toml`, and `/run-task` runs there as `$run-task T-001`. A full `/run-task` run was
+validated with Codex CLI, not in the IDE extension or the desktop app, which share the same configuration. It has
+two known limitations.
 
 ### Known limitations on Codex
 
@@ -93,14 +95,14 @@ symptom is a name-resolution (DNS) error toward the package index, or a read-onl
 
 The permission profile Codex runs with needs network access and write access to the package manager's cache. Example
 for `~/.codex/config.toml` (checked with Codex CLI 0.169; key names may change between versions), where the filesystem
-entry is the path of your package manager's cache, here uv's:
+entry is the absolute path of your package manager's cache (write it absolute, not with `~`), here uv's:
 
 ```toml
 [permissions.<profile>.network]
 enabled = true
 
 [permissions.<profile>.filesystem]
-"~/.cache/uv" = "write"
+"/home/<user>/.cache/uv" = "write"
 ```
 
 `codex sandbox <command>` runs a command inside the sandbox, and `-c` lets you try a permission change before applying
