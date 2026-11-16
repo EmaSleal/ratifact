@@ -77,7 +77,8 @@ def test_obtener_contexto_lista_propuestas_en_orden_numerico(srv, proyecto):
     _adr(proyecto["mem"], "ADR-101")
     salida = srv.get_context(project="demo")
     linea = next(l for l in salida.splitlines() if l.startswith("Proposed decisions awaiting"))
-    assert linea.endswith(": ADR-101, ADR-1000"), linea
+    assert linea.startswith("Proposed decisions awaiting the user's acceptance: ADR-101 (")
+    assert ", ADR-1000 (" in linea and linea.index("ADR-101") < linea.index("ADR-1000"), linea
 
 
 # ───────────────────────── ids normalizados al escribir y al mostrar ─────────────────────────

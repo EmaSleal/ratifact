@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 
 from ratifact import build as _build
+from ratifact import registros as _registros
 from ratifact.app import _ejecutar, herramienta
 from ratifact.busqueda import _resultados
 from ratifact.catalogo import _bloque_pendientes, _es_carpeta_de_registros, _linea, _registros_en, _resolver_id
@@ -14,11 +15,12 @@ from ratifact.config import (CARPETAS_IGNORADAS, EXT_TEXTO, LIMITE_INDICE, LIMIT
                              _aviso_alias, _es_repo, _mem, _proyectos, _raiz, _repos, _ruta_segura, _traducir_alias,
                              _valor)
 from ratifact.esquema import _bloqueo, _idioma_contenido, _version_esquema
+from ratifact.herramientas.decisiones_visibilidad import _linea_propuestas
 from ratifact.idioma import linea_contenido
 from ratifact.integraciones import registro as _integraciones
 from ratifact.listado import _listado
-from ratifact.registros import _clave_id, _commit, _escribir_atomico, _leer_registro, _resumen_tareas
-from ratifact.vocabulario import DECISIONES, MODOS_V0
+from ratifact.registros import _commit, _escribir_atomico, _leer_registro, _resumen_tareas
+from ratifact.vocabulario import MODOS_V0
 
 
 # ───────────────────────── herramientas ─────────────────────────
@@ -43,8 +45,6 @@ def list_projects() -> str:
 
 
 UMBRAL_INDICE = 5   # cambios en la memoria tras los cuales INDEX.md se considera desactualizado
-
-
 def _aviso_indice(proyecto: str) -> str:
     """Si INDEX.md quedó atrás respecto de la memoria, lo dice explícitamente al cargar contexto."""
     mem = _mem(proyecto)
@@ -71,6 +71,7 @@ def get_context(project: str) -> str:
     The first line is `ratifact <build>` (version + content hash of the running server). Below it, a ⚠ line when
     this server process is older than the installation on disk (restart the client) or when the local source it was
     installed from is newer than the installation (reinstall).
+    Proposed decisions are listed with their age and oldest items are flagged for a small decision batch.
     At the end, if optional integrations are active (codegraph, gentle-ai, engram…), one line listing them and their
     planning guidance; that guidance is conditional: follow it only if you have their tools."""
     proyecto = project
@@ -89,11 +90,9 @@ def get_context(project: str) -> str:
         indice = mem / "INDEX.md"
         partes.append(indice.read_text(encoding="utf-8") if indice.exists() else "(INDEX.md does not exist)")
         partes.append(_bloque_pendientes(proyecto))     # ADR-026: del catálogo, no abiertas.md
-        propuestas = ["-".join(p.stem.split("-", 2)[:2]) for p in (mem / DECISIONES).glob("ADR-*.md")
-                      if _leer_registro(p)[0].get("status") == "proposed"]
-        if propuestas:
-            partes.append("Proposed decisions awaiting the user's acceptance: "
-                          + ", ".join(sorted(propuestas, key=_clave_id)))
+        linea_propuestas = _linea_propuestas(mem)
+        if linea_propuestas:
+            partes.append(linea_propuestas)
         tareas = _resumen_tareas(proyecto)
         if tareas:
             partes.append("# Active code tasks\n" + "\n".join(tareas))

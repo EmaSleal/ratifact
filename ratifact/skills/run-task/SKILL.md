@@ -22,7 +22,7 @@ The project name in `ratifact` is in this repository's `CLAUDE.md` / `AGENTS.md`
 
    Amendments ("### Amendment N" blocks: **Additional criteria** and **Notes**) are part of the spec: they add to the original criteria.
    If the spec has a `repo` field (multi-repo projects), **everything that follows —git, branches, commands and tests— happens inside that folder**, not at the project root.
-3. Read the decisions listed in "Applicable decisions" (`read_document("<project>", "ADR-NNN")`). Only `accepted` ones are rules.
+3. Read the decisions listed in "Applicable decisions" (`read_document("<project>", "ADR-NNN")`). `read_task` shows each decision's current status; only `accepted` ones are rules.
 4. Check with `git status` that the working tree is clean. If there are uncommitted changes, **stop** and ask me; do not move or discard them.
 5. Branch (the spec's `branch` field). Check whether it already exists with `git branch --list <branch>`:
    - **It exists** (always for `changes_requested`, often for `failed`): `git switch <branch>` and continue on it. Do not recreate it, rebase it or `--amend` earlier commits: corrections go in new commits.

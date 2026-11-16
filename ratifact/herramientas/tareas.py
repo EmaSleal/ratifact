@@ -13,6 +13,7 @@ from ratifact.app import _ejecutar, herramienta
 from ratifact.catalogo import _registros_en
 from ratifact.config import ErrorMemoria, _mem, _proyectos, _repos, _valor
 from ratifact.esquema import _bloqueo, _idioma_contenido
+from ratifact.herramientas.decisiones_visibilidad import _avisos_decisiones
 from ratifact.idioma import bloque_idioma
 from ratifact.integraciones import registro as _integraciones
 from ratifact.registros import (_buscar_registro, _commit, _duplicado_reciente, _escribir_registro, _hoy,
@@ -88,7 +89,8 @@ def create_task(project: str, title: str, goal: str, acceptance_criteria: str, d
     In multi-repo projects, `repo` (required) is the folder where the work happens; in single-repo projects it is
     ignored (the response says so).
     It must be self-contained: the coding agent runs it without this chat. `acceptance_criteria`: a verifiable list
-    (tests that must pass, observable behavior). `decisions`: applicable ADR ids. `files`: paths likely to be
+    (tests that must pass, observable behavior). `decisions`: applicable ADR ids; non-accepted decisions are identified
+    in the response without preventing task creation. `files`: paths likely to be
     touched. The user runs it with /run-task T-NNN.
     `resolves`: pending items the task resolves, comma-separated, each optionally with "(partial)" (e.g.
     "P-036, P-037 (partial)"); they must exist and be open. Stored in the task ("Resolves" section); when the task is
@@ -151,8 +153,10 @@ def create_task(project: str, title: str, goal: str, acceptance_criteria: str, d
             _escribir_registro(ruta, meta, "\n\n".join(secciones))
             sha = _commit(proyecto, [ruta], f"{id_} {titulo} (todo)")
             linea = _integraciones._linea_integraciones(proyecto)
-            return (f"{id_} created · suggested branch {meta['branch']} · commit {sha}\nRun it with: /run-task {id_}"
-                    + nota + (f"\n{linea}" if linea else ""))
+            respuesta = (f"{id_} created · suggested branch {meta['branch']} · commit {sha}\nRun it with: /run-task {id_}"
+                         + nota + (f"\n{linea}" if linea else ""))
+            avisos = _avisos_decisiones(proyecto, decisiones_norm)
+            return respuesta + (f"\n{avisos}" if avisos else "")
     return _ejecutar(f)
 
 
