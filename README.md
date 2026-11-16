@@ -62,7 +62,8 @@ repository of its own), detects the test command and returns two texts to paste:
    ``This repository uses the `ratifact` MCP server with project `my-app`.``
 
 `project_instructions("my-app")` returns them again at any time. The projects folder is `~/Projects` unless
-`RATIFACT_BASE` says otherwise; `RATIFACT_CONFIG` and `RATIFACT_LOG` override the configuration and the usage log.
+`RATIFACT_BASE` says otherwise; `RATIFACT_CONFIG` and `RATIFACT_LOG` override the configuration and the usage log, and
+`RATIFACT_CLAUDE_CODE_TEMP` overrides the Claude Code temporary folder that `ratifact doctor` reviews.
 
 ## /run-task
 
@@ -79,6 +80,11 @@ from main, implements it, runs the project's tests and leaves the task `in_revie
 plan says to remove it by hand. The links point inside the installed package; if a reinstall moves it (for example
 `uv tool install --reinstall` with another Python version), `ratifact doctor` reports the links as pending and
 `ratifact install --apply` fixes them.
+
+Create verification copies with `git archive` from the task branch (versioned files only), never by copying the working
+tree, and never copy production data or database dumps into temporary space. Before reporting `in_review` or `failed`,
+delete only this session's task-created temporary copies and keep the result self-contained, with evidence in the result
+or repository rather than temporary-file references.
 
 ## Codex
 
@@ -121,7 +127,7 @@ offer them runs the roles on the session's model. See [Model routing](#model-rou
 |---|---|
 | `ratifact serve` | The MCP server over stdio (what the clients launch). |
 | `ratifact install [--apply] [--client NAME]` | Configures the MCP clients and links /run-task (plan unless `--apply`). |
-| `ratifact doctor` | Read-only diagnosis: version and where it runs from, configuration, each project's code, memory, schema and git status, integrations, the state of each client (configured with ratifact / old configuration / not configured / not found), the build id, whether a local source is newer than the installation, the running `ratifact serve` processes that started before it (see [Version drift](#version-drift)) and the pending actions. Exit code 1 if something is pending. |
+| `ratifact doctor` | Read-only diagnosis: version and where it runs from, configuration, each project's code, memory, schema and git status, integrations, the state of each client (configured with ratifact / old configuration / not configured / not found), the build id, whether a local source is newer than the installation, the running `ratifact serve` processes that started before it (see [Version drift](#version-drift)), Claude Code temporary-space usage (`/tmp/claude-<uid>/`, overridden by `RATIFACT_CLAUDE_CODE_TEMP`), and pending actions. Exit code 1 if something is pending. |
 | `ratifact upgrade [--apply]` | One-time upgrade from memoria-proyectos (below). |
 | `ratifact report [--days N] [--project P] [--log PATH]` | Usage summary from the local telemetry log (`~/.local/state/ratifact/uso.jsonl`: tool, size, duration and error of each call — never content). |
 | `ratifact --version` | Installed version. |

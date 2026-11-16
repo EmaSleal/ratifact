@@ -6,8 +6,8 @@ Servidor MCP local: comando `ratifact serve` (paquete instalable, sección 0; `s
 Desde la v1 el contrato está en inglés: herramientas, parámetros, descripciones y respuestas
 (`docs/v1-english-naming.md`). Pasos para usuarios existentes después de actualizar: `docs/upgrade-v1.md`.
 
-Variables de entorno: `RATIFACT_CONFIG` (projects.json), `RATIFACT_LOG` (telemetría) y `RATIFACT_BASE` (carpeta de
-proyectos). Las anteriores `MEMORIA_PROYECTOS_*` siguen funcionando como respaldo hasta 1.1 (gana la nueva; el log del
+Variables de entorno: `RATIFACT_CONFIG` (projects.json), `RATIFACT_LOG` (telemetría), `RATIFACT_BASE` (carpeta de
+proyectos) y `RATIFACT_CLAUDE_CODE_TEMP` (carpeta temporal de Claude Code que revisa `ratifact doctor`). Las anteriores `MEMORIA_PROYECTOS_*` siguen funcionando como respaldo hasta 1.1 (gana la nueva; el log del
 servidor avisa una vez por variable). Sin variable, la configuración es `~/.config/ratifact/projects.json` si existe, si
 no `~/.config/memoria-proyectos/projects.json` (no se mueve ni reescribe nada).
 
@@ -24,7 +24,7 @@ ejecutable `~/.local/bin/ratifact`; después de cada integración en main: `uv t
 | `ratifact serve` | Servidor MCP por stdio (lo que lanzan los clientes). `servidor.py` es un envoltorio de esto hasta 1.1. |
 | `ratifact install [--apply] [--client NOMBRE]` | Configura los clientes MCP que encuentra (Claude Desktop, Claude Code, Pi, Codex) y enlaza `/run-task` (sección 1). Sin `--apply` solo muestra el plan. |
 | `ratifact report [--days N] [--project P] [--log RUTA]` | Resumen del uso (sección 7). `analizar_uso.py` es un envoltorio hasta 1.1 (acepta `--dias`/`--proyecto`). |
-| `ratifact doctor` | Solo lectura: versión y de dónde corre (instalación fija o copia de trabajo, con aviso), configuración usada y grafía de sus claves, por proyecto código, memoria (ruta, esquema, `.memorias/` viejo o `.ratifact/` nuevo, estado git) e integraciones detectadas, log, variables `MEMORIA_PROYECTOS_*` y acciones pendientes, el estado de cada cliente (configurado con ratifact / configuración vieja / sin configurar / no encontrado), el build, si la fuente local es más nueva que la instalación y los procesos `ratifact serve` vivos, marcando los anteriores a la instalación. Sale con 0 si no hay nada pendiente, 1 si hay acciones. Si no existe la configuración por defecto pero hay servidores corriendo con `RATIFACT_CONFIG`/`MEMORIA_PROYECTOS_CONFIG` o un `projects.json` junto al repositorio de origen, sugiere el comando exacto (`RATIFACT_CONFIG=<ruta> ratifact upgrade`). |
+| `ratifact doctor` | Solo lectura: versión y de dónde corre (instalación fija o copia de trabajo, con aviso), configuración usada y grafía de sus claves, por proyecto código, memoria (ruta, esquema, `.memorias/` viejo o `.ratifact/` nuevo, estado git) e integraciones detectadas, log, variables `MEMORIA_PROYECTOS_*` y acciones pendientes, el estado de cada cliente (configurado con ratifact / configuración vieja / sin configurar / no encontrado), el build, si la fuente local es más nueva que la instalación, los procesos `ratifact serve` vivos y el espacio temporal de Claude Code (`/tmp/claude-<uid>/`, reemplazado por `RATIFACT_CLAUDE_CODE_TEMP`). Sale con 0 si no hay nada pendiente, 1 si hay acciones. Si no existe la configuración por defecto pero hay servidores corriendo con `RATIFACT_CONFIG`/`MEMORIA_PROYECTOS_CONFIG` o un `projects.json` junto al repositorio de origen, sugiere el comando exacto (`RATIFACT_CONFIG=<ruta> ratifact upgrade`). |
 | `ratifact upgrade` | Paso explícito, con todos los clientes cerrados. Sin opciones solo muestra el plan; `--apply` lo ejecuta: migra a v2 las memorias v1, mueve `<base>/.memorias/<p>` a `<base>/.ratifact/<p>` (las rutas propias nunca se mueven), escribe `~/.config/ratifact/projects.json` con claves en inglés y renombra el viejo a `projects.json.bak-v1`, regenera las vistas y copia el log viejo. Aborta si hay un servidor corriendo con esa configuración, un `.lock` tomado o una memoria con cambios sin commit (cabecera "Aborted — nothing was changed:", el plan y los motivos; código de salida 1); idempotente; si un paso falla, lo revierte. |
 | `ratifact --version` | Versión instalada. |
 
@@ -375,6 +375,8 @@ copia instalada (nunca desde la copia de trabajo), así existe en todos los proy
 
 Un destino que ya existe como archivo o carpeta real (no enlace) nunca se reemplaza: el plan pide borrarlo a mano.
 Si usa gentle-shell independiente, enlace también `~/.gentle-shell/agent/prompts/run-task.md` a la misma fuente.
+
+Las copias de verificación se crean con `git archive` (solo archivos versionados), nunca copiando el árbol ni datos de producción; antes de cerrar se borran solo las copias y datos temporales creados en esta sesión, y el resultado conserva evidencia autocontenida sin citar archivos temporales.
 
 ## 13. Versión de esquema de la memoria
 

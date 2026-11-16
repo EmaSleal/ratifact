@@ -15,6 +15,7 @@ from ratifact.config import ErrorMemoria, _mem, _proyectos, _repos, _valor
 from ratifact.esquema import _bloqueo, _idioma_contenido
 from ratifact.herramientas.decisiones_visibilidad import _avisos_decisiones
 from ratifact.idioma import bloque_idioma
+from ratifact.rutas_temporales import primera_ruta_temporal
 from ratifact.integraciones import registro as _integraciones
 from ratifact.registros import (_buscar_registro, _commit, _duplicado_reciente, _escribir_registro, _hoy,
                                 _ids_resuelve, _leer_registro, _mensaje_duplicado, _normalizar_id, _resumen_tareas,
@@ -189,6 +190,8 @@ def update_task(project: str, id: str, status: str, result: str = "", commit: st
     build and the time of the transition.
     If this server process is older than the installation on disk, 'in_progress' is refused without changing
     anything (restart the client and repeat it); every other status works and carries a warning.
+    With 'in_review' or 'failed', if `result` contains a temporary path (/tmp/, /var/tmp/, /private/tmp/ or a
+    `scratchpad` segment), the response adds a warning to keep the result self-contained; the result is stored unchanged.
     With 'in_review', if the policy was required and `result` has no valid `Workers:` line, the response carries a
     warning with a proposed corrected line when it can derive one (the status changes anyway). If the task is already
     in review and `result` is only a valid `Workers:` line, it replaces that line in the latest result block instead of
@@ -240,6 +243,11 @@ def update_task(project: str, id: str, status: str, result: str = "", commit: st
                 politica = (_delegacion.politica_de_routing(meta.get("routing", ""))
                             or _delegacion.efectiva(entrada, meta)[0])
                 guia = _delegacion.aviso_in_review(politica, resultado)
+            if nuevo in ("in_review", "failed") and not correccion:
+                tmp = primera_ruta_temporal(resultado)
+                aviso = tmp and (f"⚠ The result references temporary path {tmp}; keep the result self-contained "
+                                 "(evidence belongs in the result or repository, not temporary files).")
+                guia = f"{guia}\n{aviso}" if guia and aviso else guia or aviso
             if nuevo == "merged":
                 guia = _recordatorio_resuelve(proyecto, meta.get("resolves", ""))
             nota = ""
