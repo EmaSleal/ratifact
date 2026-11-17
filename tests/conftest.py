@@ -13,6 +13,19 @@ RAIZ_REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ_REPO))
 
 
+@pytest.fixture(autouse=True)
+def git_sin_mantenimiento(monkeypatch):
+    """Ningún git lanzado durante la suite (por las pruebas o por el código de ratifact) corre mantenimiento ni gc
+    automáticos: `git commit` lanza `git maintenance run --auto` desacoplado, que toma y suelta
+    objects/maintenance.lock y hace inestable cualquier comparación del árbol de archivos (P-042). Va por variables
+    de entorno (no por el gitconfig de `entorno`) para cubrir también las pruebas que no lo usan y no depender de
+    GIT_CONFIG_GLOBAL. Pisa un GIT_CONFIG_COUNT previo del entorno del usuario; solo afecta a las pruebas."""
+    for k, v in {"GIT_CONFIG_COUNT": "2",
+                 "GIT_CONFIG_KEY_0": "maintenance.auto", "GIT_CONFIG_VALUE_0": "false",
+                 "GIT_CONFIG_KEY_1": "gc.auto", "GIT_CONFIG_VALUE_1": "0"}.items():
+        monkeypatch.setenv(k, v)
+
+
 @pytest.fixture
 def entorno(tmp_path, monkeypatch):
     """Carpeta de proyectos vacía + variables de entorno que el servidor y git respetan."""
