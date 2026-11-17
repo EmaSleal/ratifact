@@ -38,6 +38,7 @@ The project name in `ratifact` is in this repository's `CLAUDE.md` / `AGENTS.md`
 - Add or adjust tests that cover every verifiable acceptance criterion.
 - If the `in_progress` response brought a **"Delegation"** block, follow it: with `required` it is an instruction (you orchestrate; explore, write and verify workers do the work), with `suggested` it is a suggestion. The task's delegation policy was decided when it was planned; you do not decide whether to delegate.
 - If it brought a **"Model routing"** block, follow it whenever you delegate to a sub-agent: use the model it gives for that role (explore, write, verify). Roles without a model, or a client that cannot choose the model of sub-agents, use the session's model.
+- Every brief you give a worker is self-sufficient: it includes what the worker needs from the spec (goal, acceptance criteria, files, out of scope) and from the applicable decisions, and it says explicitly that the worker must not call ratifact tools (no `get_context`, no `read_task`, no `read_document` on the memory).
 
 ## 3. Verify
 Run the command in the spec's **"How to verify"** section, from the repository root, and keep the summary (pass/fail per suite). If the spec has no command, use the one in `CLAUDE.md` / `AGENTS.md`; if there is none either, ask me before considering the task verified. Go over every acceptance criterion and mark which one is met and how it was verified.

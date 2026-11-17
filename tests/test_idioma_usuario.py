@@ -42,14 +42,27 @@ def _con_idioma(proyecto, codigo):
     ruta.write_text(json.dumps(datos))
 
 
-def test_read_task_e_in_progress_traen_idioma_y_regla(srv, proyecto):
+def test_read_task_trae_idioma_y_regla_corta_e_in_progress_la_completa(srv, proyecto):
     from ratifact import idioma
     _con_idioma(proyecto, "es")
     srv.create_task(project="demo", title="Algo", goal="o", acceptance_criteria="c")
     leida = srv.read_task(project="demo", id="T-001")
     en_curso = srv.update_task(project="demo", id="T-001", status="in_progress")
-    for salida in (leida, en_curso):
-        assert "Content language: es" in salida and idioma.REGLA_IDIOMA in salida
+    assert idioma.linea_contenido("es") in leida and idioma.REGLA_IDIOMA_CORTA in leida
+    assert idioma.REGLA_IDIOMA not in leida and len(idioma.REGLA_IDIOMA_CORTA) <= 250
+    assert "\n" not in idioma.REGLA_IDIOMA_CORTA
+    assert "Content language: es" in en_curso and idioma.REGLA_IDIOMA in en_curso
+
+
+def test_skill_pide_encargos_autosuficientes_sin_llamadas_a_ratifact():
+    texto = SKILL.read_text(encoding="utf-8")
+    assert "self-sufficient" in texto and "must not call ratifact tools" in texto
+
+
+def test_plantilla_de_agentes_dice_que_el_trabajador_no_llama_a_ratifact():
+    from ratifact.plantillas import PLANTILLA_AGENTES, PLANTILLA_AGENTES_V2
+    assert "A worker delegated by `/run-task` does not call `get_context` or `read_task`" in PLANTILLA_AGENTES
+    assert PLANTILLA_AGENTES.startswith(PLANTILLA_AGENTES_V2) and PLANTILLA_AGENTES != PLANTILLA_AGENTES_V2
 
 
 def test_get_context_usa_la_misma_linea(srv, proyecto):

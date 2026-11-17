@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ratifact.archivos import ErrorInstalacion, escribir_validado, leer_json, texto_json, validar_json
-from ratifact.plantillas import PLANTILLA_AGENTES, PLANTILLA_AGENTES_V1
+from ratifact.plantillas import PLANTILLA_AGENTES, PLANTILLA_AGENTES_V1, PLANTILLA_AGENTES_V2
 from ratifact.vocabulario import HERRAMIENTAS_V0
 
 PREFIJO_VIEJO, PREFIJO = "mcp__memoria-proyectos", "mcp__ratifact"
@@ -87,7 +87,9 @@ def planificar_bloques(proyectos: list[tuple[str, Path, list[str]]]) -> tuple[li
     the files that still name the `memoria-proyectos` server in a text written by hand, never edited here)."""
     salida, manuales, vistos = [], [], set()
     for nombre, codigo, repos in proyectos:
-        viejo, nuevo = PLANTILLA_AGENTES_V1.format(proyecto=nombre), PLANTILLA_AGENTES.format(proyecto=nombre)
+        viejos = [v.format(proyecto=nombre) for v in (PLANTILLA_AGENTES_V1, PLANTILLA_AGENTES_V2)]
+        nuevo = PLANTILLA_AGENTES.format(proyecto=nombre)
+        titulo = PLANTILLA_AGENTES.splitlines()[0]
         for carpeta in [codigo, *(codigo / r for r in repos)]:
             for archivo in ARCHIVOS_BLOQUE:
                 ruta = carpeta / archivo
@@ -95,12 +97,18 @@ def planificar_bloques(proyectos: list[tuple[str, Path, list[str]]]) -> tuple[li
                     continue
                 vistos.add(ruta.resolve())
                 texto = ruta.read_text(encoding="utf-8")
-                if viejo in texto:
+                viejo = next((v for v in viejos if v in texto), None) if nuevo not in texto else None
+                if viejo:
                     salida.append(Cambio(ruta.resolve() if ruta.is_symlink() else ruta, texto.replace(viejo, nuevo),
-                                         [f"{nombre}: project block → the `ratifact` MCP server"], en_repo=True))
+                                         [f"{nombre}: project block → the current generated block"], en_repo=True))
+                elif nuevo in texto and "memoria-proyectos" not in texto.replace(nuevo, ""):
+                    continue                           # V2 is a prefix of the current block: never re-replaced
                 elif "memoria-proyectos" in texto.replace(nuevo, ""):      # a project may be named so
                     manuales.append(f"{ruta} mentions `memoria-proyectos` outside the generated block (written by "
                                     f"hand or before v1): replace it with the block of project_instructions(\"{nombre}\")")
+                elif titulo in texto:                  # a generated block edited by hand: reported, never touched
+                    manuales.append(f"{ruta} has the `{titulo}` block edited by hand: compare it with the block of "
+                                    f"project_instructions(\"{nombre}\") and update it manually")
     return salida, manuales
 
 

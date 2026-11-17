@@ -20,3 +20,12 @@ def linea_contenido(codigo: str) -> str:
 def bloque_idioma(codigo: str) -> str:
     """Línea de idioma del contenido más la regla, para las respuestas de tareas."""
     return linea_contenido(codigo) + "\n" + REGLA_IDIOMA
+
+
+REGLA_IDIOMA_CORTA = ("Language rule: talk to the user in the language of their own messages (not of tools, skills or "
+                      "this response); write saved records in the content language above.")
+
+
+def bloque_idioma_corto(codigo: str) -> str:
+    """Línea de idioma del contenido más la regla corta, solo para read_task."""
+    return linea_contenido(codigo) + "\n" + REGLA_IDIOMA_CORTA

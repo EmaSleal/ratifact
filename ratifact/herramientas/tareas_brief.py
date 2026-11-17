@@ -15,7 +15,7 @@ from ratifact.app import _ejecutar, herramienta
 from ratifact.busqueda import _fin_frontmatter
 from ratifact.config import MEM, ErrorMemoria, _mem
 from ratifact.esquema import _bloqueo, _idioma_contenido
-from ratifact.idioma import bloque_idioma
+from ratifact.idioma import bloque_idioma_corto
 from ratifact.registros import (MARCA_DUPLICADO, VENTANA_IDEMPOTENCIA_MINUTOS, _buscar_registro, _commit,
                                 _escribir_registro, _hoy, _leer_registro, _normalizar_id)
 from ratifact.vocabulario import DECISIONES, TAREAS
@@ -202,7 +202,7 @@ def read_task(project: str, id: str) -> str:
                         len(lineas))
         spec = _decisiones_vigentes(_mem(project), lineas[:fin_spec])
         partes = [f"(→ {relativa})\n" + "\n".join(spec).rstrip(),
-                  bloque_idioma(_idioma_contenido(_mem(project)))]
+                  bloque_idioma_corto(_idioma_contenido(_mem(project)))]
         bloques = _bloques(lineas, fin_spec + 1)
         elegido = _relevante(meta.get("status", ""), bloques)
         texto = lambda b: "\n".join(lineas[b[1] - 1:b[2]])   # noqa: E731

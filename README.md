@@ -316,7 +316,7 @@ ratifact doctor               # should end with "Pending actions: none"
 `ratifact install` replaces the `memoria-proyectos` entry with `ratifact` (never both), renames the Claude Code
 permissions `mcp__memoria-proyectos__<tool>` → `mcp__ratifact__<tool>` in `~/.claude/settings.json` and in the
 `.claude/settings.json` of each registered project, moves Codex per-tool approval tables to the new key, and rewrites
-the generated `CLAUDE.md`/`AGENTS.md` block (only that exact text). It lists what it cannot change: Claude Desktop
+the generated `CLAUDE.md`/`AGENTS.md` block (only that exact text, from v1 or from the previous release; a block edited by hand is listed, not touched). It lists what it cannot change: Claude Desktop
 keeps tool approvals per server name, so mark `propose_decision`, `add_pending`, `create_task`, `create_document`,
 `register_project`, `accept_decision` and `accept_decisions` as *requires approval* again. If the default
 configuration does not exist but a server still runs with `MEMORIA_PROYECTOS_CONFIG`, `doctor` and `upgrade` print

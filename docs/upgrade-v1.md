@@ -50,6 +50,7 @@ This repository uses the `ratifact` MCP server with project `<project>`. Before 
 user's confirmation. Code tasks run with `/run-task T-NNN` (in Codex: `$run-task T-NNN`).
 Decisions, pending items and tasks live in `ratifact`; on a contradiction with another memory, the
 accepted decision wins.
+A worker delegated by `/run-task` does not call `get_context` or `read_task`: its brief is its context.
 ```
 
 (Before the `ratifact` server key the block said ``uses the `memoria-proyectos` MCP server (ratifact)``; `ratifact install --apply` rewrites

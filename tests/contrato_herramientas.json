@@ -443,7 +443,7 @@
       "nombre": "propose_decision"
     },
     {
-      "descripcion": "Reads a project text file, optionally a line range (1-based, inclusive).\nAlso accepts a memory record id (\"T-24\", \"tasks/T-024.md\", \"ADR-NNN-slug.md\"): if the path does not exist, it\nreads the real record and prepends the line \"(→ .project/<folder>/<file>)\". A path with a v1 folder\n(.project/tareas/…, .project/acuerdos.md…) is translated and flagged the same way.\nFor a task, read_task returns a working brief (spec, amendments, the latest relevant block) instead.",
+      "descripcion": "Reads a project text file, optionally a line range (1-based, inclusive).\nAlso accepts a memory record id (\"T-24\", \"tasks/T-024.md\", \"ADR-NNN-slug.md\"): if the path does not exist, it\nreads the real record and prepends the line \"(→ .project/<folder>/<file>)\". A path with a v1 folder\n(.project/tareas/…, .project/acuerdos.md…) is translated and flagged the same way.\nA task file read whole (no range) returns the read_task brief (spec, amendments, the latest relevant block)\npreceded by a line saying how to get the full file: call again with an explicit range (from_line=1,\nto_line=<last line>). Any explicit range reads the file as is, and so do all other files.",
       "esquema_entrada": {
         "properties": {
           "from_line": {
