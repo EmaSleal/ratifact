@@ -1,8 +1,8 @@
 """`ratifact doctor` (solo lectura): versión y de dónde corre (instalación fija o copia de trabajo, P-017),
 configuración en uso y grafía de sus claves, estado de cada proyecto (código, memoria, esquema, ubicación por defecto
-vieja/nueva, git, integraciones), log, variables MEMORIA_PROYECTOS_*, estado de cada cliente MCP (T-013) y la lista de
-acciones pendientes. Código de
-salida 0 si no hay nada pendiente, 1 si hay acciones. No escribe nada."""
+vieja/nueva, git, integraciones), log, variables MEMORIA_PROYECTOS_*, estado de cada cliente MCP (T-013), espacio
+temporal de Claude Code y lista de acciones pendientes. Código de salida 0 si no hay nada pendiente, 1 si hay
+acciones. No escribe nada."""
 from __future__ import annotations
 
 import os
@@ -11,6 +11,7 @@ from typing import Callable
 
 from ratifact import __version__, build, delegacion, modelos, procesos, retirado, rutas
 from ratifact import config as _cfg
+from ratifact import doctor_espacio_temporal as _espacio_temporal
 from ratifact.config import _ruta_config
 from ratifact.esquema import VERSION_ESQUEMA
 from ratifact.doctor_plataforma import _es_wsl, _plataforma
@@ -209,9 +210,9 @@ def informe(procesos: Callable[[], list[Proceso]] = procesos_servidor, paquete: 
         sugerencia = mensaje_sugerencia(sugerencias_config(_servidores_vivos(procesos), rutas.origen(paquete)))
         acciones.append(str(e) + (f" Hint: {sugerencia}." if sugerencia else ""))
         return (lineas + _settings(_ruta_config(), acciones) + _log(log_viejo) + _entorno(acciones)
-                + _clientes(acciones, paquete), acciones)
+                + _clientes(acciones, paquete) + _espacio_temporal.seccion(acciones), acciones)
     lineas += (_settings(plan.inst.config, acciones) + _proyectos(plan, acciones) + _log(log_viejo) + _entorno(acciones) + _servidores(plan, _servidores_vivos(procesos), lista)
-               + _clientes(acciones, paquete))
+               + _clientes(acciones, paquete) + _espacio_temporal.seccion(acciones))
     if not plan.vacio:
         pasos = describir(plan)
         acciones.insert(0, "run `ratifact upgrade` to review the plan, then `ratifact upgrade --apply` with every "
