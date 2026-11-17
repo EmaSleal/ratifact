@@ -309,7 +309,7 @@
       "nombre": "init_memory"
     },
     {
-      "descripcion": "Lists files (with size) under a project folder.\nIn .project/decisions, pending and tasks it lists one record per line: \"ID · status · title  (path)\".\nA path with a v1 folder (.project/tareas, decisiones, pendientes, sesiones) is translated and flagged.\nIf the full listing is too large, it is summarized by levels: unexpanded folders with their file count\n(\"module/ (38 files)\"); ask for a more specific `folder` to see the detail.",
+      "descripcion": "Lists files (with size) under a project folder.\nIn .project/decisions, pending and tasks it lists one record per line: \"ID · status · title\" (title cut at 100\ncharacters with \"…\", no path; pass the ID to read_document). Other files in those folders show path and size.\nA path with a v1 folder (.project/tareas, decisiones, pendientes, sesiones) is translated and flagged.\nIf the full listing is too large, it is summarized by levels: unexpanded folders with their file count\n(\"module/ (38 files)\"); ask for a more specific `folder` to see the detail.",
       "esquema_entrada": {
         "properties": {
           "folder": {
