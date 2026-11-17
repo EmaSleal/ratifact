@@ -253,6 +253,45 @@ def test_bloque_actual_de_un_proyecto_llamado_memoria_proyectos_no_es_un_paso_ma
     assert cambios[0].texto == PLANTILLA_AGENTES.format(proyecto="memoria-proyectos") + "\n"
 
 
+def test_bloque_1_0_7_se_reemplaza_y_el_segundo_apply_no_cambia_nada(tmp_path):
+    from ratifact.instalar_extras import planificar_bloques
+    from ratifact.plantillas import PLANTILLA_AGENTES, PLANTILLA_AGENTES_V2
+    ruta = tmp_path / "AGENTS.md"
+    ruta.write_text("# X\n\n" + PLANTILLA_AGENTES_V2.format(proyecto="demo") + "\nTest command: `pytest`\n")
+    cambios, manuales = planificar_bloques([("demo", tmp_path, [])])
+    assert len(cambios) == 1 and not manuales
+    assert cambios[0].texto == "# X\n\n" + PLANTILLA_AGENTES.format(proyecto="demo") + "\nTest command: `pytest`\n"
+    ruta.write_text(cambios[0].texto)
+    assert planificar_bloques([("demo", tmp_path, [])]) == ([], [])          # nothing left to change
+
+
+def test_bloque_generado_editado_a_mano_es_paso_manual_y_no_se_toca(tmp_path):
+    from ratifact.instalar_extras import planificar_bloques
+    from ratifact.plantillas import PLANTILLA_AGENTES_V2
+    texto = PLANTILLA_AGENTES_V2.format(proyecto="demo").replace("Before working", "Antes de trabajar") + "\n"
+    (tmp_path / "AGENTS.md").write_text(texto)
+    cambios, manuales = planificar_bloques([("demo", tmp_path, [])])
+    assert cambios == [] and len(manuales) == 1 and "edited by hand" in manuales[0]
+    assert (tmp_path / "AGENTS.md").read_text() == texto
+
+
+def test_apply_reemplaza_el_bloque_1_0_7_y_no_toca_el_editado(maquina, paquete, capsys):
+    from ratifact.plantillas import PLANTILLA_AGENTES, PLANTILLA_AGENTES_V2
+    v2 = PLANTILLA_AGENTES_V2.format(proyecto="demo")
+    (maquina["repo"] / "AGENTS.md").write_text(f"# Demo\n\n{v2}\n")
+    editado = v2.replace("Before working", "Antes de trabajar").replace("`ratifact`", "`rat`") + "\n"
+    (maquina["otro"] / "AGENTS.md").write_text(editado)
+    falso = ClaudeFalso(maquina["claude_json"])
+    codigo, salida = instalar(capsys, paquete, aplicar=True, claude="/usr/bin/claude", correr=falso)
+    assert codigo == 0, salida
+    assert (maquina["repo"] / "AGENTS.md").read_text() == f"# Demo\n\n{PLANTILLA_AGENTES.format(proyecto='demo')}\n"
+    assert (maquina["otro"] / "AGENTS.md").read_text() == editado
+    assert "edited by hand" in salida
+    despues = (maquina["repo"] / "AGENTS.md").read_bytes()
+    instalar(capsys, paquete, aplicar=True, claude="/usr/bin/claude", correr=falso)
+    assert (maquina["repo"] / "AGENTS.md").read_bytes() == despues
+
+
 # ───────────────────────── backups of repository files go to the state dir ─────────────────────────
 
 def _respaldos(casa: Path) -> Path:

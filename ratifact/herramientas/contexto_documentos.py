@@ -20,7 +20,7 @@ from ratifact.idioma import linea_contenido
 from ratifact.integraciones import registro as _integraciones
 from ratifact.listado import _listado
 from ratifact.registros import _commit, _escribir_atomico, _leer_registro, _resumen_tareas
-from ratifact.vocabulario import MODOS_V0
+from ratifact.vocabulario import MODOS_V0, TAREAS
 
 
 # ───────────────────────── herramientas ─────────────────────────
@@ -201,12 +201,14 @@ def read_document(project: str, path: str, from_line: int = 1, to_line: int = 0)
     Also accepts a memory record id ("T-24", "tasks/T-024.md", "ADR-NNN-slug.md"): if the path does not exist, it
     reads the real record and prepends the line "(→ .project/<folder>/<file>)". A path with a v1 folder
     (.project/tareas/…, .project/acuerdos.md…) is translated and flagged the same way.
-    For a task, read_task returns a working brief (spec, amendments, the latest relevant block) instead."""
+    A task file read whole (no range) returns the read_task brief (spec, amendments, the latest relevant block)
+    preceded by a line saying how to get the full file: call again with an explicit range (from_line=1,
+    to_line=<last line>). Any explicit range reads the file as is, and so do all other files."""
     proyecto, ruta, desde_linea, hasta_linea = project, path, from_line, to_line
 
     def f():
         p = _ruta_segura(proyecto, ruta)
-        aviso = _aviso_alias()
+        aviso = alias = _aviso_alias()
         if p.is_dir():
             raise ErrorMemoria(f"{ruta} is a folder; to see its content use list_documents(\"{proyecto}\", "
                                f"\"{ruta.rstrip('/')}\").")
@@ -220,6 +222,12 @@ def read_document(project: str, path: str, from_line: int = 1, to_line: int = 0)
         except UnicodeDecodeError:
             raise ErrorMemoria(f"{ruta} is not a text file (e.g. .docx, .pdf or an image); "
                                "ask the user to open or convert it.")
+        if desde_linea == 1 and hasta_linea == 0 and p.resolve().parent == (_mem(proyecto) / TAREAS).resolve():
+            from ratifact.herramientas.tareas_brief import read_task    # lazy: avoids a circular import
+            id_ = _leer_registro(p)[0].get("id", "")
+            return (alias + f"Task file: showing the read_task brief. For the full file, call read_document with an "
+                    f"explicit range (from_line=1, to_line={len(lineas)}).\n"
+                    + read_task.__wrapped__(proyecto, id_))
         fin = hasta_linea if hasta_linea > 0 else len(lineas)
         texto = "\n".join(lineas[max(desde_linea, 1) - 1:fin])
         if len(texto) > LIMITE_LECTURA:

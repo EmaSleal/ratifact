@@ -58,12 +58,23 @@ def test_catalogo_lee_el_frontmatter_en_cada_llamada_sin_escribir(srv, memoria):
 
 # ───────────────────────── criterio 2: read_document resuelve ids ─────────────────────────
 
+def _sin_alias(salida: str) -> str:
+    """A v1 folder path is flagged with its own "(→ …)" translation line first; the rest is the task output."""
+    return salida.split("\n", 1)[1] if salida.startswith("(→ ") and "\nTask file:" in salida else salida
+
+
+def _aviso_tarea(real) -> str:
+    n = len(real.read_text().splitlines())
+    return ("Task file: showing the read_task brief. For the full file, call read_document with an explicit range "
+            f"(from_line=1, to_line={n}).")
+
+
 @pytest.mark.parametrize("ruta", ["T-24", "T-024", "T-024.md", "tasks/T-024.md", ".project/tasks/T-024.md", "t-24",
                                   "tareas/T-024.md", ".project/tareas/T-024.md"])     # también con la carpeta v1
 def test_leer_documento_resuelve_formas_de_id(srv, memoria, ruta):
-    real = memoria / "tasks" / "T-024-navegación-por-id.md"
-    salida = srv.read_document(project="demo", path=ruta)
-    assert salida == "(→ .project/tasks/T-024-navegación-por-id.md)\n" + real.read_text().rstrip("\n"), salida
+    salida = _sin_alias(srv.read_document(project="demo", path=ruta))
+    assert salida == _aviso_tarea(memoria / "tasks" / "T-024-navegación-por-id.md") + "\n" + srv.read_task(
+        project="demo", id="T-024"), salida
 
 
 @pytest.mark.parametrize("ruta,real,cuerpo", [
@@ -76,7 +87,11 @@ def test_leer_documento_resuelve_formas_de_id(srv, memoria, ruta):
     (".project/decisions/ADR-020-slug-equivocado.md", f"decisions/{ADR_020}", "Cuerpo de ADR-020"),
 ])
 def test_leer_documento_resuelve_rutas_reales_de_los_logs(srv, memoria, ruta, real, cuerpo):
-    salida = srv.read_document(project="demo", path=ruta)
+    salida = _sin_alias(srv.read_document(project="demo", path=ruta)) if real.startswith("tasks/") \
+        else srv.read_document(project="demo", path=ruta)
+    if real.startswith("tasks/"):                       # a whole task file is the read_task brief (+ notice)
+        assert salida == _aviso_tarea(memoria / real) + "\n" + srv.read_task(project="demo", id=real[6:11]), salida
+        return
     assert salida == f"(→ .project/{real})\n" + (memoria / real).read_text().rstrip("\n"), salida
     assert cuerpo in salida
 
@@ -87,12 +102,32 @@ def test_rango_se_aplica_al_archivo_resuelto(srv, memoria):
         "(→ .project/tasks/T-024-navegación-por-id.md)\nlínea 2 de T-024"
 
 
+def test_tarea_con_rango_explicito_devuelve_el_archivo_completo(srv, memoria):
+    real = memoria / "tasks" / "T-024-navegación-por-id.md"
+    n = len(real.read_text().splitlines())
+    for ruta in ("T-24", ".project/tasks/T-024-navegación-por-id.md"):
+        salida = srv.read_document(project="demo", path=ruta, from_line=1, to_line=n)
+        assert salida.endswith(real.read_text().rstrip("\n")) and "Task file:" not in salida
+    assert srv.read_document(project="demo", path="T-24", from_line=1, to_line=n) == \
+        "(→ .project/tasks/T-024-navegación-por-id.md)\n" + real.read_text().rstrip("\n")
+
+
+def test_tarea_por_ruta_exacta_sin_rango_es_el_brief(srv, memoria):
+    real = memoria / "tasks" / "T-024-navegación-por-id.md"
+    assert srv.read_document(project="demo", path=".project/tasks/T-024-navegación-por-id.md") == \
+        _aviso_tarea(real) + "\n" + srv.read_task(project="demo", id="T-024")
+
+
+def test_adr_y_pendiente_sin_rango_no_cambian(srv, memoria):
+    for ruta, real in (("ADR-020", f"decisions/{ADR_020}"), ("P-8", "pending/P-008-tema-8.md")):
+        assert srv.read_document(project="demo", path=ruta) == \
+            f"(→ .project/{real})\n" + (memoria / real).read_text().rstrip("\n")
+
+
 # ───────────────────────── criterio 3: rutas exactas sin cambios ─────────────────────────
 
 def test_ruta_exacta_se_lee_igual_que_antes(srv, memoria, proyecto):
     real = memoria / "tasks" / "T-024-navegación-por-id.md"
-    assert srv.read_document(project="demo", path=".project/tasks/T-024-navegación-por-id.md") == \
-        real.read_text().rstrip("\n")
     assert srv.read_document(project="demo", path="docs/vision.md") == "# Visión\nUn lobo alfa lidera la manada."
     (proyecto["repo"] / "T-001.md").write_text("archivo del código\n")      # existe tal cual: no se resuelve
     assert srv.read_document(project="demo", path="T-001.md") == "archivo del código"

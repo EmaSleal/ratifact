@@ -200,8 +200,10 @@ def con_registros(srv, proyecto):
 
 def test_leer_con_carpeta_v1_avisa_la_ruta_nueva(srv, con_registros):
     real = next((con_registros["mem"] / "tasks").glob("T-001*")).name
-    salida = srv.read_document(project="demo", path=f".project/tareas/{real}")
+    salida = srv.read_document(project="demo", path=f".project/tareas/{real}", from_line=1, to_line=500)
     assert salida.startswith(f"(→ .project/tasks/{real})\n---\nid: T-001")
+    assert srv.read_document(project="demo", path=f".project/tareas/{real}").startswith(
+        f"(→ .project/tasks/{real})\nTask file:")
     hoy = dt.date.today().isoformat()
     assert srv.read_document(project="demo", path=f".project/sesiones/{hoy}.md").startswith(
         f"(→ .project/sessions/{hoy}.md)\n# Sessions {hoy}")
