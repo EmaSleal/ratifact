@@ -229,3 +229,35 @@ def test_seccion_de_enrutamiento_explica_modelo_de_sesion(nombre):
     cuerpo = _seccion(_leer(RAIZ / nombre), ENRUTAMIENTO[nombre])
     assert re.search(r"session's model|modelo de la sesión", cuerpo), nombre
     assert "`routing`" in cuerpo and "Workers" in cuerpo, nombre
+
+
+# ── rutas personales en la documentación pública ──
+
+RUTA_PERSONAL = re.compile(r"/(?:home|Users)/([^/\s`\"')]+)/")
+NOMBRES_GENERICOS = {"user", "you", "me", "alice"}
+
+
+def rutas_personales(texto: str) -> list[tuple[int, str]]:
+    """Devuelve (línea, ruta) de cada /home/<nombre>/ o /Users/<nombre>/ cuyo nombre no es un marcador."""
+    halladas = []
+    for n, linea in enumerate(texto.splitlines(), 1):
+        for m in RUTA_PERSONAL.finditer(linea):
+            nombre = m.group(1)
+            if (nombre.startswith("<") and nombre.endswith(">")) or nombre.lower() in NOMBRES_GENERICOS:
+                continue
+            halladas.append((n, m.group(0)))
+    return halladas
+
+
+@pytest.mark.parametrize("ruta", PUBLICOS, ids=lambda p: p.name)
+def test_sin_rutas_personales_en_la_documentacion(ruta):
+    halladas = rutas_personales(_leer(ruta))
+    assert not halladas, [f"{ruta.name}:{n}: {r}" for n, r in halladas]
+
+
+@pytest.mark.parametrize("texto,esperadas", [
+    ("cache /home/<user>/.cache/uv", 0), ("/Users/<usuario>/x", 0), ("/home/u/x", 1), ("a /Users/u/b", 1),
+    ("`/home/u/`", 1), ("/home" + "/user/x and /Users" + "/Alice/y", 0), ("/hom" + "e/me/x", 0),
+])
+def test_detector_de_rutas_personales(texto, esperadas):
+    assert len(rutas_personales(texto)) == esperadas

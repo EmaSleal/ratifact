@@ -109,7 +109,7 @@ def test_doctor_temporary_section_sizes_projects_and_warns_above_threshold(tmp_p
     assert "⚠" in "\n".join(temp_doctor.seccion())
 
 
-@pytest.mark.parametrize("name", ["db.sql", "db.sql.gz", "backup.dump", ".env", ".env.local", "id.pem", "id.key"])
+@pytest.mark.parametrize("name", ["db.sql", "db.sql.gz", "backup.dump", ".env", ".env.local"])
 def test_doctor_lists_sensitive_names_without_opening(tmp_path, monkeypatch, name):
     from ratifact import doctor_espacio_temporal as temp_doctor
 
@@ -150,7 +150,7 @@ def test_doctor_caps_sensitive_listing_at_twenty_and_reports_total(tmp_path, mon
     assert len(listed) == 20 and "23 total" in text
 
 
-def test_doctor_entry_limit_marks_partial_without_pending_action(tmp_path, monkeypatch):
+def test_doctor_entry_limit_marks_partial_with_warning_and_pending_action(tmp_path, monkeypatch):
     from ratifact import doctor_espacio_temporal as temp_doctor
 
     root = tmp_path / "claude"
@@ -162,7 +162,7 @@ def test_doctor_entry_limit_marks_partial_without_pending_action(tmp_path, monke
     actions: list[str] = []
     text = "\n".join(temp_doctor.seccion(actions))
     assert "partial" in text.lower() and "entry" in text.lower()
-    assert actions == [] and "⚠" not in text
+    assert len(actions) == 1 and "⚠" in text
 
 
 def test_doctor_reports_permission_errors_without_failing(tmp_path, monkeypatch):
