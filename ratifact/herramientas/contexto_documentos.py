@@ -10,7 +10,7 @@ from ratifact import build as _build
 from ratifact import registros as _registros
 from ratifact.app import _ejecutar, herramienta
 from ratifact.busqueda import _resultados
-from ratifact.catalogo import _bloque_pendientes, _es_carpeta_de_registros, _linea, _registros_en, _resolver_id
+from ratifact.catalogo import _bloque_pendientes, _es_carpeta_de_registros, _linea_compacta, _registros_en, _resolver_id
 from ratifact.config import (CARPETAS_IGNORADAS, EXT_TEXTO, LIMITE_INDICE, LIMITE_LECTURA, MEM, ErrorMemoria,
                              _aviso_alias, _es_repo, _mem, _proyectos, _raiz, _repos, _ruta_segura, _traducir_alias,
                              _valor)
@@ -166,7 +166,8 @@ def search(project: str, query: str, max_results: int = 20) -> str:
 @herramienta
 def list_documents(project: str, folder: str = "docs") -> str:
     """Lists files (with size) under a project folder.
-    In .project/decisions, pending and tasks it lists one record per line: "ID · status · title  (path)".
+    In .project/decisions, pending and tasks it lists one record per line: "ID · status · title" (title cut at 100
+    characters with "…", no path; pass the ID to read_document). Other files in those folders show path and size.
     A path with a v1 folder (.project/tareas, decisiones, pendientes, sesiones) is translated and flagged.
     If the full listing is too large, it is summarized by levels: unexpanded folders with their file count
     ("module/ (38 files)"); ask for a more specific `folder` to see the detail."""
@@ -189,7 +190,7 @@ def _listar(proyecto: str, carpeta: str) -> str:
         vistos = {r.ruta.rsplit("/", 1)[1] for r in registros}
         otros = [f"{carpeta.rstrip('/')}/{p.relative_to(base)}  ({p.stat().st_size} B)" for p in archivos
                  if p.relative_to(base).as_posix() not in vistos]
-        return "\n".join([_linea(r, "  ") for r in registros] + otros) or "(empty)"
+        return "\n".join([_linea_compacta(r) for r in registros] + otros) or "(empty)"
     entradas = [(p.relative_to(base).as_posix(), p.stat().st_size) for p in archivos]
     return _listado(carpeta, entradas) or "(empty)"
 

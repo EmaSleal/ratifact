@@ -212,7 +212,7 @@ def test_leer_con_carpeta_v1_avisa_la_ruta_nueva(srv, con_registros):
 
 def test_listar_con_carpeta_v1_avisa_en_una_linea_antes(srv, con_registros):
     salida = srv.list_documents(project="demo", folder=".project/pendientes").splitlines()
-    assert salida[0] == "(→ .project/pending)" and salida[1].startswith("P-001 · open · Abierto  (.project/pending/")
+    assert salida[0] == "(→ .project/pending)" and salida[1] == "P-001 · open · Abierto"
     assert srv.list_documents(project="demo", folder=".project/pending").splitlines()[0].startswith("P-001")
 
 

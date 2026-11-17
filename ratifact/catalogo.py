@@ -56,14 +56,23 @@ def _linea(r: Registro, separador: str = " ") -> str:
 TOPE_TEMA = 100   # caracteres del tema de un pendiente en el arranque; más largo se corta a 99 + "…"
 
 
+def _titulo_acotado(titulo: str) -> str:
+    """Título con tope de TOPE_TEMA caracteres: si es más largo, los primeros 99 + "…"."""
+    return titulo if len(titulo) <= TOPE_TEMA else titulo[:TOPE_TEMA - 1] + "…"
+
+
+def _linea_compacta(r: Registro) -> str:
+    """Línea de list_documents para un registro (ADR-055): "ID · status · título acotado", sin ruta."""
+    return f"{r.id} · {r.estado} · {_titulo_acotado(r.titulo)}"
+
+
 def _bloque_pendientes(proyecto: str) -> str:
     """Pendientes abiertos para obtener_contexto (ADR-026): una línea por pendiente, en orden numérico de id, desde el
     catálogo (sin extracto ni dueño). OPEN.md sigue en disco con su formato; el arranque ya no lo incluye."""
     abiertos = [r for r in _registros_en(proyecto, "P") if r.estado == "open"]
     lineas = [f"# Open items ({len(abiertos)})"]
     for r in abiertos:
-        tema = r.titulo if len(r.titulo) <= TOPE_TEMA else r.titulo[:TOPE_TEMA - 1] + "…"
-        lineas.append(f"- {r.id} · {tema} ({r.fecha})")
+        lineas.append(f"- {r.id} · {_titulo_acotado(r.titulo)} ({r.fecha})")
     if abiertos:
         lineas.append(f'Detail: read_document("{proyecto}", "P-NNN")')
     return "\n".join(lineas)

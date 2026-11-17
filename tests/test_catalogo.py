@@ -146,13 +146,13 @@ def test_resolucion_no_sale_de_la_memoria(srv, memoria, proyecto):
 
 def test_listar_carpeta_de_registros_por_id(srv, memoria):
     assert srv.list_documents(project="demo", folder=".project/tasks").splitlines() == [
-        "T-001 · merged · Primera tarea  (.project/tasks/T-001-primera-tarea.md)",
-        "T-010 · in_review · Décima tarea  (.project/tasks/T-010-décima-tarea.md)",
-        "T-024 · todo · Navegación por id  (.project/tasks/T-024-navegación-por-id.md)",
-        "T-1000 · todo · Tarea mil  (.project/tasks/T-1000-tarea-mil.md)",
+        "T-001 · merged · Primera tarea",
+        "T-010 · in_review · Décima tarea",
+        "T-024 · todo · Navegación por id",
+        "T-1000 · todo · Tarea mil",
     ]
     assert srv.list_documents(project="demo", folder=".project/pending/").splitlines()[0] == \
-        "P-008 · open · Tema 8  (.project/pending/P-008-tema-8.md)"
+        "P-008 · open · Tema 8"
     assert "ADR-020 · accepted · ObjectMapper de Spring Boot" in srv.list_documents(project="demo",
                                                                                         folder=".project/decisions")
 
